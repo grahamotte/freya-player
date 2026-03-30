@@ -135,6 +135,15 @@ final class PlexClient {
         return url
     }
 
+    func children(for ratingKey: String, connection: PlexConnectionSummary) async throws -> [PlexMediaItem] {
+        try await fetchMetadataItems(
+            path: "/library/metadata/\(ratingKey)/children",
+            token: connection.serverToken,
+            baseURL: connection.serverURL,
+            extraQueryItems: [URLQueryItem(name: "sort", value: "index:asc")]
+        )
+    }
+
     private func setStreamSelection(
         partID: String,
         audioStreamID: String?,
@@ -361,13 +370,27 @@ final class PlexClient {
         baseURL: String,
         extraQueryItems: [URLQueryItem] = []
     ) async throws -> [PlexMediaItem] {
+        try await fetchMetadataItems(
+            path: path,
+            token: token,
+            baseURL: baseURL,
+            extraQueryItems: extraQueryItems
+        )
+    }
+
+    private func fetchMetadataItems(
+        path: String,
+        token: String,
+        baseURL: String,
+        extraQueryItems: [URLQueryItem] = []
+    ) async throws -> [PlexMediaItem] {
         guard var components = URLComponents(string: "\(baseURL)\(path)") else {
             throw PlexError.invalidURL
         }
 
         components.queryItems = extraQueryItems + [
             URLQueryItem(name: "X-Plex-Container-Start", value: "0"),
-            URLQueryItem(name: "X-Plex-Container-Size", value: "20"),
+            URLQueryItem(name: "X-Plex-Container-Size", value: "200"),
             URLQueryItem(name: "X-Plex-Token", value: token)
         ]
 

@@ -1,12 +1,24 @@
 import SwiftUI
 
 struct ShowEpisodeView: View {
-    let title: String
+    @ObservedObject var model: AppModel
+    let item: PlexMediaItem
 
     var body: some View {
-        FeatureStubView(
-            title: title,
-            message: "Episode details and playback entry will live here."
-        )
+        Group {
+            if let summary = model.connectedSummary {
+                MediaView(
+                    model: model,
+                    data: item.mediaViewData(
+                        in: summary,
+                        playbackID: .plex(item.ratingKey)
+                    )
+                )
+            } else {
+                ProgressView()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(AppBackground())
+            }
+        }
     }
 }

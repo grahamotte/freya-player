@@ -153,6 +153,14 @@ final class AppModel: ObservableObject {
         }
     }
 
+    func plexChildren(for item: PlexMediaItem) async throws -> [PlexMediaItem] {
+        guard let summary = connectedSummary else {
+            throw PlaybackError.unavailable
+        }
+
+        return try await client.children(for: item.ratingKey, connection: summary)
+    }
+
     private func pollForAuth(pin: PlexPin) async {
         pollTask?.cancel()
         pollTask = Task { [weak self] in

@@ -16,9 +16,20 @@ struct MediaViewData {
     }
 }
 
-struct MediaView: View {
+struct MediaView<Content: View>: View {
     @ObservedObject var model: AppModel
     let data: MediaViewData
+    let content: Content
+
+    init(
+        model: AppModel,
+        data: MediaViewData,
+        @ViewBuilder content: () -> Content
+    ) {
+        self.model = model
+        self.data = data
+        self.content = content()
+    }
 
     var body: some View {
         GeometryReader { proxy in
@@ -26,41 +37,50 @@ struct MediaView: View {
             let synopsisWidth = min(proxy.size.width * 0.62, 980)
 
             HStack(spacing: 72) {
-                VStack(alignment: .leading, spacing: 32) {
-                    Spacer(minLength: 0)
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 32) {
+                        Spacer(minLength: 0)
 
-                    Text(data.title)
-                        .font(.system(size: 58, weight: .bold))
-                        .lineLimit(3)
+                        Text(data.title)
+                            .font(.system(size: 58, weight: .bold))
+                            .lineLimit(3)
 
-                    if !data.metadata.isEmpty {
-                        HStack(alignment: .top, spacing: 44) {
-                            ForEach(data.metadata) { entry in
-                                VStack(alignment: .leading, spacing: 8) {
-                                    Text(entry.label)
-                                        .font(.footnote.weight(.semibold))
-                                        .foregroundStyle(.secondary)
+                        if !data.metadata.isEmpty {
+                            HStack(alignment: .top, spacing: 44) {
+                                ForEach(data.metadata) { entry in
+                                    VStack(alignment: .leading, spacing: 8) {
+                                        Text(entry.label)
+                                            .font(.footnote.weight(.semibold))
+                                            .foregroundStyle(.secondary)
 
-                                    Text(entry.value)
-                                        .font(.headline.weight(.medium))
+                                        Text(entry.value)
+                                            .font(.headline.weight(.medium))
+                                    }
                                 }
                             }
                         }
+
+                        Text(data.synopsis)
+                            .font(.body)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(6)
+                            .frame(maxWidth: synopsisWidth, maxHeight: 220, alignment: .topLeading)
+
+                        if let playbackID = data.playbackID {
+                            MediaPlayButton(model: model, id: playbackID)
+                        }
+
+                        content
+
+                        Spacer(minLength: 0)
                     }
-
-                    Text(data.synopsis)
-                        .font(.body)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(6)
-                        .frame(maxWidth: synopsisWidth, maxHeight: 220, alignment: .topLeading)
-
-                    if let playbackID = data.playbackID {
-                        MediaPlayButton(model: model, id: playbackID)
-                    }
-
-                    Spacer(minLength: 0)
+                    .padding(.horizontal, 36)
+                    .padding(.vertical, 24)
+                    .frame(minHeight: proxy.size.height - 96, alignment: .center)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
+                .scrollIndicators(.hidden)
+                .scrollClipDisabled()
 
                 MediaPosterView(url: data.posterURL, title: data.title)
                     .frame(width: posterWidth)
@@ -72,6 +92,14 @@ struct MediaView: View {
         }
         .background {
             MediaBackdropView(url: data.backdropURL)
+        }
+    }
+}
+
+extension MediaView where Content == EmptyView {
+    init(model: AppModel, data: MediaViewData) {
+        self.init(model: model, data: data) {
+            EmptyView()
         }
     }
 }

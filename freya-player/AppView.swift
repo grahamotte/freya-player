@@ -25,10 +25,10 @@ struct AppView: View {
                         TVLibraryIndexView(title: title)
                     case .series(let item):
                         ShowSeriesView(model: model, item: item)
-                    case .season(let title):
-                        ShowSeasonView(title: title)
-                    case .episode(let title):
-                        ShowEpisodeView(title: title)
+                    case .season(let item):
+                        ShowSeasonView(model: model, item: item)
+                    case .episode(let item):
+                        ShowEpisodeView(model: model, item: item)
                     case .otherLibrary(let title):
                         OtherLibraryIndexView(title: title)
                     case .other(let title):
