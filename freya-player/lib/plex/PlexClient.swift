@@ -3,6 +3,7 @@ import Foundation
 final class PlexClient {
     private let session: URLSession
     private let clientIdentifier: String
+    private let hlsSubtitleProfileExtra = "add-transcode-target(type=subtitleProfile&context=all&protocol=hls&container=webvtt&subtitleCodec=webvtt)"
 
     init(session: URLSession = .shared) {
         self.session = session
@@ -56,43 +57,173 @@ final class PlexClient {
         throw PlexError.noReachableServer
     }
 
-    func playbackURL(for ratingKey: String, connection: PlexConnectionSummary) async throws -> URL {
+    func playbackOptions(for ratingKey: String, connection: PlexConnectionSummary) async throws -> MediaPlaybackOptions? {
         let metadata = try await fetchPlaybackMetadata(
             ratingKey: ratingKey,
             baseURL: connection.serverURL,
             token: connection.serverToken
         )
 
+        return metadata.playbackOptions(ratingKey: ratingKey)
+    }
+
+    func playbackURL(
+        for ratingKey: String,
+        connection: PlexConnectionSummary,
+        selection: MediaPlaybackSelection? = nil
+    ) async throws -> URL {
+        let metadata = try await fetchPlaybackMetadata(
+            ratingKey: ratingKey,
+            baseURL: connection.serverURL,
+            token: connection.serverToken
+        )
+
+        if let selection,
+           let options = metadata.playbackOptions(ratingKey: ratingKey),
+           case .plex(let context) = options.kind {
+            try await setStreamSelection(
+                partID: context.partID,
+                audioStreamID: selection.audioID,
+                subtitleStreamID: selection.subtitleID,
+                connection: connection
+            )
+
+            let sessionID = UUID().uuidString
+
+            try await preparePlaybackSession(
+                ratingKey: ratingKey,
+                connection: connection,
+                forceTranscode: false,
+                sessionID: sessionID
+            )
+
+            guard let url = transcodedMovieStreamURL(
+                for: ratingKey,
+                connection: connection,
+                forceTranscode: false,
+                sessionID: sessionID
+            ) else {
+                throw PlexError.invalidURL
+            }
+
+            return url
+        }
+
         if let url = directPlayURL(from: metadata, connection: connection) {
             return url
         }
 
-        guard let url = transcodedMovieStreamURL(for: ratingKey, connection: connection) else {
+        let forceTranscode = false
+        let sessionID = UUID().uuidString
+
+        try await preparePlaybackSession(
+            ratingKey: ratingKey,
+            connection: connection,
+            forceTranscode: forceTranscode,
+            sessionID: sessionID
+        )
+
+        guard let url = transcodedMovieStreamURL(
+            for: ratingKey,
+            connection: connection,
+            forceTranscode: forceTranscode,
+            sessionID: sessionID
+        ) else {
             throw PlexError.invalidURL
         }
 
         return url
     }
 
-    private func transcodedMovieStreamURL(for ratingKey: String, connection: PlexConnectionSummary) -> URL? {
+    private func setStreamSelection(
+        partID: String,
+        audioStreamID: String?,
+        subtitleStreamID: String?,
+        connection: PlexConnectionSummary
+    ) async throws {
+        guard var components = URLComponents(string: "\(connection.serverURL)/library/parts/\(partID)") else {
+            throw PlexError.invalidURL
+        }
+
+        components.queryItems = [
+            URLQueryItem(name: "allParts", value: "0"),
+            URLQueryItem(name: "audioStreamID", value: audioStreamID),
+            URLQueryItem(name: "subtitleStreamID", value: subtitleStreamID ?? "0"),
+            URLQueryItem(name: "X-Plex-Token", value: connection.serverToken)
+        ]
+
+        var request = URLRequest(url: components.url!)
+        request.httpMethod = "PUT"
+        applyPlexHeaders(to: &request, token: connection.serverToken)
+        try await sendVoid(request)
+    }
+
+    private func transcodedMovieStreamURL(
+        for ratingKey: String,
+        connection: PlexConnectionSummary,
+        forceTranscode: Bool,
+        sessionID: String
+    ) -> URL? {
         guard var components = URLComponents(
             string: "\(connection.serverURL)/video/:/transcode/universal/start.m3u8"
         ) else {
             return nil
         }
 
-        let sessionID = UUID().uuidString
+        components.queryItems = playbackQueryItems(
+            for: ratingKey,
+            connection: connection,
+            forceTranscode: forceTranscode,
+            sessionID: sessionID
+        )
 
-        components.queryItems = [
+        return components.url
+    }
+
+    private func preparePlaybackSession(
+        ratingKey: String,
+        connection: PlexConnectionSummary,
+        forceTranscode: Bool,
+        sessionID: String
+    ) async throws {
+        guard var components = URLComponents(
+            string: "\(connection.serverURL)/video/:/transcode/universal/decision"
+        ) else {
+            throw PlexError.invalidURL
+        }
+
+        components.queryItems = playbackQueryItems(
+            for: ratingKey,
+            connection: connection,
+            forceTranscode: forceTranscode,
+            sessionID: sessionID
+        )
+
+        var request = URLRequest(url: components.url!)
+        applyPlexHeaders(to: &request, token: connection.serverToken)
+        let _: PlexMetadataContainer<PlexPlaybackDecisionMetadata> = try await send(request)
+    }
+
+    private func playbackQueryItems(
+        for ratingKey: String,
+        connection: PlexConnectionSummary,
+        forceTranscode: Bool,
+        sessionID: String
+    ) -> [URLQueryItem] {
+        [
             URLQueryItem(name: "path", value: "/library/metadata/\(ratingKey)"),
             URLQueryItem(name: "mediaIndex", value: "0"),
             URLQueryItem(name: "partIndex", value: "0"),
             URLQueryItem(name: "protocol", value: "hls"),
-            URLQueryItem(name: "directPlay", value: "1"),
-            URLQueryItem(name: "directStream", value: "1"),
-            URLQueryItem(name: "directStreamAudio", value: "1"),
-            URLQueryItem(name: "subtitles", value: "auto"),
+            URLQueryItem(name: "copyts", value: "1"),
+            URLQueryItem(name: "fastSeek", value: "1"),
+            URLQueryItem(name: "subtitles", value: "segmented"),
+            URLQueryItem(name: "directPlay", value: forceTranscode ? "0" : "1"),
+            URLQueryItem(name: "directStream", value: forceTranscode ? "0" : "1"),
+            URLQueryItem(name: "directStreamAudio", value: forceTranscode ? "0" : "1"),
+            URLQueryItem(name: "advancedSubtitles", value: "text"),
             URLQueryItem(name: "transcodeSessionId", value: sessionID),
+            URLQueryItem(name: "X-Plex-Client-Profile-Extra", value: hlsSubtitleProfileExtra),
             URLQueryItem(name: "X-Plex-Token", value: connection.serverToken),
             URLQueryItem(name: "X-Plex-Client-Identifier", value: clientIdentifier),
             URLQueryItem(name: "X-Plex-Product", value: "Freya Player"),
@@ -101,8 +232,6 @@ final class PlexClient {
             URLQueryItem(name: "X-Plex-Device", value: "Apple TV"),
             URLQueryItem(name: "X-Plex-Device-Name", value: "Freya Player")
         ]
-
-        return components.url
     }
 
     private func fetchPlaybackMetadata(
@@ -114,7 +243,10 @@ final class PlexClient {
             throw PlexError.invalidURL
         }
 
-        components.queryItems = [URLQueryItem(name: "X-Plex-Token", value: token)]
+        components.queryItems = [
+            URLQueryItem(name: "includeElements", value: "Media,Part,Stream"),
+            URLQueryItem(name: "X-Plex-Token", value: token)
+        ]
 
         var request = URLRequest(url: components.url!)
         applyPlexHeaders(to: &request, token: token)
@@ -257,6 +389,17 @@ final class PlexClient {
         }
 
         return try JSONDecoder().decode(T.self, from: data)
+    }
+
+    private func sendVoid(_ request: URLRequest) async throws {
+        let (_, response) = try await session.data(for: request)
+
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw PlexError.invalidResponse
+        }
+        guard (200 ... 299).contains(httpResponse.statusCode) else {
+            throw PlexError.requestFailed(httpResponse.statusCode)
+        }
     }
 
     private func applyPlexHeaders(to request: inout URLRequest, token: String? = nil) {
@@ -411,6 +554,34 @@ private struct PlexMetadataContainer<Item: Decodable>: Decodable {
 private struct PlexPlaybackMetadata: Decodable {
     let media: [Media]?
 
+    var hasSelectableStreams: Bool {
+        media?.contains(where: \.hasSelectableStreams) == true
+    }
+
+    func playbackOptions(ratingKey: String) -> MediaPlaybackOptions? {
+        guard let media = media?.first(where: { $0.parts?.isEmpty == false }),
+              let part = media.parts?.first,
+              let partID = part.id else {
+            return nil
+        }
+
+        let audioOptions = part.audioOptions
+        let subtitleOptions = part.subtitleOptions
+
+        return MediaPlaybackOptions(
+            audioOptions: audioOptions,
+            subtitleOptions: subtitleOptions,
+            selectedAudioID: part.selectedAudioID ?? audioOptions.first?.id,
+            selectedSubtitleID: part.selectedSubtitleID,
+            kind: .plex(
+                PlexPlaybackSelectionContext(
+                    ratingKey: ratingKey,
+                    partID: partID
+                )
+            )
+        )
+    }
+
     private enum CodingKeys: String, CodingKey {
         case media = "Media"
     }
@@ -421,11 +592,16 @@ private struct PlexPlaybackMetadata: Decodable {
         let audioCodec: String?
         let parts: [Part]?
 
+        var hasSelectableStreams: Bool {
+            parts?.contains(where: \.hasSelectableStreams) == true
+        }
+
         var isDirectPlayable: Bool {
             guard let parts, !parts.isEmpty else { return false }
             return Self.supportedContainers.contains(container?.lowercased() ?? "")
                 && Self.supportedVideoCodecs.contains(videoCodec?.lowercased() ?? "")
                 && Self.supportedAudioCodecs.contains(audioCodec?.lowercased() ?? "")
+                && parts.allSatisfy(\.canDirectPlay)
         }
 
         private static let supportedContainers = ["mp4", "m4v", "mov"]
@@ -441,6 +617,108 @@ private struct PlexPlaybackMetadata: Decodable {
     }
 
     struct Part: Decodable {
+        let id: String?
         let key: String
+        let streams: [Stream]?
+
+        var audioOptions: [MediaPlaybackOption] {
+            streams?
+                .filter { $0.streamType == 2 }
+                .compactMap { stream in
+                    guard let id = stream.id else { return nil }
+                    return MediaPlaybackOption(id: id, title: stream.displayName)
+                } ?? []
+        }
+
+        var subtitleOptions: [MediaPlaybackOption] {
+            streams?
+                .filter { $0.streamType == 3 }
+                .compactMap { stream in
+                    guard let id = stream.id else { return nil }
+                    return MediaPlaybackOption(id: id, title: stream.displayName)
+                } ?? []
+        }
+
+        var selectedAudioID: String? {
+            streams?.first(where: { $0.streamType == 2 && $0.selected == true })?.id
+        }
+
+        var selectedSubtitleID: String? {
+            streams?.first(where: { $0.streamType == 3 && $0.selected == true })?.id
+        }
+
+        var hasSelectableStreams: Bool {
+            audioStreamCount > 1 || subtitleStreamCount > 0
+        }
+
+        var canDirectPlay: Bool {
+            streams != nil && audioStreamCount <= 1
+        }
+
+        private var audioStreamCount: Int {
+            streams?.filter { $0.streamType == 2 }.count ?? 0
+        }
+
+        private var subtitleStreamCount: Int {
+            streams?.filter { $0.streamType == 3 }.count ?? 0
+        }
+
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            id = try container.decodeLossyStringIfPresent(forKey: .id)
+            key = try container.decodeLossyString(forKey: .key)
+            streams = try container.decodeIfPresent([Stream].self, forKey: .streams)
+        }
+
+        private enum CodingKeys: String, CodingKey {
+            case id
+            case key
+            case streams = "Stream"
+        }
+    }
+
+    struct Stream: Decodable {
+        let id: String?
+        let streamType: Int?
+        let selected: Bool?
+        let language: String?
+        let title: String?
+        let displayTitle: String?
+
+        var displayName: String {
+            displayTitle ?? title ?? language ?? fallbackTitle
+        }
+
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            id = try container.decodeLossyStringIfPresent(forKey: .id)
+            streamType = try container.decodeLossyIntIfPresent(forKey: .streamType)
+            selected = try container.decodeLossyBoolIfPresent(forKey: .selected)
+            language = try container.decodeIfPresent(String.self, forKey: .language)
+            title = try container.decodeIfPresent(String.self, forKey: .title)
+            displayTitle = try container.decodeIfPresent(String.self, forKey: .displayTitle)
+        }
+
+        private var fallbackTitle: String {
+            switch streamType {
+            case 2:
+                return "Audio"
+            case 3:
+                return "Subtitle"
+            default:
+                return "Track"
+            }
+        }
+
+        private enum CodingKeys: String, CodingKey {
+            case id
+            case streamType
+            case selected
+            case language
+            case title
+            case displayTitle
+        }
     }
 }
+
+private struct PlexPlaybackDecisionMetadata: Decodable {}

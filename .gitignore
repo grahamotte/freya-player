@@ -8,3 +8,4 @@ xcuserdata/
 *.xcuserstate
 
 .mise.local.toml
+creds.txt

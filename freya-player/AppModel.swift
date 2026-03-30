@@ -6,6 +6,38 @@ enum MediaPlaybackID: Hashable {
     case jellyfin(String)
 }
 
+struct MediaPlaybackOptions: Equatable {
+    let audioOptions: [MediaPlaybackOption]
+    let subtitleOptions: [MediaPlaybackOption]
+    let selectedAudioID: String?
+    let selectedSubtitleID: String?
+    let kind: Kind
+
+    var requiresSelection: Bool {
+        audioOptions.count > 1 || !subtitleOptions.isEmpty
+    }
+
+    enum Kind: Equatable {
+        case plex(PlexPlaybackSelectionContext)
+        case jellyfin
+    }
+}
+
+struct MediaPlaybackOption: Identifiable, Hashable {
+    let id: String
+    let title: String
+}
+
+struct MediaPlaybackSelection: Equatable {
+    let audioID: String?
+    let subtitleID: String?
+}
+
+struct PlexPlaybackSelectionContext: Equatable {
+    let ratingKey: String
+    let partID: String
+}
+
 @MainActor
 final class AppModel: ObservableObject {
     enum PlexState {
@@ -91,14 +123,31 @@ final class AppModel: ObservableObject {
         }
     }
 
-    func playbackURL(for id: MediaPlaybackID) async throws -> URL {
+    func playbackOptions(for id: MediaPlaybackID) async throws -> MediaPlaybackOptions? {
         switch id {
         case .plex(let ratingKey):
             guard let summary = connectedSummary else {
                 throw PlaybackError.unavailable
             }
 
-            return try await client.playbackURL(for: ratingKey, connection: summary)
+            return try await client.playbackOptions(for: ratingKey, connection: summary)
+        case .jellyfin:
+            throw PlaybackError.unavailable
+        }
+    }
+
+    func playbackURL(for id: MediaPlaybackID, selection: MediaPlaybackSelection? = nil) async throws -> URL {
+        switch id {
+        case .plex(let ratingKey):
+            guard let summary = connectedSummary else {
+                throw PlaybackError.unavailable
+            }
+
+            return try await client.playbackURL(
+                for: ratingKey,
+                connection: summary,
+                selection: selection
+            )
         case .jellyfin:
             throw PlaybackError.unavailable
         }
