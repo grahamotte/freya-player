@@ -3,15 +3,17 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DERIVED_DATA_PATH="$ROOT_DIR/.build/xcode-dist"
-PROJECT_PATH="$ROOT_DIR/FreyaPlayer.xcodeproj"
+PROJECT_PATH="$ROOT_DIR/freya-player.xcodeproj"
+SCHEME="freya-player"
+APP_NAME="freya-player.app"
 DIST_DIR="$ROOT_DIR/dist"
-APP_PATH="$DERIVED_DATA_PATH/Build/Products/Release-appletvos/FreyaPlayer.app"
-DIST_APP_PATH="$DIST_DIR/FreyaPlayer.app"
+APP_PATH="$DERIVED_DATA_PATH/Build/Products/Release-appletvos/$APP_NAME"
+DIST_APP_PATH="$DIST_DIR/$APP_NAME"
 
-echo "Building FreyaPlayer (Release) for tvOS devices..."
+echo "Building $SCHEME (Release) for tvOS devices..."
 xcodebuild \
   -project "$PROJECT_PATH" \
-  -scheme FreyaPlayer \
+  -scheme "$SCHEME" \
   -configuration Release \
   -destination "generic/platform=tvOS" \
   -derivedDataPath "$DERIVED_DATA_PATH" \

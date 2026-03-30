@@ -2,6 +2,7 @@
 .build/
 dist/
 FreyaPlayer.app
+freya-player.app
 
 xcuserdata/
 *.xcuserstate

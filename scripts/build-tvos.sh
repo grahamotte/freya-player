@@ -4,9 +4,11 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CONFIGURATION="${1:-Debug}"
 DERIVED_DATA_PATH="$ROOT_DIR/.build/xcode"
-PROJECT_PATH="$ROOT_DIR/FreyaPlayer.xcodeproj"
-APP_PATH="$DERIVED_DATA_PATH/Build/Products/$CONFIGURATION-appletvsimulator/FreyaPlayer.app"
-ROOT_APP_PATH="$ROOT_DIR/FreyaPlayer.app"
+PROJECT_PATH="$ROOT_DIR/freya-player.xcodeproj"
+SCHEME="freya-player"
+APP_NAME="freya-player.app"
+APP_PATH="$DERIVED_DATA_PATH/Build/Products/$CONFIGURATION-appletvsimulator/$APP_NAME"
+ROOT_APP_PATH="$ROOT_DIR/$APP_NAME"
 
 if [[ "$CONFIGURATION" != "Debug" && "$CONFIGURATION" != "Release" ]]; then
   echo "Usage: $0 [Debug|Release]"
@@ -18,10 +20,10 @@ if ! xcodebuild -version >/dev/null 2>&1; then
   exit 1
 fi
 
-echo "Building FreyaPlayer ($CONFIGURATION) for tvOS Simulator..."
+echo "Building $SCHEME ($CONFIGURATION) for tvOS Simulator..."
 xcodebuild \
   -project "$PROJECT_PATH" \
-  -scheme FreyaPlayer \
+  -scheme "$SCHEME" \
   -configuration "$CONFIGURATION" \
   -destination "generic/platform=tvOS Simulator" \
   -derivedDataPath "$DERIVED_DATA_PATH" \

@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-ROOT_APP_PATH="$ROOT_DIR/FreyaPlayer.app"
+ROOT_APP_PATH="$ROOT_DIR/freya-player.app"
 
 booted_apple_tv_udid() {
   xcrun simctl list devices booted 2>/dev/null | awk '/Apple TV/ { if (match($0, /[0-9A-F-]{36}/)) { print substr($0, RSTART, RLENGTH); exit } }'

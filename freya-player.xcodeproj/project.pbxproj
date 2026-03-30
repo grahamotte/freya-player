@@ -256,6 +256,8 @@
 				DEVELOPMENT_TEAM = W92D549Q42;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = "Freya Player";
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Freya Player connects to media servers on your local network.";
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UIUserInterfaceStyle = Automatic;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -285,6 +287,8 @@
 				DEVELOPMENT_TEAM = W92D549Q42;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = "Freya Player";
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Freya Player connects to media servers on your local network.";
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UIUserInterfaceStyle = Automatic;
 				LD_RUNPATH_SEARCH_PATHS = (
