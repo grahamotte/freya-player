@@ -32,7 +32,9 @@ struct LibrariesView: View {
 private struct PlexLibraryShelfView: View {
     let library: PlexLibrarySection
     let summary: PlexConnectionSummary
-    @FocusState private var focusedItemID: String?
+    @FocusState private var focusedTileID: String?
+
+    private var openTileID: String { "\(library.id)-open" }
 
     private var shelfStyle: PlexShelfStyle {
         switch library.type {
@@ -43,52 +45,64 @@ private struct PlexLibraryShelfView: View {
         }
     }
 
-    private var selectedItem: PlexMediaItem? {
-        library.items.first(where: { $0.id == focusedItemID }) ?? library.items.first
+    private var selectedLabel: String {
+        if focusedTileID == openTileID {
+            return library.title
+        }
+
+        return library.items.first(where: { $0.id == focusedTileID })?.title ?? library.title
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
-            HStack {
-                Text(library.title)
-                    .font(.title3.weight(.semibold))
+            Text(library.title)
+                .font(.title3.weight(.semibold))
 
-                Spacer()
+            ScrollView(.horizontal) {
+                LazyHStack(alignment: .top, spacing: 40) {
+                    NavigationLink(value: library.indexRoute) {
+                        PlexTilePlaceholderView(
+                            title: library.title,
+                            iconName: "arrow.right",
+                            aspectRatio: shelfStyle.aspectRatio
+                        )
+                        .containerRelativeFrame(.horizontal, count: shelfStyle.columns, spacing: 40)
+                    }
+                    .focused($focusedTileID, equals: openTileID)
 
-                NavigationLink("Open Library", value: library.indexRoute)
-                    .buttonStyle(.bordered)
+                    ForEach(library.items) { item in
+                        NavigationLink(value: library.itemRoute(for: item)) {
+                            PlexArtworkView(
+                                url: item.artworkURL(
+                                    baseURL: summary.serverURL,
+                                    token: summary.serverToken,
+                                    width: shelfStyle.imageSize.width,
+                                    height: shelfStyle.imageSize.height,
+                                    preferCoverArt: shelfStyle == .wide
+                                ),
+                                title: item.title,
+                                iconName: shelfStyle.placeholderIconName,
+                                aspectRatio: shelfStyle.aspectRatio
+                            )
+                            .containerRelativeFrame(.horizontal, count: shelfStyle.columns, spacing: 40)
+                        }
+                        .focused($focusedTileID, equals: item.id)
+                        .accessibilityLabel(item.title)
+                    }
+                }
+                .padding(.vertical, 12)
             }
+            .scrollClipDisabled()
+            .buttonStyle(.card)
 
             if library.items.isEmpty {
                 Text("No recent items yet.")
+                    .font(.body)
+                    .lineLimit(2, reservesSpace: true)
                     .foregroundStyle(.secondary)
+                    .frame(minHeight: 48, alignment: .topLeading)
             } else {
-                ScrollView(.horizontal) {
-                    LazyHStack(alignment: .top, spacing: 40) {
-                        ForEach(library.items) { item in
-                            NavigationLink(value: library.itemRoute(for: item)) {
-                                PlexArtworkView(
-                                    url: item.artworkURL(
-                                        baseURL: summary.serverURL,
-                                        token: summary.serverToken,
-                                        width: shelfStyle.imageSize.width,
-                                        height: shelfStyle.imageSize.height,
-                                        preferCoverArt: shelfStyle == .wide
-                                    ),
-                                    aspectRatio: shelfStyle.aspectRatio
-                                )
-                                .containerRelativeFrame(.horizontal, count: shelfStyle.columns, spacing: 40)
-                            }
-                            .focused($focusedItemID, equals: item.id)
-                            .accessibilityLabel(item.title)
-                        }
-                    }
-                    .padding(.vertical, 12)
-                }
-                .scrollClipDisabled()
-                .buttonStyle(.borderless)
-
-                Text(selectedItem?.title ?? "")
+                Text(selectedLabel)
                     .font(.body)
                     .lineLimit(2, reservesSpace: true)
                     .foregroundStyle(.secondary)
@@ -101,18 +115,56 @@ private struct PlexLibraryShelfView: View {
 
 private struct PlexArtworkView: View {
     let url: URL?
+    let title: String
+    let iconName: String
     let aspectRatio: CGFloat
 
     var body: some View {
-        AsyncImage(url: url) { image in
-            image
-                .resizable()
-                .aspectRatio(aspectRatio, contentMode: .fit)
-        } placeholder: {
-            Rectangle()
-                .fill(Color.white.opacity(0.08))
-                .aspectRatio(aspectRatio, contentMode: .fit)
+        AsyncImage(url: url) { phase in
+            switch phase {
+            case .success(let image):
+                image
+                    .resizable()
+                    .aspectRatio(aspectRatio, contentMode: .fit)
+            default:
+                PlexTilePlaceholderView(
+                    title: title,
+                    iconName: iconName,
+                    aspectRatio: aspectRatio
+                )
+            }
         }
+    }
+}
+
+private struct PlexTilePlaceholderView: View {
+    let title: String
+    let iconName: String
+    let aspectRatio: CGFloat
+
+    var body: some View {
+        let shape = RoundedRectangle(cornerRadius: 28, style: .continuous)
+
+        ZStack {
+            shape
+                .fill(Color.white.opacity(0.08))
+
+            VStack(spacing: 16) {
+                Image(systemName: iconName)
+                    .font(.system(size: 44, weight: .semibold))
+
+                Text(title)
+                    .font(.headline)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(2)
+            }
+            .foregroundStyle(.secondary)
+            .padding(24)
+        }
+        .aspectRatio(aspectRatio, contentMode: .fit)
+        .clipShape(shape)
+        .contentShape(shape)
+        .compositingGroup()
     }
 }
 
@@ -144,6 +196,15 @@ private enum PlexShelfStyle: Equatable {
             return (480, 720)
         case .wide:
             return (640, 360)
+        }
+    }
+
+    var placeholderIconName: String {
+        switch self {
+        case .poster:
+            return "film.stack.fill"
+        case .wide:
+            return "tv.fill"
         }
     }
 }
