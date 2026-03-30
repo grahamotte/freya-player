@@ -25,7 +25,7 @@ struct LibrariesView: View {
             .padding(48)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(AppBackground())
+        .background(LibrariesAmbientBackground())
     }
 }
 
