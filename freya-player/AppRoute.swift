@@ -6,7 +6,7 @@ enum AppRoute: Hashable {
     case plexSettings
     case jellyfinSettings
     case movieLibrary(String)
-    case movie(String)
+    case movie(PlexMediaItem)
     case tvLibrary(String)
     case series(String)
     case season(String)

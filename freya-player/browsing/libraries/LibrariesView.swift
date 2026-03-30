@@ -224,7 +224,7 @@ private extension PlexLibrarySection {
     func itemRoute(for item: PlexMediaItem) -> AppRoute {
         switch type {
         case "movie":
-            return .movie(item.title)
+            return .movie(item)
         case "show":
             return .series(item.title)
         default:

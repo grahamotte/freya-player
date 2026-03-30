@@ -56,6 +56,92 @@ final class PlexClient {
         throw PlexError.noReachableServer
     }
 
+    func playbackURL(for ratingKey: String, connection: PlexConnectionSummary) async throws -> URL {
+        let metadata = try await fetchPlaybackMetadata(
+            ratingKey: ratingKey,
+            baseURL: connection.serverURL,
+            token: connection.serverToken
+        )
+
+        if let url = directPlayURL(from: metadata, connection: connection) {
+            return url
+        }
+
+        guard let url = transcodedMovieStreamURL(for: ratingKey, connection: connection) else {
+            throw PlexError.invalidURL
+        }
+
+        return url
+    }
+
+    private func transcodedMovieStreamURL(for ratingKey: String, connection: PlexConnectionSummary) -> URL? {
+        guard var components = URLComponents(
+            string: "\(connection.serverURL)/video/:/transcode/universal/start.m3u8"
+        ) else {
+            return nil
+        }
+
+        let sessionID = UUID().uuidString
+
+        components.queryItems = [
+            URLQueryItem(name: "path", value: "/library/metadata/\(ratingKey)"),
+            URLQueryItem(name: "mediaIndex", value: "0"),
+            URLQueryItem(name: "partIndex", value: "0"),
+            URLQueryItem(name: "protocol", value: "hls"),
+            URLQueryItem(name: "directPlay", value: "1"),
+            URLQueryItem(name: "directStream", value: "1"),
+            URLQueryItem(name: "directStreamAudio", value: "1"),
+            URLQueryItem(name: "subtitles", value: "auto"),
+            URLQueryItem(name: "transcodeSessionId", value: sessionID),
+            URLQueryItem(name: "X-Plex-Token", value: connection.serverToken),
+            URLQueryItem(name: "X-Plex-Client-Identifier", value: clientIdentifier),
+            URLQueryItem(name: "X-Plex-Product", value: "Freya Player"),
+            URLQueryItem(name: "X-Plex-Version", value: clientVersion),
+            URLQueryItem(name: "X-Plex-Platform", value: "tvOS"),
+            URLQueryItem(name: "X-Plex-Device", value: "Apple TV"),
+            URLQueryItem(name: "X-Plex-Device-Name", value: "Freya Player")
+        ]
+
+        return components.url
+    }
+
+    private func fetchPlaybackMetadata(
+        ratingKey: String,
+        baseURL: String,
+        token: String
+    ) async throws -> PlexPlaybackMetadata {
+        guard var components = URLComponents(string: "\(baseURL)/library/metadata/\(ratingKey)") else {
+            throw PlexError.invalidURL
+        }
+
+        components.queryItems = [URLQueryItem(name: "X-Plex-Token", value: token)]
+
+        var request = URLRequest(url: components.url!)
+        applyPlexHeaders(to: &request, token: token)
+
+        let response: PlexMetadataContainer<PlexPlaybackMetadata> = try await send(request)
+
+        guard let metadata = response.mediaContainer.metadata?.first else {
+            throw PlexError.invalidResponse
+        }
+
+        return metadata
+    }
+
+    private func directPlayURL(from metadata: PlexPlaybackMetadata, connection: PlexConnectionSummary) -> URL? {
+        guard let partKey = metadata.media?.first(where: \.isDirectPlayable)?.parts?.first?.key,
+              var components = URLComponents(string: "\(connection.serverURL)\(partKey)") else {
+            return nil
+        }
+
+        components.queryItems = (components.queryItems ?? []) + [
+            URLQueryItem(name: "download", value: "0"),
+            URLQueryItem(name: "X-Plex-Token", value: connection.serverToken)
+        ]
+
+        return components.url
+    }
+
     private func fetchUser(userToken: String) async throws -> PlexUser {
         var request = URLRequest(url: URL(string: "https://plex.tv/api/v2/user")!)
         applyPlexHeaders(to: &request, token: userToken)
@@ -177,10 +263,7 @@ final class PlexClient {
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         request.setValue(clientIdentifier, forHTTPHeaderField: "X-Plex-Client-Identifier")
         request.setValue("Freya Player", forHTTPHeaderField: "X-Plex-Product")
-        request.setValue(
-            Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0",
-            forHTTPHeaderField: "X-Plex-Version"
-        )
+        request.setValue(clientVersion, forHTTPHeaderField: "X-Plex-Version")
         request.setValue("tvOS", forHTTPHeaderField: "X-Plex-Platform")
         request.setValue("Apple TV", forHTTPHeaderField: "X-Plex-Device")
         request.setValue("Freya Player", forHTTPHeaderField: "X-Plex-Device-Name")
@@ -232,6 +315,10 @@ final class PlexClient {
         }
 
         return score
+    }
+
+    private var clientVersion: String {
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0"
     }
 
     private static func loadClientIdentifier() -> String {
@@ -318,5 +405,42 @@ private struct PlexMetadataContainer<Item: Decodable>: Decodable {
 
     private enum CodingKeys: String, CodingKey {
         case mediaContainer = "MediaContainer"
+    }
+}
+
+private struct PlexPlaybackMetadata: Decodable {
+    let media: [Media]?
+
+    private enum CodingKeys: String, CodingKey {
+        case media = "Media"
+    }
+
+    struct Media: Decodable {
+        let container: String?
+        let videoCodec: String?
+        let audioCodec: String?
+        let parts: [Part]?
+
+        var isDirectPlayable: Bool {
+            guard let parts, !parts.isEmpty else { return false }
+            return Self.supportedContainers.contains(container?.lowercased() ?? "")
+                && Self.supportedVideoCodecs.contains(videoCodec?.lowercased() ?? "")
+                && Self.supportedAudioCodecs.contains(audioCodec?.lowercased() ?? "")
+        }
+
+        private static let supportedContainers = ["mp4", "m4v", "mov"]
+        private static let supportedVideoCodecs = ["h264", "avc", "avc1", "hevc", "h265", "hvc1"]
+        private static let supportedAudioCodecs = ["aac", "ac3", "eac3", "mp3"]
+
+        private enum CodingKeys: String, CodingKey {
+            case container
+            case videoCodec
+            case audioCodec
+            case parts = "Part"
+        }
+    }
+
+    struct Part: Decodable {
+        let key: String
     }
 }

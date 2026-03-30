@@ -19,8 +19,8 @@ struct AppView: View {
                         JellyfinSettingsView()
                     case .movieLibrary(let title):
                         MovieLibraryIndexView(title: title)
-                    case .movie(let title):
-                        ShowMovieView(title: title)
+                    case .movie(let item):
+                        ShowMovieView(model: model, item: item)
                     case .tvLibrary(let title):
                         TVLibraryIndexView(title: title)
                     case .series(let title):

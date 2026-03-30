@@ -1,6 +1,11 @@
 import Combine
 import Foundation
 
+enum MediaPlaybackID: Hashable {
+    case plex(String)
+    case jellyfin(String)
+}
+
 @MainActor
 final class AppModel: ObservableObject {
     enum PlexState {
@@ -86,6 +91,19 @@ final class AppModel: ObservableObject {
         }
     }
 
+    func playbackURL(for id: MediaPlaybackID) async throws -> URL {
+        switch id {
+        case .plex(let ratingKey):
+            guard let summary = connectedSummary else {
+                throw PlaybackError.unavailable
+            }
+
+            return try await client.playbackURL(for: ratingKey, connection: summary)
+        case .jellyfin:
+            throw PlaybackError.unavailable
+        }
+    }
+
     private func pollForAuth(pin: PlexPin) async {
         pollTask?.cancel()
         pollTask = Task { [weak self] in
@@ -135,4 +153,8 @@ final class AppModel: ObservableObject {
             plexState = .failed(message: "We signed into Plex, but couldn't connect to a Plex Media Server for this account.")
         }
     }
+}
+
+private enum PlaybackError: Error {
+    case unavailable
 }

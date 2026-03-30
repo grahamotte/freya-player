@@ -37,7 +37,7 @@ struct PlexLibrarySection: Identifiable {
     let items: [PlexMediaItem]
 }
 
-struct PlexMediaItem: Decodable, Identifiable {
+struct PlexMediaItem: Decodable, Identifiable, Hashable {
     let ratingKey: String
     let title: String
     let art: String?
