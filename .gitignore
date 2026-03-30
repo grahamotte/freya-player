@@ -1,0 +1,9 @@
+.DS_Store
+.build/
+dist/
+FreyaPlayer.app
+
+xcuserdata/
+*.xcuserstate
+
+.mise.local.toml

@@ -1,0 +1,11 @@
+[tasks.build]
+description = "Build Freya Player for the tvOS simulator"
+run = "./scripts/build-tvos.sh"
+
+[tasks.start]
+description = "Rebuild, install, and launch Freya Player in the Apple TV simulator"
+run = "./scripts/start.sh"
+
+[tasks.dist]
+description = "Build an unsigned Release app for tvOS devices"
+run = "./scripts/build-distribution.sh"
