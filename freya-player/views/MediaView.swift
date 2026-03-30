@@ -38,12 +38,26 @@ enum MediaArtworkStyle {
             return 720
         }
     }
+
+    func fittedSize(in bounds: CGSize) -> CGSize {
+        let width = min(width, bounds.width)
+        let height = width / aspectRatio
+
+        if height <= bounds.height {
+            return CGSize(width: width, height: height)
+        }
+
+        let fittedHeight = bounds.height
+        return CGSize(width: fittedHeight * aspectRatio, height: fittedHeight)
+    }
 }
 
 struct MediaView<Content: View>: View {
     @ObservedObject var model: AppModel
     let data: MediaViewData
     let content: Content
+    private let horizontalPadding: CGFloat = 72
+    private let artworkSpacing: CGFloat = 72
 
     init(
         model: AppModel,
@@ -57,7 +71,10 @@ struct MediaView<Content: View>: View {
 
     var body: some View {
         GeometryReader { proxy in
-            let synopsisWidth = min(proxy.size.width * 0.62, 980)
+            let panelWidth = (proxy.size.width - (horizontalPadding * 2) - artworkSpacing) / 2
+            let synopsisWidth = min(panelWidth - 72, 980)
+            let artworkBounds = CGSize(width: panelWidth, height: proxy.size.height - 96)
+            let artworkSize = data.artworkStyle.fittedSize(in: artworkBounds)
 
             HStack(spacing: 72) {
                 ScrollView {
@@ -101,15 +118,22 @@ struct MediaView<Content: View>: View {
                     .padding(.vertical, 24)
                     .frame(minHeight: proxy.size.height - 96, alignment: .center)
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
+                .frame(width: panelWidth, alignment: .leading)
                 .scrollIndicators(.hidden)
                 .scrollClipDisabled()
 
-                MediaArtworkView(url: data.artworkURL, title: data.title, style: data.artworkStyle)
-                    .frame(width: data.artworkStyle.width)
-                    .frame(maxWidth: .infinity, alignment: .trailing)
+                VStack {
+                    Spacer(minLength: 0)
+
+                    MediaArtworkView(url: data.artworkURL, title: data.title, style: data.artworkStyle)
+                        .frame(width: artworkSize.width, height: artworkSize.height)
+
+                    Spacer(minLength: 0)
+                }
+                .frame(width: panelWidth)
+                .clipped()
             }
-            .padding(.horizontal, 72)
+            .padding(.horizontal, horizontalPadding)
             .padding(.vertical, 48)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
@@ -173,27 +197,29 @@ private struct MediaArtworkView: View {
     let url: URL?
     let title: String
     let style: MediaArtworkStyle
+    private let shape = RoundedRectangle(cornerRadius: 30, style: .continuous)
 
     var body: some View {
-        AsyncImage(url: url) { phase in
-            switch phase {
-            case .success(let image):
-                image
-                    .resizable()
-                    .scaledToFill()
-            default:
-                RoundedRectangle(cornerRadius: 30, style: .continuous)
-                    .fill(Color.white.opacity(0.08))
-                    .overlay {
-                        Image(systemName: "film.fill")
-                            .font(.system(size: 48, weight: .semibold))
-                            .foregroundStyle(.secondary)
-                    }
+        ZStack {
+            shape
+                .fill(Color.white.opacity(0.08))
+
+            AsyncImage(url: url) { phase in
+                switch phase {
+                case .success(let image):
+                    image
+                        .resizable()
+                        .scaledToFit()
+                default:
+                    Image(systemName: "film.fill")
+                        .font(.system(size: 48, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                }
             }
+            .padding(1)
         }
         .aspectRatio(style.aspectRatio, contentMode: .fit)
-        .clipped()
-        .clipShape(RoundedRectangle(cornerRadius: 30, style: .continuous))
+        .clipShape(shape)
         .shadow(color: .black.opacity(0.35), radius: 28, y: 18)
         .accessibilityLabel(title)
     }

@@ -19,7 +19,8 @@ extension PlexMediaItem {
                 baseURL: summary.serverURL,
                 token: summary.serverToken,
                 width: 720,
-                height: artworkStyle == .poster ? 1080 : 405
+                height: artworkStyle == .poster ? 1080 : 405,
+                preferCoverArt: artworkStyle == .landscape
             ),
             artworkStyle: artworkStyle,
             backdropURL: artworkURL(

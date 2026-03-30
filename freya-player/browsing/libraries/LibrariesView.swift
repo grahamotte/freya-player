@@ -218,23 +218,25 @@ private extension PlexLibrarySection {
     }
 
     var indexRoute: AppRoute {
-        switch type {
-        case "movie":
-            return .movieLibrary(title)
-        case "show":
+        if type == "show" {
             return .tvLibrary(title)
-        default:
+        }
+
+        if usesPosterArtwork {
+            return .movieLibrary(title)
+        } else {
             return .otherLibrary(title)
         }
     }
 
     func itemRoute(for item: PlexMediaItem) -> AppRoute {
-        switch type {
-        case "movie":
-            return .movie(item)
-        case "show":
+        if type == "show" {
             return .series(item)
-        default:
+        }
+
+        if usesPosterArtwork {
+            return .movie(item)
+        } else {
             return .other(item)
         }
     }
