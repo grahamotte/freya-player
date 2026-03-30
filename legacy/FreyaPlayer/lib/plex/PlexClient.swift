@@ -1,101 +1,4 @@
 import Foundation
-import Security
-
-struct PlexConnectionSummary {
-    let serverID: String
-    let serverName: String
-    let serverURL: String
-    let serverToken: String
-    let accountName: String
-    let libraries: [PlexLibrarySection]
-}
-
-struct PlexLibrary: Decodable, Identifiable {
-    let key: String
-    let title: String
-    let type: String
-    var id: String { key }
-
-    init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        title = try container.decode(String.self, forKey: .title)
-        type = try container.decode(String.self, forKey: .type)
-        key = try container.decodeLossyString(forKey: .key)
-    }
-
-    private enum CodingKeys: String, CodingKey {
-        case key
-        case title
-        case type
-    }
-}
-
-struct PlexLibrarySection: Identifiable {
-    let id: String
-    let title: String
-    let type: String
-    let items: [PlexMediaItem]
-}
-
-struct PlexMediaItem: Decodable, Identifiable {
-    let ratingKey: String
-    let title: String
-    let art: String?
-    let thumb: String?
-    let parentThumb: String?
-    let grandparentThumb: String?
-    var id: String { ratingKey }
-
-    init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        ratingKey = try container.decodeLossyString(forKey: .ratingKey)
-        title = try container.decode(String.self, forKey: .title)
-        art = try container.decodeIfPresent(String.self, forKey: .art)
-        thumb = try container.decodeIfPresent(String.self, forKey: .thumb)
-        parentThumb = try container.decodeIfPresent(String.self, forKey: .parentThumb)
-        grandparentThumb = try container.decodeIfPresent(String.self, forKey: .grandparentThumb)
-    }
-
-    func artworkURL(baseURL: String, token: String, width: Int, height: Int, preferCoverArt: Bool = false) -> URL? {
-        let imagePath = if preferCoverArt {
-            art ?? thumb ?? parentThumb ?? grandparentThumb
-        } else {
-            thumb ?? parentThumb ?? grandparentThumb ?? art
-        }
-
-        guard let imagePath,
-              var components = URLComponents(string: "\(baseURL)/photo/:/transcode") else {
-            return nil
-        }
-
-        components.queryItems = [
-            URLQueryItem(name: "url", value: imagePath),
-            URLQueryItem(name: "width", value: String(width)),
-            URLQueryItem(name: "height", value: String(height)),
-            URLQueryItem(name: "minSize", value: "1"),
-            URLQueryItem(name: "upscale", value: "1"),
-            URLQueryItem(name: "X-Plex-Token", value: token)
-        ]
-
-        return components.url
-    }
-
-    private enum CodingKeys: String, CodingKey {
-        case ratingKey
-        case title
-        case art
-        case thumb
-        case parentThumb
-        case grandparentThumb
-    }
-}
-
-struct PlexPin: Decodable {
-    let id: Int
-    let code: String
-    let authToken: String?
-    let expiresIn: Int?
-}
 
 final class PlexClient {
     private let session: URLSession
@@ -110,7 +13,6 @@ final class PlexClient {
         var request = URLRequest(url: URL(string: "https://plex.tv/api/v2/pins")!)
         request.httpMethod = "POST"
         applyPlexHeaders(to: &request)
-
         return try await send(request)
     }
 
@@ -260,6 +162,7 @@ final class PlexClient {
 
     private func send<T: Decodable>(_ request: URLRequest, as type: T.Type = T.self) async throws -> T {
         let (data, response) = try await session.data(for: request)
+
         guard let httpResponse = response as? HTTPURLResponse else {
             throw PlexError.invalidResponse
         }
@@ -274,7 +177,10 @@ final class PlexClient {
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         request.setValue(clientIdentifier, forHTTPHeaderField: "X-Plex-Client-Identifier")
         request.setValue("Freya Player", forHTTPHeaderField: "X-Plex-Product")
-        request.setValue(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0", forHTTPHeaderField: "X-Plex-Version")
+        request.setValue(
+            Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0",
+            forHTTPHeaderField: "X-Plex-Version"
+        )
         request.setValue("tvOS", forHTTPHeaderField: "X-Plex-Platform")
         request.setValue("Apple TV", forHTTPHeaderField: "X-Plex-Device")
         request.setValue("Freya Player", forHTTPHeaderField: "X-Plex-Device-Name")
@@ -339,33 +245,6 @@ final class PlexClient {
         let identifier = UUID().uuidString
         defaults.set(identifier, forKey: key)
         return identifier
-    }
-}
-
-final class PlexSessionStore {
-    private let defaults = UserDefaults.standard
-    private let tokenKey = "plex.user.token"
-    private let serverKey = "plex.server.identifier"
-
-    var userToken: String? {
-        get { KeychainStore.value(for: tokenKey) }
-        set {
-            if let newValue {
-                KeychainStore.setValue(newValue, for: tokenKey)
-            } else {
-                KeychainStore.removeValue(for: tokenKey)
-            }
-        }
-    }
-
-    var serverIdentifier: String? {
-        get { defaults.string(forKey: serverKey) }
-        set { defaults.set(newValue, forKey: serverKey) }
-    }
-
-    func clear() {
-        userToken = nil
-        defaults.removeObject(forKey: serverKey)
     }
 }
 
@@ -439,68 +318,5 @@ private struct PlexMetadataContainer<Item: Decodable>: Decodable {
 
     private enum CodingKeys: String, CodingKey {
         case mediaContainer = "MediaContainer"
-    }
-}
-
-private enum KeychainStore {
-    private static let service = "ottecode.FreyaPlayer"
-
-    static func value(for key: String) -> String? {
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: key,
-            kSecReturnData as String: true,
-            kSecMatchLimit as String: kSecMatchLimitOne
-        ]
-
-        var result: AnyObject?
-        guard SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess,
-              let data = result as? Data else {
-            return nil
-        }
-
-        return String(data: data, encoding: .utf8)
-    }
-
-    static func setValue(_ value: String, for key: String) {
-        removeValue(for: key)
-
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: key,
-            kSecValueData as String: Data(value.utf8),
-            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlock
-        ]
-
-        SecItemAdd(query as CFDictionary, nil)
-    }
-
-    static func removeValue(for key: String) {
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: key
-        ]
-
-        SecItemDelete(query as CFDictionary)
-    }
-}
-
-private extension KeyedDecodingContainer {
-    func decodeLossyString(forKey key: Key) throws -> String {
-        if let string = try? decode(String.self, forKey: key) {
-            return string
-        }
-
-        if let int = try? decode(Int.self, forKey: key) {
-            return String(int)
-        }
-
-        throw DecodingError.typeMismatch(
-            String.self,
-            .init(codingPath: codingPath + [key], debugDescription: "Expected a String or Int.")
-        )
     }
 }

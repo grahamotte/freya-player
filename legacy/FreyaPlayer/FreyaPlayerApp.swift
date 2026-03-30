@@ -4,7 +4,7 @@ import SwiftUI
 struct FreyaPlayerApp: App {
     var body: some Scene {
         WindowGroup {
-            HomeView()
+            AppView()
         }
     }
 }
