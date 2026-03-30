@@ -3,19 +3,55 @@ import SwiftUI
 
 struct HomeView: View {
     @StateObject private var model = HomeModel()
+    @State private var path: [Route] = []
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
+            rootView
+            .navigationDestination(for: Route.self) { route in
+                switch route {
+                case .plexConnect:
+                    PlexConnectView(model: model)
+                case .plexAccount:
+                    PlexAccountView(model: model, path: $path)
+                case .jellyfin:
+                    JellyfinComingSoonView()
+                }
+            }
+            .task {
+                await model.restoreIfNeeded()
+            }
+            .onChange(of: model.connectedSummary?.serverID) { _, serverID in
+                if serverID != nil {
+                    path.removeAll()
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var rootView: some View {
+        if let summary = model.connectedSummary {
+            PlexServerHomeView(summary: summary)
+        } else if case .checking = model.plexState {
+            ProgressView("Checking saved Plex connection...")
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(backgroundGradient)
+        } else {
             VStack {
                 HStack(spacing: 72) {
-                    NavigationLink(value: Route.plex) {
+                    Button {
+                        path.append(.plexConnect)
+                    } label: {
                         serviceButton(title: "Plex", systemImage: "play.rectangle.fill")
                     }
                     .buttonStyle(.bordered)
                     .buttonBorderShape(.roundedRectangle(radius: 28))
                     .controlSize(.large)
 
-                    NavigationLink(value: Route.jellyfin) {
+                    Button {
+                        path.append(.jellyfin)
+                    } label: {
                         serviceButton(title: "Jellyfin", systemImage: "square.stack.3d.up.fill")
                     }
                     .buttonStyle(.bordered)
@@ -27,17 +63,6 @@ struct HomeView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(backgroundGradient)
             .navigationTitle("Freya Player")
-            .navigationDestination(for: Route.self) { route in
-                switch route {
-                case .plex:
-                    PlexConnectView(model: model)
-                case .jellyfin:
-                    JellyfinComingSoonView()
-                }
-            }
-            .task {
-                await model.restoreIfNeeded()
-            }
         }
     }
 
@@ -72,22 +97,25 @@ final class HomeModel: ObservableObject {
 
     @Published var plexState: PlexState = .checking
 
-    var hasSavedPlexSession: Bool {
-        store.userToken != nil
-    }
-
     private let client = PlexClient()
     private let store = PlexSessionStore()
     private var restoreTask: Task<Void, Never>?
     private var pollTask: Task<Void, Never>?
     private var hasRestored = false
 
+    var connectedSummary: PlexConnectionSummary? {
+        if case .connected(let summary) = plexState {
+            return summary
+        }
+        return nil
+    }
+
     func restoreIfNeeded() async {
         guard !hasRestored else { return }
         hasRestored = true
 
         guard let userToken = store.userToken else {
-            plexState = .signedOut(message: "Link your Plex account to discover a server and load its libraries.")
+            plexState = .signedOut(message: "Link your Plex account to discover a server.")
             return
         }
 
@@ -127,7 +155,7 @@ final class HomeModel: ObservableObject {
         restoreTask?.cancel()
         pollTask?.cancel()
         store.clear()
-        plexState = .signedOut(message: "Link your Plex account to discover a server and load its libraries.")
+        plexState = .signedOut(message: "Link your Plex account to discover a server.")
     }
 
     func preparePlexScreen() {
@@ -167,7 +195,7 @@ final class HomeModel: ObservableObject {
 
             if !Task.isCancelled {
                 await MainActor.run {
-                    self.plexState = .failed(message: "That Plex code expired. Start over to get a new one.")
+                    self.plexState = .failed(message: "That Plex code expired. Please try again.")
                 }
             }
         }
@@ -193,7 +221,8 @@ final class HomeModel: ObservableObject {
 }
 
 private enum Route: Hashable {
-    case plex
+    case plexConnect
+    case plexAccount
     case jellyfin
 }
 
@@ -238,81 +267,21 @@ private struct PlexConnectView: View {
                     Text("Waiting for approval...")
                         .foregroundStyle(.secondary)
 
-                case .connected(let summary):
-                    Label("Connected to \(summary.serverName)", systemImage: "checkmark.circle.fill")
-                        .foregroundStyle(.green)
-
-                    Text(summary.serverURL)
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(2)
-
-                    if summary.libraries.isEmpty {
-                        Text("Connected, but this server has no libraries yet.")
-                            .foregroundStyle(.secondary)
-                    } else {
-                        ScrollView {
-                            VStack(alignment: .leading, spacing: 12) {
-                                ForEach(summary.libraries) { library in
-                                    HStack {
-                                        VStack(alignment: .leading, spacing: 2) {
-                                            Text(library.title)
-                                                .font(.headline)
-
-                                            Text(library.type.capitalized)
-                                                .font(.footnote)
-                                                .foregroundStyle(.secondary)
-                                        }
-
-                                        Spacer()
-
-                                        Text("#\(library.key)")
-                                            .font(.footnote.monospaced())
-                                            .foregroundStyle(.tertiary)
-                                    }
-                                }
-                            }
-                        }
-                        .frame(maxHeight: 360)
-                    }
-
-                    HStack(spacing: 16) {
-                        Button("Refresh") {
-                            model.refreshPlex()
-                        }
-
-                        Button("Disconnect", role: .destructive) {
-                            model.disconnectPlex()
-                        }
-                    }
-
                 case .failed(let message):
                     Text(message)
                         .foregroundStyle(.secondary)
 
-                    HStack(spacing: 16) {
-                        Button("Try Again") {
-                            model.startPlexLogin()
-                        }
-
-                        if model.hasSavedPlexSession {
-                            Button("Clear Saved Session", role: .destructive) {
-                                model.disconnectPlex()
-                            }
-                        }
+                    Button("Try Again") {
+                        model.startPlexLogin()
                     }
+
+                case .connected:
+                    ProgressView("Loading your server...")
                 }
             }
             .frame(maxWidth: 720, alignment: .leading)
             .padding(28)
-            .background(
-                RoundedRectangle(cornerRadius: 34, style: .continuous)
-                    .fill(Color.white.opacity(0.08))
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 34, style: .continuous)
-                            .strokeBorder(Color.white.opacity(0.12), lineWidth: 1)
-                    }
-            )
+            .background(panelBackground)
 
             Button("Cancel") {
                 dismiss()
@@ -328,17 +297,138 @@ private struct PlexConnectView: View {
             model.preparePlexScreen()
         }
     }
+}
 
-    private var backgroundGradient: some View {
-        LinearGradient(
-            colors: [
-                Color(red: 0.08, green: 0.09, blue: 0.12),
-                Color(red: 0.04, green: 0.05, blue: 0.07)
-            ],
-            startPoint: .top,
-            endPoint: .bottom
-        )
-        .ignoresSafeArea()
+private struct PlexServerHomeView: View {
+    let summary: PlexConnectionSummary
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 36) {
+                Text(summary.serverName)
+                    .font(.largeTitle.weight(.semibold))
+
+                ForEach(summary.libraries) { library in
+                    PlexLibraryShelfView(library: library, summary: summary)
+                }
+
+                NavigationLink(value: Route.plexAccount) {
+                    Text("Manage Account")
+                        .frame(minWidth: 260)
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.large)
+                .padding(.top, 12)
+                .focusSection()
+            }
+            .padding(48)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(backgroundGradient)
+    }
+}
+
+private struct PlexLibraryShelfView: View {
+    let library: PlexLibrarySection
+    let summary: PlexConnectionSummary
+    @FocusState private var focusedItemID: String?
+
+    private var shelfStyle: PlexShelfStyle {
+        switch library.type {
+        case "movie", "show":
+            return .poster
+        default:
+            return .wide
+        }
+    }
+
+    private var selectedItem: PlexMediaItem? {
+        library.items.first(where: { $0.id == focusedItemID }) ?? library.items.first
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            Text(library.title)
+                .font(.title3.weight(.semibold))
+
+            if library.items.isEmpty {
+                Text("No recent items yet.")
+                    .foregroundStyle(.secondary)
+            } else {
+                ScrollView(.horizontal) {
+                    LazyHStack(alignment: .top, spacing: 40) {
+                        ForEach(library.items) { item in
+                            Button {
+                            } label: {
+                                PlexArtworkView(
+                                    url: item.artworkURL(
+                                        baseURL: summary.serverURL,
+                                        token: summary.serverToken,
+                                        width: shelfStyle.imageSize.width,
+                                        height: shelfStyle.imageSize.height,
+                                        preferCoverArt: shelfStyle == .wide
+                                    ),
+                                    aspectRatio: shelfStyle.aspectRatio
+                                )
+                                .containerRelativeFrame(.horizontal, count: shelfStyle.columns, spacing: 40)
+                            }
+                            .focused($focusedItemID, equals: item.id)
+                            .accessibilityLabel(item.title)
+                        }
+                    }
+                    .padding(.vertical, 12)
+                }
+                .scrollClipDisabled()
+                .buttonStyle(.borderless)
+
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(selectedItem?.title ?? "")
+                        .font(.body)
+                        .lineLimit(2, reservesSpace: true)
+                        .foregroundStyle(.secondary)
+                }
+                .frame(minHeight: 72, alignment: .topLeading)
+            }
+        }
+        .focusSection()
+    }
+}
+
+private struct PlexAccountView: View {
+    @ObservedObject var model: HomeModel
+    @Binding var path: [Route]
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        VStack(spacing: 36) {
+            Spacer()
+
+            VStack(alignment: .leading, spacing: 18) {
+                Text("Logged In")
+                    .font(.title3.weight(.semibold))
+
+                Text(model.connectedSummary?.accountName ?? "Plex")
+                    .font(.title2.weight(.semibold))
+
+                Button("Disconnect", role: .destructive) {
+                    model.disconnectPlex()
+                    path.removeAll()
+                }
+
+                Button("Back") {
+                    dismiss()
+                }
+            }
+            .frame(maxWidth: 720, alignment: .leading)
+            .padding(28)
+            .background(panelBackground)
+
+            Spacer()
+        }
+        .padding(48)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(backgroundGradient)
+        .navigationTitle("Account")
     }
 }
 
@@ -358,14 +448,7 @@ private struct JellyfinComingSoonView: View {
             }
             .frame(maxWidth: 720)
             .padding(28)
-            .background(
-                RoundedRectangle(cornerRadius: 34, style: .continuous)
-                    .fill(Color.white.opacity(0.08))
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 34, style: .continuous)
-                            .strokeBorder(Color.white.opacity(0.12), lineWidth: 1)
-                    }
-            )
+            .background(panelBackground)
 
             Button("Cancel") {
                 dismiss()
@@ -378,16 +461,74 @@ private struct JellyfinComingSoonView: View {
         .background(backgroundGradient)
         .navigationTitle("Jellyfin")
     }
+}
 
-    private var backgroundGradient: some View {
-        LinearGradient(
-            colors: [
-                Color(red: 0.08, green: 0.09, blue: 0.12),
-                Color(red: 0.04, green: 0.05, blue: 0.07)
-            ],
-            startPoint: .top,
-            endPoint: .bottom
-        )
-        .ignoresSafeArea()
+private struct PlexArtworkView: View {
+    let url: URL?
+    let aspectRatio: CGFloat
+
+    var body: some View {
+        AsyncImage(url: url) { image in
+            image
+                .resizable()
+                .aspectRatio(aspectRatio, contentMode: .fit)
+        } placeholder: {
+            Rectangle()
+                .fill(Color.white.opacity(0.08))
+                .aspectRatio(aspectRatio, contentMode: .fit)
+        }
     }
+}
+
+private enum PlexShelfStyle: Equatable {
+    case poster
+    case wide
+
+    var aspectRatio: CGFloat {
+        switch self {
+        case .poster:
+            return 2 / 3
+        case .wide:
+            return 16 / 9
+        }
+    }
+
+    var columns: Int {
+        switch self {
+        case .poster:
+            return 6
+        case .wide:
+            return 8
+        }
+    }
+
+    var imageSize: (width: Int, height: Int) {
+        switch self {
+        case .poster:
+            return (480, 720)
+        case .wide:
+            return (640, 360)
+        }
+    }
+}
+
+private var panelBackground: some View {
+    RoundedRectangle(cornerRadius: 34, style: .continuous)
+        .fill(Color.white.opacity(0.08))
+        .overlay {
+            RoundedRectangle(cornerRadius: 34, style: .continuous)
+                .strokeBorder(Color.white.opacity(0.12), lineWidth: 1)
+        }
+}
+
+private var backgroundGradient: some View {
+    LinearGradient(
+        colors: [
+            Color(red: 0.08, green: 0.09, blue: 0.12),
+            Color(red: 0.04, green: 0.05, blue: 0.07)
+        ],
+        startPoint: .top,
+        endPoint: .bottom
+    )
+    .ignoresSafeArea()
 }

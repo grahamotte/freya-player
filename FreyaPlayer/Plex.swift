@@ -5,7 +5,9 @@ struct PlexConnectionSummary {
     let serverID: String
     let serverName: String
     let serverURL: String
-    let libraries: [PlexLibrary]
+    let serverToken: String
+    let accountName: String
+    let libraries: [PlexLibrarySection]
 }
 
 struct PlexLibrary: Decodable, Identifiable {
@@ -25,6 +27,66 @@ struct PlexLibrary: Decodable, Identifiable {
         case key
         case title
         case type
+    }
+}
+
+struct PlexLibrarySection: Identifiable {
+    let id: String
+    let title: String
+    let type: String
+    let items: [PlexMediaItem]
+}
+
+struct PlexMediaItem: Decodable, Identifiable {
+    let ratingKey: String
+    let title: String
+    let art: String?
+    let thumb: String?
+    let parentThumb: String?
+    let grandparentThumb: String?
+    var id: String { ratingKey }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        ratingKey = try container.decodeLossyString(forKey: .ratingKey)
+        title = try container.decode(String.self, forKey: .title)
+        art = try container.decodeIfPresent(String.self, forKey: .art)
+        thumb = try container.decodeIfPresent(String.self, forKey: .thumb)
+        parentThumb = try container.decodeIfPresent(String.self, forKey: .parentThumb)
+        grandparentThumb = try container.decodeIfPresent(String.self, forKey: .grandparentThumb)
+    }
+
+    func artworkURL(baseURL: String, token: String, width: Int, height: Int, preferCoverArt: Bool = false) -> URL? {
+        let imagePath = if preferCoverArt {
+            art ?? thumb ?? parentThumb ?? grandparentThumb
+        } else {
+            thumb ?? parentThumb ?? grandparentThumb ?? art
+        }
+
+        guard let imagePath,
+              var components = URLComponents(string: "\(baseURL)/photo/:/transcode") else {
+            return nil
+        }
+
+        components.queryItems = [
+            URLQueryItem(name: "url", value: imagePath),
+            URLQueryItem(name: "width", value: String(width)),
+            URLQueryItem(name: "height", value: String(height)),
+            URLQueryItem(name: "minSize", value: "1"),
+            URLQueryItem(name: "upscale", value: "1"),
+            URLQueryItem(name: "X-Plex-Token", value: token)
+        ]
+
+        return components.url
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case ratingKey
+        case title
+        case art
+        case thumb
+        case parentThumb
+        case grandparentThumb
     }
 }
 
@@ -59,20 +121,29 @@ final class PlexClient {
     }
 
     func connect(userToken: String, preferredServerID: String?) async throws -> PlexConnectionSummary {
+        let user = try await fetchUser(userToken: userToken)
         let servers = try await fetchServers(userToken: userToken)
         let orderedServers = orderServers(servers, preferredServerID: preferredServerID)
 
         for server in orderedServers {
-            let token = server.accessToken ?? userToken
+            let serverToken = server.accessToken ?? userToken
 
             for connection in orderConnections(server.connections ?? []) {
                 do {
-                    let libraries = try await fetchLibraries(baseURL: connection.uri, token: token)
+                    let libraries = try await fetchLibraries(baseURL: connection.uri, token: serverToken)
+                    let sections = try await fetchLibrarySections(
+                        libraries: libraries,
+                        baseURL: connection.uri,
+                        token: serverToken
+                    )
+
                     return PlexConnectionSummary(
                         serverID: server.clientIdentifier,
                         serverName: server.name,
                         serverURL: connection.uri,
-                        libraries: libraries
+                        serverToken: serverToken,
+                        accountName: user.displayName,
+                        libraries: sections
                     )
                 } catch {
                     continue
@@ -81,6 +152,12 @@ final class PlexClient {
         }
 
         throw PlexError.noReachableServer
+    }
+
+    private func fetchUser(userToken: String) async throws -> PlexUser {
+        var request = URLRequest(url: URL(string: "https://plex.tv/api/v2/user")!)
+        applyPlexHeaders(to: &request, token: userToken)
+        return try await send(request)
     }
 
     private func fetchServers(userToken: String) async throws -> [PlexServer] {
@@ -104,8 +181,81 @@ final class PlexClient {
         var request = URLRequest(url: components.url!)
         applyPlexHeaders(to: &request, token: token)
 
-        let response: PlexContainer<PlexLibrary> = try await send(request)
+        let response: PlexDirectoryContainer<PlexLibrary> = try await send(request)
         return response.mediaContainer.directory ?? []
+    }
+
+    private func fetchLibrarySections(
+        libraries: [PlexLibrary],
+        baseURL: String,
+        token: String
+    ) async throws -> [PlexLibrarySection] {
+        var sections: [PlexLibrarySection] = []
+
+        for library in libraries {
+            let items = (try? await fetchItems(for: library, baseURL: baseURL, token: token)) ?? []
+            sections.append(
+                PlexLibrarySection(
+                    id: library.key,
+                    title: library.title,
+                    type: library.type,
+                    items: items
+                )
+            )
+        }
+
+        return sections
+    }
+
+    private func fetchItems(for library: PlexLibrary, baseURL: String, token: String) async throws -> [PlexMediaItem] {
+        switch library.type {
+        case "show":
+            return try await fetchSectionItems(
+                path: "/library/sections/\(library.key)/all",
+                token: token,
+                baseURL: baseURL,
+                extraQueryItems: [
+                    URLQueryItem(name: "type", value: "2"),
+                    URLQueryItem(name: "sort", value: "addedAt:desc")
+                ]
+            )
+        case "movie":
+            return try await fetchSectionItems(
+                path: "/library/sections/\(library.key)/recentlyAdded",
+                token: token,
+                baseURL: baseURL,
+                extraQueryItems: [URLQueryItem(name: "type", value: "1")]
+            )
+        default:
+            return try await fetchSectionItems(
+                path: "/library/sections/\(library.key)/recentlyAdded",
+                token: token,
+                baseURL: baseURL
+            )
+        }
+    }
+
+    private func fetchSectionItems(
+        path: String,
+        token: String,
+        baseURL: String,
+        extraQueryItems: [URLQueryItem] = []
+    ) async throws -> [PlexMediaItem] {
+        guard var components = URLComponents(string: "\(baseURL)\(path)") else {
+            throw PlexError.invalidURL
+        }
+
+        components.queryItems = extraQueryItems + [
+            URLQueryItem(name: "X-Plex-Container-Start", value: "0"),
+            URLQueryItem(name: "X-Plex-Container-Size", value: "20"),
+            URLQueryItem(name: "X-Plex-Token", value: token)
+        ]
+
+        var request = URLRequest(url: components.url!)
+        applyPlexHeaders(to: &request, token: token)
+
+        let response: PlexMetadataContainer<PlexMediaItem> = try await send(request)
+        return response.mediaContainer.metadata ?? []
     }
 
     private func send<T: Decodable>(_ request: URLRequest, as type: T.Type = T.self) async throws -> T {
@@ -226,6 +376,17 @@ private enum PlexError: Error {
     case noReachableServer
 }
 
+private struct PlexUser: Decodable {
+    let title: String?
+    let friendlyName: String?
+    let username: String?
+    let email: String?
+
+    var displayName: String {
+        friendlyName ?? title ?? username ?? email ?? "Plex"
+    }
+}
+
 private struct PlexServer: Decodable {
     let name: String
     let clientIdentifier: String
@@ -249,7 +410,7 @@ private struct PlexServerConnection: Decodable {
     }
 }
 
-private struct PlexContainer<Item: Decodable>: Decodable {
+private struct PlexDirectoryContainer<Item: Decodable>: Decodable {
     let mediaContainer: MediaContainer
 
     struct MediaContainer: Decodable {
@@ -257,6 +418,22 @@ private struct PlexContainer<Item: Decodable>: Decodable {
 
         private enum CodingKeys: String, CodingKey {
             case directory = "Directory"
+        }
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case mediaContainer = "MediaContainer"
+    }
+}
+
+private struct PlexMetadataContainer<Item: Decodable>: Decodable {
+    let mediaContainer: MediaContainer
+
+    struct MediaContainer: Decodable {
+        let metadata: [Item]?
+
+        private enum CodingKeys: String, CodingKey {
+            case metadata = "Metadata"
         }
     }
 
