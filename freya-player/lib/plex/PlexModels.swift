@@ -40,6 +40,10 @@ struct PlexLibrarySection: Identifiable {
 struct PlexMediaItem: Decodable, Identifiable, Hashable {
     let ratingKey: String
     let title: String
+    let summary: String?
+    let year: Int?
+    let duration: Int?
+    let contentRating: String?
     let art: String?
     let thumb: String?
     let parentThumb: String?
@@ -51,10 +55,39 @@ struct PlexMediaItem: Decodable, Identifiable, Hashable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         ratingKey = try container.decodeLossyString(forKey: .ratingKey)
         title = try container.decode(String.self, forKey: .title)
+        summary = try container.decodeLossyStringIfPresent(forKey: .summary)
+        year = try container.decodeLossyIntIfPresent(forKey: .year)
+        duration = try container.decodeLossyIntIfPresent(forKey: .duration)
+        contentRating = try container.decodeLossyStringIfPresent(forKey: .contentRating)
         art = try container.decodeIfPresent(String.self, forKey: .art)
         thumb = try container.decodeIfPresent(String.self, forKey: .thumb)
         parentThumb = try container.decodeIfPresent(String.self, forKey: .parentThumb)
         grandparentThumb = try container.decodeIfPresent(String.self, forKey: .grandparentThumb)
+    }
+
+    var synopsis: String {
+        let trimmed = summary?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return trimmed.isEmpty ? "No description available." : trimmed
+    }
+
+    var runtimeText: String? {
+        guard let duration else { return nil }
+
+        let minutes = duration / 60_000
+        guard minutes > 0 else { return nil }
+
+        let hours = minutes / 60
+        let remainingMinutes = minutes % 60
+
+        if hours == 0 {
+            return "\(minutes)m"
+        }
+
+        if remainingMinutes == 0 {
+            return "\(hours)h"
+        }
+
+        return "\(hours)h \(remainingMinutes)m"
     }
 
     func artworkURL(baseURL: String, token: String, width: Int, height: Int, preferCoverArt: Bool = false) -> URL? {
@@ -84,6 +117,10 @@ struct PlexMediaItem: Decodable, Identifiable, Hashable {
     private enum CodingKeys: String, CodingKey {
         case ratingKey
         case title
+        case summary
+        case year
+        case duration
+        case contentRating
         case art
         case thumb
         case parentThumb

@@ -23,8 +23,8 @@ struct AppView: View {
                         ShowMovieView(model: model, item: item)
                     case .tvLibrary(let title):
                         TVLibraryIndexView(title: title)
-                    case .series(let title):
-                        ShowSeriesView(title: title)
+                    case .series(let item):
+                        ShowSeriesView(model: model, item: item)
                     case .season(let title):
                         ShowSeasonView(title: title)
                     case .episode(let title):

@@ -226,7 +226,7 @@ private extension PlexLibrarySection {
         case "movie":
             return .movie(item)
         case "show":
-            return .series(item.title)
+            return .series(item)
         default:
             return .other(item.title)
         }
