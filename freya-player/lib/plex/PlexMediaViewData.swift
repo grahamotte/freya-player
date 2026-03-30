@@ -3,7 +3,8 @@ import Foundation
 extension PlexMediaItem {
     func mediaViewData(
         in summary: PlexConnectionSummary,
-        playbackID: MediaPlaybackID? = nil
+        playbackID: MediaPlaybackID? = nil,
+        artworkStyle: MediaArtworkStyle = .poster
     ) -> MediaViewData {
         MediaViewData(
             title: title,
@@ -14,12 +15,13 @@ extension PlexMediaItem {
             ]
             .compactMap { $0 },
             synopsis: synopsis,
-            posterURL: artworkURL(
+            artworkURL: artworkURL(
                 baseURL: summary.serverURL,
                 token: summary.serverToken,
                 width: 720,
-                height: 1080
+                height: artworkStyle == .poster ? 1080 : 405
             ),
+            artworkStyle: artworkStyle,
             backdropURL: artworkURL(
                 baseURL: summary.serverURL,
                 token: summary.serverToken,

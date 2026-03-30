@@ -31,8 +31,8 @@ struct AppView: View {
                         ShowEpisodeView(model: model, item: item)
                     case .otherLibrary(let title):
                         OtherLibraryIndexView(title: title)
-                    case .other(let title):
-                        ShowOtherItemView(title: title)
+                    case .other(let item):
+                        ShowOtherItemView(model: model, item: item)
                     }
                 }
                 .task {

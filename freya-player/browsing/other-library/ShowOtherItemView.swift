@@ -1,12 +1,25 @@
 import SwiftUI
 
 struct ShowOtherItemView: View {
-    let title: String
+    @ObservedObject var model: AppModel
+    let item: PlexMediaItem
 
     var body: some View {
-        FeatureStubView(
-            title: title,
-            message: "Details for non-movie, non-series items will live here."
-        )
+        Group {
+            if let summary = model.connectedSummary {
+                MediaView(
+                    model: model,
+                    data: item.mediaViewData(
+                        in: summary,
+                        playbackID: .plex(item.ratingKey),
+                        artworkStyle: .landscape
+                    )
+                )
+            } else {
+                ProgressView()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(AppBackground())
+            }
+        }
     }
 }

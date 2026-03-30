@@ -37,10 +37,9 @@ private struct PlexLibraryShelfView: View {
     private var openTileID: String { "\(library.id)-open" }
 
     private var shelfStyle: PlexShelfStyle {
-        switch library.type {
-        case "movie", "show":
+        if library.usesPosterArtwork {
             return .poster
-        default:
+        } else {
             return .wide
         }
     }
@@ -125,7 +124,7 @@ private struct PlexArtworkView: View {
             case .success(let image):
                 image
                     .resizable()
-                    .aspectRatio(aspectRatio, contentMode: .fit)
+                    .scaledToFill()
             default:
                 PlexTilePlaceholderView(
                     title: title,
@@ -134,6 +133,8 @@ private struct PlexArtworkView: View {
                 )
             }
         }
+        .aspectRatio(aspectRatio, contentMode: .fit)
+        .clipped()
     }
 }
 
@@ -143,10 +144,8 @@ private struct PlexTilePlaceholderView: View {
     let aspectRatio: CGFloat
 
     var body: some View {
-        let shape = RoundedRectangle(cornerRadius: 28, style: .continuous)
-
         ZStack {
-            shape
+            Rectangle()
                 .fill(Color.white.opacity(0.08))
 
             VStack(spacing: 16) {
@@ -162,9 +161,6 @@ private struct PlexTilePlaceholderView: View {
             .padding(24)
         }
         .aspectRatio(aspectRatio, contentMode: .fit)
-        .clipShape(shape)
-        .contentShape(shape)
-        .compositingGroup()
     }
 }
 
@@ -186,7 +182,7 @@ private enum PlexShelfStyle: Equatable {
         case .poster:
             return 6
         case .wide:
-            return 8
+            return 4
         }
     }
 
@@ -210,6 +206,17 @@ private enum PlexShelfStyle: Equatable {
 }
 
 private extension PlexLibrarySection {
+    var usesPosterArtwork: Bool {
+        switch type {
+        case "show":
+            return true
+        case "movie":
+            return agent != "tv.plex.agents.none"
+        default:
+            return false
+        }
+    }
+
     var indexRoute: AppRoute {
         switch type {
         case "movie":
@@ -228,7 +235,7 @@ private extension PlexLibrarySection {
         case "show":
             return .series(item)
         default:
-            return .other(item.title)
+            return .other(item)
         }
     }
 }

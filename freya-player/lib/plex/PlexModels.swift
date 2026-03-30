@@ -13,6 +13,7 @@ struct PlexLibrary: Decodable, Identifiable {
     let key: String
     let title: String
     let type: String
+    let agent: String?
 
     var id: String { key }
 
@@ -20,6 +21,7 @@ struct PlexLibrary: Decodable, Identifiable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         title = try container.decode(String.self, forKey: .title)
         type = try container.decode(String.self, forKey: .type)
+        agent = try container.decodeIfPresent(String.self, forKey: .agent)
         key = try container.decodeLossyString(forKey: .key)
     }
 
@@ -27,6 +29,7 @@ struct PlexLibrary: Decodable, Identifiable {
         case key
         case title
         case type
+        case agent
     }
 }
 
@@ -34,6 +37,7 @@ struct PlexLibrarySection: Identifiable {
     let id: String
     let title: String
     let type: String
+    let agent: String?
     let items: [PlexMediaItem]
 }
 

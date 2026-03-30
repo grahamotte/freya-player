@@ -4,7 +4,8 @@ struct MediaViewData {
     let title: String
     let metadata: [Metadata]
     let synopsis: String
-    let posterURL: URL?
+    let artworkURL: URL?
+    let artworkStyle: MediaArtworkStyle
     let backdropURL: URL?
     let playbackID: MediaPlaybackID?
 
@@ -13,6 +14,29 @@ struct MediaViewData {
         let value: String
 
         var id: String { label }
+    }
+}
+
+enum MediaArtworkStyle {
+    case poster
+    case landscape
+
+    var aspectRatio: CGFloat {
+        switch self {
+        case .poster:
+            return 2 / 3
+        case .landscape:
+            return 16 / 9
+        }
+    }
+
+    var width: CGFloat {
+        switch self {
+        case .poster:
+            return 420
+        case .landscape:
+            return 720
+        }
     }
 }
 
@@ -33,7 +57,6 @@ struct MediaView<Content: View>: View {
 
     var body: some View {
         GeometryReader { proxy in
-            let posterWidth = min(proxy.size.width * 0.28, 420)
             let synopsisWidth = min(proxy.size.width * 0.62, 980)
 
             HStack(spacing: 72) {
@@ -82,8 +105,8 @@ struct MediaView<Content: View>: View {
                 .scrollIndicators(.hidden)
                 .scrollClipDisabled()
 
-                MediaPosterView(url: data.posterURL, title: data.title)
-                    .frame(width: posterWidth)
+                MediaArtworkView(url: data.artworkURL, title: data.title, style: data.artworkStyle)
+                    .frame(width: data.artworkStyle.width)
                     .frame(maxWidth: .infinity, alignment: .trailing)
             }
             .padding(.horizontal, 72)
@@ -146,9 +169,10 @@ private struct MediaBackdropView: View {
     }
 }
 
-private struct MediaPosterView: View {
+private struct MediaArtworkView: View {
     let url: URL?
     let title: String
+    let style: MediaArtworkStyle
 
     var body: some View {
         AsyncImage(url: url) { phase in
@@ -156,11 +180,10 @@ private struct MediaPosterView: View {
             case .success(let image):
                 image
                     .resizable()
-                    .aspectRatio(2 / 3, contentMode: .fit)
+                    .scaledToFill()
             default:
                 RoundedRectangle(cornerRadius: 30, style: .continuous)
                     .fill(Color.white.opacity(0.08))
-                    .aspectRatio(2 / 3, contentMode: .fit)
                     .overlay {
                         Image(systemName: "film.fill")
                             .font(.system(size: 48, weight: .semibold))
@@ -168,6 +191,8 @@ private struct MediaPosterView: View {
                     }
             }
         }
+        .aspectRatio(style.aspectRatio, contentMode: .fit)
+        .clipped()
         .clipShape(RoundedRectangle(cornerRadius: 30, style: .continuous))
         .shadow(color: .black.opacity(0.35), radius: 28, y: 18)
         .accessibilityLabel(title)

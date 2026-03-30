@@ -11,7 +11,8 @@ struct ShowEpisodeView: View {
                     model: model,
                     data: item.mediaViewData(
                         in: summary,
-                        playbackID: .plex(item.ratingKey)
+                        playbackID: .plex(item.ratingKey),
+                        artworkStyle: .landscape
                     )
                 )
             } else {

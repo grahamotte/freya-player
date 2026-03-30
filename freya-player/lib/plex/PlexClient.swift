@@ -328,6 +328,7 @@ final class PlexClient {
                     id: library.key,
                     title: library.title,
                     type: library.type,
+                    agent: library.agent,
                     items: items
                 )
             )

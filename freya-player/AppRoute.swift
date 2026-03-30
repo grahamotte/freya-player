@@ -12,5 +12,5 @@ enum AppRoute: Hashable {
     case season(PlexMediaItem)
     case episode(PlexMediaItem)
     case otherLibrary(String)
-    case other(String)
+    case other(PlexMediaItem)
 }
