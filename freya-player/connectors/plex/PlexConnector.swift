@@ -158,6 +158,18 @@ final class PlexConnector: MediaConnector {
         try await client.scrobble(for: id.itemID, connection: connection)
     }
 
+    func setWatchStatus(for id: MediaPlaybackID, isWatched: Bool) async throws {
+        guard let connection else {
+            throw MediaConnectorError.unavailable
+        }
+
+        if isWatched {
+            try await client.scrobble(for: id.itemID, connection: connection)
+        } else {
+            try await client.unscrobble(for: id.itemID, connection: connection)
+        }
+    }
+
     func beginLogin() async throws -> PlexLoginSession {
         let pin = try await client.createPin()
         return PlexLoginSession(

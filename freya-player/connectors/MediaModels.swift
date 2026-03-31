@@ -134,6 +134,25 @@ struct MediaItem: Hashable, Identifiable {
     var hasResume: Bool {
         (resumeOffsetMilliseconds ?? 0) > 0 && !isWatched
     }
+
+    func settingWatchStatus(_ isWatched: Bool) -> MediaItem {
+        MediaItem(
+            providerID: providerID,
+            serverID: serverID,
+            id: id,
+            title: title,
+            kind: kind,
+            synopsis: synopsis,
+            addedAt: addedAt,
+            year: year,
+            durationMilliseconds: durationMilliseconds,
+            contentRating: contentRating,
+            isWatched: isWatched,
+            progress: isWatched ? 1 : nil,
+            resumeOffsetMilliseconds: nil,
+            artwork: artwork
+        )
+    }
 }
 
 struct MediaPlaybackID: Hashable {

@@ -5,6 +5,6 @@ struct ShowOtherItemView: View {
     let item: MediaItem
 
     var body: some View {
-        MediaView(model: model, data: item.mediaViewData())
+        PlayableMediaItemView(model: model, item: item)
     }
 }

@@ -197,6 +197,26 @@ final class PlexClient {
         try await sendVoid(request)
     }
 
+    func unscrobble(
+        for ratingKey: String,
+        connection: PlexConnectionSummary
+    ) async throws {
+        guard var components = URLComponents(string: "\(connection.serverURL)/:/unscrobble") else {
+            throw PlexError.invalidURL
+        }
+
+        components.queryItems = [
+            URLQueryItem(name: "identifier", value: "com.plexapp.plugins.library"),
+            URLQueryItem(name: "key", value: ratingKey),
+            URLQueryItem(name: "X-Plex-Token", value: connection.serverToken)
+        ]
+
+        var request = URLRequest(url: components.url!)
+        request.httpMethod = "PUT"
+        applyPlexHeaders(to: &request, token: connection.serverToken)
+        try await sendVoid(request)
+    }
+
     func libraryItems(for library: PlexLibraryContext, connection: PlexConnectionSummary) async throws -> [PlexMediaItem] {
         let items = try await fetchMetadataItems(
             path: "/library/sections/\(library.id)/all",

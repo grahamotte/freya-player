@@ -6,14 +6,18 @@ struct ShowSeasonView: View {
 
     var body: some View {
         MediaView(model: model, data: item.mediaViewData()) {
-            TVChildListSection(
-                model: model,
-                item: item,
-                title: "Episodes",
-                emptyMessage: "No episodes yet.",
-                destination: { $0.route },
-                rowStyle: .numbered
-            )
+            VStack(alignment: .leading, spacing: 32) {
+                MediaCollectionWatchStatusButton(model: model, item: item)
+
+                TVChildListSection(
+                    model: model,
+                    item: item,
+                    title: "Episodes",
+                    emptyMessage: "No episodes yet.",
+                    destination: { $0.route },
+                    rowStyle: .numbered
+                )
+            }
         }
     }
 }

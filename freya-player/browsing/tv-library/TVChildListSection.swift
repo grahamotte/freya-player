@@ -36,6 +36,10 @@ struct TVChildListSection: View {
 
                                 Spacer(minLength: 0)
 
+                                if showsWatchedBadge(for: child) {
+                                    TVWatchedBadge()
+                                }
+
                                 Image(systemName: "chevron.right")
                                     .foregroundStyle(.secondary)
                             }
@@ -78,11 +82,28 @@ struct TVChildListSection: View {
             return "\(position + 1). \(child.title)"
         }
     }
+
+    private func showsWatchedBadge(for child: MediaItem) -> Bool {
+        child.isWatched && (child.kind == .season || child.kind == .episode)
+    }
 }
 
 extension TVChildListSection {
     enum RowStyle {
         case standard
         case numbered
+    }
+}
+
+private struct TVWatchedBadge: View {
+    var body: some View {
+        Circle()
+            .fill(MediaWatchStatusDisplay.color)
+            .frame(width: 28, height: 28)
+            .overlay {
+                Image(systemName: "checkmark")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(.black)
+            }
     }
 }

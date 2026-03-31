@@ -224,6 +224,28 @@ final class JellyfinConnector: MediaConnector {
         )
     }
 
+    func setWatchStatus(for id: MediaPlaybackID, isWatched: Bool) async throws {
+        guard let connection else {
+            throw MediaConnectorError.unavailable
+        }
+
+        if isWatched {
+            try await client.markPlayed(
+                itemID: id.itemID,
+                serverURL: connection.serverURL,
+                accessToken: connection.accessToken,
+                userID: connection.userID
+            )
+        } else {
+            try await client.markUnplayed(
+                itemID: id.itemID,
+                serverURL: connection.serverURL,
+                accessToken: connection.accessToken,
+                userID: connection.userID
+            )
+        }
+    }
+
     func connect(serverURL: String, username: String, password: String) async throws -> ConnectedServer {
         let auth = try await client.authenticate(serverURL: serverURL, username: username, password: password)
         store.serverURL = serverURL.trimmingCharacters(in: .whitespacesAndNewlines)

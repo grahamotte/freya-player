@@ -178,6 +178,10 @@ final class AppModel: ObservableObject {
         try? await connector(for: id.providerID).markPlaybackCompleted(for: id)
     }
 
+    func setWatchStatus(for id: MediaPlaybackID, isWatched: Bool) async throws {
+        try await connector(for: id.providerID).setWatchStatus(for: id, isWatched: isWatched)
+    }
+
     private var plexConnectorIsReady: Bool {
         activeConnector?.providerID == .plex || PlexSessionStore().userToken != nil
     }

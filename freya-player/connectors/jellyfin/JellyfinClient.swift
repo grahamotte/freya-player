@@ -262,6 +262,27 @@ final class JellyfinClient {
         )
     }
 
+    func markUnplayed(
+        itemID: String,
+        serverURL: String,
+        accessToken: String,
+        userID: String
+    ) async throws {
+        try await updateUserData(
+            itemID: itemID,
+            serverURL: serverURL,
+            accessToken: accessToken,
+            userID: userID,
+            body: JellyfinUpdateUserDataBody(
+                Played: false,
+                PlayCount: 0,
+                PlaybackPositionTicks: 0,
+                LastPlayedDate: ISO8601DateFormatter().string(from: Date()),
+                ItemId: itemID
+            )
+        )
+    }
+
     private func fetchPublicSystemInfo(serverURL: String, accessToken: String) async throws -> JellyfinPublicSystemInfo {
         var request = URLRequest(url: try url(serverURL: serverURL, path: "/System/Info/Public"))
         applyAuthorizationHeaders(to: &request, accessToken: accessToken)

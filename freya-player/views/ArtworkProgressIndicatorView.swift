@@ -17,13 +17,13 @@ final class ArtworkProgressIndicatorView: UIView {
         backgroundColor = .clear
         isUserInteractionEnabled = false
 
-        trackView.backgroundColor = .systemYellow.withAlphaComponent(0.3)
+        trackView.backgroundColor = MediaWatchStatusDisplay.uiColor.withAlphaComponent(0.3)
         trackView.isHidden = true
         addSubview(trackView)
-        fillView.backgroundColor = .systemYellow
+        fillView.backgroundColor = MediaWatchStatusDisplay.uiColor
         trackView.addSubview(fillView)
 
-        badgeView.backgroundColor = .systemYellow
+        badgeView.backgroundColor = MediaWatchStatusDisplay.uiColor
         badgeView.isHidden = true
         addSubview(badgeView)
 

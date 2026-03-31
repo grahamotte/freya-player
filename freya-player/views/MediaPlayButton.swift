@@ -32,11 +32,9 @@ struct MediaPlayButton: View {
                         ProgressView()
                     } else {
                         Text(hasResume ? "Resume" : "Play")
-                            .frame(minWidth: 140)
                     }
                 }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.large)
+                .buttonStyle(MediaGlassButtonStyle())
                 .disabled(isLoading)
 
                 if let playbackOptions, playbackOptions.audioOptions.count > 1 {
@@ -53,9 +51,7 @@ struct MediaPlayButton: View {
                             isFocused: focusedControl == .audio
                         )
                     }
-                    .buttonStyle(.bordered)
-                    .buttonBorderShape(focusedControl == .audio ? .capsule : .circle)
-                    .controlSize(.large)
+                    .buttonStyle(MediaGlassButtonStyle())
                     .focused($focusedControl, equals: .audio)
                     .disabled(isLoading || isLoadingOptions)
                 }
@@ -78,9 +74,7 @@ struct MediaPlayButton: View {
                             isFocused: focusedControl == .subtitle
                         )
                     }
-                    .buttonStyle(.bordered)
-                    .buttonBorderShape(focusedControl == .subtitle ? .capsule : .circle)
-                    .controlSize(.large)
+                    .buttonStyle(MediaGlassButtonStyle())
                     .focused($focusedControl, equals: .subtitle)
                     .disabled(isLoading || isLoadingOptions)
                 }

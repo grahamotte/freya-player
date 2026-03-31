@@ -20,6 +20,7 @@ protocol MediaConnector: AnyObject {
         sessionID: String
     ) async throws
     func markPlaybackCompleted(for id: MediaPlaybackID) async throws
+    func setWatchStatus(for id: MediaPlaybackID, isWatched: Bool) async throws
 }
 
 enum MediaConnectorError: Error {
