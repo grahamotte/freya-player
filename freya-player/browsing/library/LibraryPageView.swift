@@ -3,10 +3,10 @@ import UIKit
 
 struct LibraryPageView: View {
     @ObservedObject var model: AppModel
-    let library: PlexLibraryContext
+    let library: LibraryReference
     @Binding var path: [AppRoute]
 
-    @State private var items: [PlexMediaItem] = []
+    @State private var items: [MediaItem] = []
     @State private var isLoading = true
     @State private var errorMessage: String?
 
@@ -15,59 +15,59 @@ struct LibraryPageView: View {
             if isLoading {
                 ProgressView()
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else if let errorMessage {
+            } else if let errorMessage, items.isEmpty {
                 VStack(spacing: 24) {
                     Text(errorMessage)
                         .foregroundStyle(.secondary)
 
                     Button("Try Again") {
                         Task {
-                            await loadItems()
+                            await loadItems(showSpinner: true)
                         }
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else if let summary = model.connectedSummary {
+            } else {
                 LibraryPageCollectionView(
-                    summary: summary,
                     library: library,
                     items: items,
                     onSelectRoute: { path.append($0) }
                 )
-            } else {
-                ProgressView()
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
         .background(AppBackground())
         .task(id: library.id) {
-            await loadItems()
+            await PollingLoop.run {
+                await loadItems(showSpinner: items.isEmpty)
+            }
         }
     }
 
-    private func loadItems() async {
-        isLoading = true
+    private func loadItems(showSpinner: Bool) async {
+        if showSpinner {
+            isLoading = true
+        }
         errorMessage = nil
 
         do {
-            items = try await model.plexLibraryItems(for: library)
+            items = try await model.loadLibraryItems(for: library)
             isLoading = false
         } catch {
-            errorMessage = "Couldn't load this library."
-            isLoading = false
+            if items.isEmpty {
+                errorMessage = "Couldn't load this library."
+                isLoading = false
+            }
         }
     }
 }
 
 private struct LibraryPageCollectionView: UIViewControllerRepresentable {
-    let summary: PlexConnectionSummary
-    let library: PlexLibraryContext
-    let items: [PlexMediaItem]
+    let library: LibraryReference
+    let items: [MediaItem]
     let onSelectRoute: (AppRoute) -> Void
 
     func makeUIViewController(context: Context) -> LibraryPageCollectionViewController {
         LibraryPageCollectionViewController(
-            summary: summary,
             library: library,
             items: items,
             onSelectRoute: onSelectRoute
@@ -75,7 +75,7 @@ private struct LibraryPageCollectionView: UIViewControllerRepresentable {
     }
 
     func updateUIViewController(_ viewController: LibraryPageCollectionViewController, context: Context) {
-        viewController.update(summary: summary, library: library, items: items)
+        viewController.update(library: library, items: items)
     }
 }
 
@@ -83,11 +83,10 @@ private final class LibraryPageCollectionViewController: UIViewController, UICol
     private static let headerKind = "LibraryPageHeader"
 
     private let onSelectRoute: (AppRoute) -> Void
-    private let store = PlexSessionStore()
+    private let store = MediaSessionStore()
 
-    private var summary: PlexConnectionSummary
-    private var library: PlexLibraryContext
-    private var items: [PlexMediaItem]
+    private var library: LibraryReference
+    private var items: [MediaItem]
     private var filter: WatchFilter
     private var sort: LibrarySort
     private var sortOrder: LibrarySortOrder
@@ -102,17 +101,15 @@ private final class LibraryPageCollectionViewController: UIViewController, UICol
     private var headerFocusGuideHeightConstraint: NSLayoutConstraint?
 
     init(
-        summary: PlexConnectionSummary,
-        library: PlexLibraryContext,
-        items: [PlexMediaItem],
+        library: LibraryReference,
+        items: [MediaItem],
         onSelectRoute: @escaping (AppRoute) -> Void
     ) {
-        self.summary = summary
         self.library = library
         self.items = items
-        self.filter = Self.savedFilter(store: store, summary: summary, library: library)
-        self.sort = Self.savedSort(store: store, summary: summary, library: library)
-        self.sortOrder = Self.savedSortOrder(store: store, summary: summary, library: library, sort: self.sort)
+        self.filter = Self.savedFilter(store: store, library: library)
+        self.sort = Self.savedSort(store: store, library: library)
+        self.sortOrder = Self.savedSortOrder(store: store, library: library, sort: self.sort)
         self.onSelectRoute = onSelectRoute
         super.init(nibName: nil, bundle: nil)
     }
@@ -178,21 +175,19 @@ private final class LibraryPageCollectionViewController: UIViewController, UICol
         updateHeaderFocusGuide()
     }
 
-    func update(summary: PlexConnectionSummary, library: PlexLibraryContext, items: [PlexMediaItem]) {
-        let didChangeLibrary = self.summary.serverID != summary.serverID || self.library.id != library.id
-        self.summary = summary
+    func update(library: LibraryReference, items: [MediaItem]) {
+        let didChangeLibrary = self.library != library
         self.library = library
         self.items = items
 
         if didChangeLibrary {
-            filter = Self.savedFilter(store: store, summary: summary, library: library)
-            sort = Self.savedSort(store: store, summary: summary, library: library)
-            sortOrder = Self.savedSortOrder(store: store, summary: summary, library: library, sort: sort)
+            filter = Self.savedFilter(store: store, library: library)
+            sort = Self.savedSort(store: store, library: library)
+            sortOrder = Self.savedSortOrder(store: store, library: library, sort: sort)
         }
 
         guard isViewLoaded else { return }
-        collectionView.setCollectionViewLayout(makeLayout(), animated: false)
-        collectionView.reloadData()
+        reloadDataPreservingScrollPosition(!didChangeLibrary)
         updateEmptyState()
         refreshHeader()
     }
@@ -246,43 +241,35 @@ private final class LibraryPageCollectionViewController: UIViewController, UICol
     }
 
     func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {
-        onSelectRoute(library.itemRoute(for: displayedItems[indexPath.item]))
+        onSelectRoute(displayedItems[indexPath.item].route)
     }
 
     func scrollViewDidScroll(_ scrollView: UIScrollView) {
         updateHeaderFocusGuide()
     }
 
-    private var displayedItems: [PlexMediaItem] {
+    private var displayedItems: [MediaItem] {
         sort.items(from: items.filter { filter.matches($0) }, order: sortOrder)
     }
 
     private var tileStyle: LibraryTileStyle {
-        library.usesPosterArtwork ? .poster : .landscape
+        library.artworkStyle == .poster ? .poster : .landscape
     }
 
     private var countText: String {
         let count = displayedItems.count
-        let itemName = library.itemName
-        let suffix = count == 1 ? itemName : "\(itemName)s"
+        let suffix = count == 1 ? library.itemTitle : "\(library.itemTitle)s"
         return "\(count) \(suffix)"
     }
 
-    private func artworkURL(for item: PlexMediaItem) -> URL? {
-        item.artworkURL(
-            baseURL: summary.serverURL,
-            token: summary.serverToken,
-            width: tileStyle.imageSize.width,
-            height: tileStyle.imageSize.height,
-            preferCoverArt: tileStyle == .landscape,
-            allowBackdropFallback: tileStyle == .landscape
-        )
+    private func artworkURL(for item: MediaItem) -> URL? {
+        item.artwork.url(for: tileStyle.mediaArtworkStyle)
     }
 
     private func setFilter(_ filter: WatchFilter) {
         guard self.filter != filter else { return }
         self.filter = filter
-        store.setLibraryFilterRawValue(filter.rawValue, forLibraryID: library.id, serverID: summary.serverID)
+        store.setLibraryFilterRawValue(filter.rawValue, for: library)
         collectionView.reloadData()
         updateEmptyState()
         refreshHeader()
@@ -291,7 +278,7 @@ private final class LibraryPageCollectionViewController: UIViewController, UICol
     private func setSort(_ sort: LibrarySort) {
         guard self.sort != sort else { return }
         self.sort = sort
-        store.setLibrarySortRawValue(sort.rawValue, forLibraryID: library.id, serverID: summary.serverID)
+        store.setLibrarySortRawValue(sort.rawValue, for: library)
         collectionView.reloadData()
         refreshHeader()
     }
@@ -299,18 +286,14 @@ private final class LibraryPageCollectionViewController: UIViewController, UICol
     private func setSortOrder(_ order: LibrarySortOrder) {
         guard sortOrder != order else { return }
         sortOrder = order
-        store.setLibrarySortOrderRawValue(order.rawValue, forLibraryID: library.id, serverID: summary.serverID)
+        store.setLibrarySortOrderRawValue(order.rawValue, for: library)
         collectionView.reloadData()
         refreshHeader()
     }
 
-    private static func savedFilter(
-        store: PlexSessionStore,
-        summary: PlexConnectionSummary,
-        library: PlexLibraryContext
-    ) -> WatchFilter {
+    private static func savedFilter(store: MediaSessionStore, library: LibraryReference) -> WatchFilter {
         guard
-            let rawValue = store.libraryFilterRawValue(forLibraryID: library.id, serverID: summary.serverID),
+            let rawValue = store.libraryFilterRawValue(for: library),
             let filter = WatchFilter(rawValue: rawValue)
         else {
             return .all
@@ -319,13 +302,9 @@ private final class LibraryPageCollectionViewController: UIViewController, UICol
         return filter
     }
 
-    private static func savedSort(
-        store: PlexSessionStore,
-        summary: PlexConnectionSummary,
-        library: PlexLibraryContext
-    ) -> LibrarySort {
+    private static func savedSort(store: MediaSessionStore, library: LibraryReference) -> LibrarySort {
         guard
-            let rawValue = store.librarySortRawValue(forLibraryID: library.id, serverID: summary.serverID),
+            let rawValue = store.librarySortRawValue(for: library),
             let sort = LibrarySort(rawValue: rawValue)
         else {
             return .title
@@ -335,13 +314,12 @@ private final class LibraryPageCollectionViewController: UIViewController, UICol
     }
 
     private static func savedSortOrder(
-        store: PlexSessionStore,
-        summary: PlexConnectionSummary,
-        library: PlexLibraryContext,
+        store: MediaSessionStore,
+        library: LibraryReference,
         sort: LibrarySort
     ) -> LibrarySortOrder {
         guard
-            let rawValue = store.librarySortOrderRawValue(forLibraryID: library.id, serverID: summary.serverID),
+            let rawValue = store.librarySortOrderRawValue(for: library),
             let order = LibrarySortOrder(rawValue: rawValue)
         else {
             return sort.defaultOrder
@@ -351,7 +329,7 @@ private final class LibraryPageCollectionViewController: UIViewController, UICol
     }
 
     private func updateEmptyState() {
-        emptyLabel.text = displayedItems.isEmpty ? filter.emptyStateText(for: library.itemName) : nil
+        emptyLabel.text = displayedItems.isEmpty ? filter.emptyStateText(for: library.itemTitle) : nil
     }
 
     private func refreshHeader() {
@@ -397,6 +375,29 @@ private final class LibraryPageCollectionViewController: UIViewController, UICol
         headerFocusGuide.preferredFocusEnvironments = [header.focusTargetView]
         headerFocusGuideTopConstraint?.constant = header.frame.minY
         headerFocusGuideHeightConstraint?.constant = max(header.frame.height, 0)
+    }
+
+    private func reloadDataPreservingScrollPosition(_ shouldPreserveScrollPosition: Bool) {
+        let contentOffset = collectionView.contentOffset
+
+        UIView.performWithoutAnimation {
+            collectionView.reloadData()
+            collectionView.layoutIfNeeded()
+        }
+
+        guard shouldPreserveScrollPosition else { return }
+
+        let minOffsetY = -collectionView.adjustedContentInset.top
+        let maxOffsetY = max(
+            collectionView.contentSize.height - collectionView.bounds.height + collectionView.adjustedContentInset.bottom,
+            minOffsetY
+        )
+        let restoredOffset = CGPoint(
+            x: contentOffset.x,
+            y: min(max(contentOffset.y, minOffsetY), maxOffsetY)
+        )
+
+        collectionView.setContentOffset(restoredOffset, animated: false)
     }
 
     private func makeLayout() -> UICollectionViewLayout {
@@ -453,7 +454,7 @@ private enum WatchFilter: Int, CaseIterable {
         }
     }
 
-    func matches(_ item: PlexMediaItem) -> Bool {
+    func matches(_ item: MediaItem) -> Bool {
         switch self {
         case .all:
             return true
@@ -499,7 +500,7 @@ private enum LibrarySort: Int, CaseIterable {
         }
     }
 
-    func items(from items: [PlexMediaItem], order: LibrarySortOrder) -> [PlexMediaItem] {
+    func items(from items: [MediaItem], order: LibrarySortOrder) -> [MediaItem] {
         items.sorted { lhs, rhs in
             switch self {
             case .title:
@@ -513,11 +514,11 @@ private enum LibrarySort: Int, CaseIterable {
                 }
                 return order.compare(lhs.title.localizedStandardCompare(rhs.title) == .orderedAscending)
             case .duration:
-                if let lhsDuration = lhs.duration, let rhsDuration = rhs.duration, lhsDuration != rhsDuration {
+                if let lhsDuration = lhs.durationMilliseconds, let rhsDuration = rhs.durationMilliseconds, lhsDuration != rhsDuration {
                     return order.compare(lhsDuration < rhsDuration)
                 }
-                if lhs.duration != nil || rhs.duration != nil {
-                    return order.compare((lhs.duration ?? .min) < (rhs.duration ?? .min))
+                if lhs.durationMilliseconds != nil || rhs.durationMilliseconds != nil {
+                    return order.compare((lhs.durationMilliseconds ?? .min) < (rhs.durationMilliseconds ?? .min))
                 }
                 return order.compare(lhs.title.localizedStandardCompare(rhs.title) == .orderedAscending)
             }
@@ -579,21 +580,21 @@ private enum LibraryTileStyle: Equatable {
         }
     }
 
-    var imageSize: (width: Int, height: Int) {
-        switch self {
-        case .poster:
-            return (480, 720)
-        case .landscape:
-            return (640, 360)
-        }
-    }
-
     var placeholderIconName: String {
         switch self {
         case .poster:
             return "film.stack.fill"
         case .landscape:
             return "tv.fill"
+        }
+    }
+
+    var mediaArtworkStyle: MediaArtworkStyle {
+        switch self {
+        case .poster:
+            return .poster
+        case .landscape:
+            return .landscape
         }
     }
 
@@ -714,7 +715,7 @@ private final class LibraryGridCell: UICollectionViewCell {
         fatalError("init(coder:) has not been implemented")
     }
 
-    func configure(item: PlexMediaItem, artworkURL: URL?, style: LibraryTileStyle) {
+    func configure(item: MediaItem, artworkURL: URL?, style: LibraryTileStyle) {
         self.style = style
         accessibilityLabel = item.title
         currentArtworkURL = artworkURL
@@ -731,14 +732,14 @@ private final class LibraryGridCell: UICollectionViewCell {
 
         guard let artworkURL else { return }
 
-        if let image = PlexArtworkImageCache.shared.image(for: artworkURL) {
+        if let image = ArtworkImageCache.shared.image(for: artworkURL) {
             imageView.image = image
             placeholderStack.isHidden = true
             return
         }
 
         imageTask = Task { [weak self] in
-            guard let image = await PlexArtworkImageCache.shared.loadImage(from: artworkURL) else { return }
+            guard let image = await ArtworkImageCache.shared.loadImage(from: artworkURL) else { return }
             guard !Task.isCancelled else { return }
 
             await MainActor.run {
@@ -911,41 +912,6 @@ private final class GlassMenuButton: UIButton {
     }
 }
 
-@MainActor
-private final class PlexArtworkImageCache {
-    static let shared = PlexArtworkImageCache()
-
-    private let cache = NSCache<NSURL, UIImage>()
-
-    func image(for url: URL) -> UIImage? {
-        cache.object(forKey: url as NSURL)
-    }
-
-    func loadImage(from url: URL) async -> UIImage? {
-        if let cached = image(for: url) {
-            return cached
-        }
-
-        do {
-            let (data, _) = try await URLSession.shared.data(from: url)
-            guard let image = UIImage(data: data) else { return nil }
-            cache.setObject(image, forKey: url as NSURL)
-            return image
-        } catch {
-            return nil
-        }
-    }
-}
-
-private extension PlexMediaItem {
-    var subtitle: String? {
-        [year.map(String.init), runtimeText]
-            .compactMap { $0 }
-            .joined(separator: " • ")
-            .nilIfEmpty
-    }
-}
-
 private extension UIFont {
     func withTraits(_ traits: UIFontDescriptor.SymbolicTraits) -> UIFont {
         guard let descriptor = fontDescriptor.withSymbolicTraits(traits) else {
@@ -953,11 +919,5 @@ private extension UIFont {
         }
 
         return UIFont(descriptor: descriptor, size: pointSize)
-    }
-}
-
-private extension String {
-    var nilIfEmpty: String? {
-        isEmpty ? nil : self
     }
 }

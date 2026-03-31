@@ -2,13 +2,13 @@ import SwiftUI
 
 struct TVChildListSection: View {
     @ObservedObject var model: AppModel
-    let item: PlexMediaItem
+    let item: MediaItem
     let title: String
     let emptyMessage: String
-    let destination: (PlexMediaItem) -> AppRoute
+    let destination: (MediaItem) -> AppRoute
     let rowStyle: RowStyle
 
-    @State private var children: [PlexMediaItem] = []
+    @State private var children: [MediaItem] = []
     @State private var isLoading = false
     @State private var errorMessage: String?
 
@@ -49,7 +49,9 @@ struct TVChildListSection: View {
             }
         }
         .task(id: item.id) {
-            await loadChildren()
+            await PollingLoop.run {
+                await loadChildren()
+            }
         }
     }
 
@@ -59,14 +61,16 @@ struct TVChildListSection: View {
         defer { isLoading = false }
 
         do {
-            children = try await model.plexChildren(for: item)
+            children = try await model.loadChildren(for: item)
             errorMessage = nil
         } catch {
-            errorMessage = "Couldn't load this list right now."
+            if children.isEmpty {
+                errorMessage = "Couldn't load this list right now."
+            }
         }
     }
 
-    private func title(for child: PlexMediaItem, position: Int) -> String {
+    private func title(for child: MediaItem, position: Int) -> String {
         switch rowStyle {
         case .standard:
             return child.title

@@ -2,24 +2,9 @@ import SwiftUI
 
 struct ShowEpisodeView: View {
     @ObservedObject var model: AppModel
-    let item: PlexMediaItem
+    let item: MediaItem
 
     var body: some View {
-        Group {
-            if let summary = model.connectedSummary {
-                MediaView(
-                    model: model,
-                    data: item.mediaViewData(
-                        in: summary,
-                        playbackID: .plex(item.ratingKey),
-                        artworkStyle: .landscape
-                    )
-                )
-            } else {
-                ProgressView()
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .background(AppBackground())
-            }
-        }
+        MediaView(model: model, data: item.mediaViewData())
     }
 }

@@ -13,14 +13,14 @@ struct PlexSettingsView: View {
                 Text("Plex Server")
                     .font(.title3.weight(.semibold))
 
-                Text(model.connectedSummary?.serverName ?? "Unknown Server")
+                Text(model.connectedServer?.serverName ?? "Unknown Server")
                     .font(.title2.weight(.semibold))
 
-                Text(model.connectedSummary?.accountName ?? "Plex")
+                Text(model.connectedServer?.accountName ?? "Plex")
                     .foregroundStyle(.secondary)
 
                 Button("Deactivate Server", role: .destructive) {
-                    model.disconnectPlex()
+                    model.disconnectCurrentServer()
                     path.removeAll()
                 }
 

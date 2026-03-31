@@ -19,7 +19,7 @@ struct MediaViewData {
     }
 }
 
-enum MediaArtworkStyle {
+enum MediaArtworkStyle: Hashable {
     case poster
     case landscape
 

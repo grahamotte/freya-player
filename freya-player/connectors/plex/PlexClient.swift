@@ -71,7 +71,7 @@ final class PlexClient {
             token: connection.serverToken
         )
 
-        return metadata.playbackOptions(ratingKey: ratingKey)
+        return metadata.playbackOptions()
     }
 
     func playbackURL(
@@ -85,11 +85,9 @@ final class PlexClient {
             token: connection.serverToken
         )
 
-        if let selection,
-           let options = metadata.playbackOptions(ratingKey: ratingKey),
-           case .plex(let context) = options.kind {
+        if let selection, let partID = metadata.selectedPartID {
             try await setStreamSelection(
-                partID: context.partID,
+                partID: partID,
                 audioStreamID: selection.audioID,
                 subtitleStreamID: selection.subtitleID,
                 connection: connection
@@ -676,10 +674,13 @@ private struct PlexPlaybackMetadata: Decodable {
         media?.contains(where: \.hasSelectableStreams) == true
     }
 
-    func playbackOptions(ratingKey: String) -> MediaPlaybackOptions? {
+    var selectedPartID: String? {
+        media?.first(where: { $0.parts?.isEmpty == false })?.parts?.first?.id
+    }
+
+    func playbackOptions() -> MediaPlaybackOptions? {
         guard let media = media?.first(where: { $0.parts?.isEmpty == false }),
-              let part = media.parts?.first,
-              let partID = part.id else {
+              let part = media.parts?.first else {
             return nil
         }
 
@@ -690,13 +691,7 @@ private struct PlexPlaybackMetadata: Decodable {
             audioOptions: audioOptions,
             subtitleOptions: subtitleOptions,
             selectedAudioID: part.selectedAudioID ?? audioOptions.first?.id,
-            selectedSubtitleID: part.selectedSubtitleID,
-            kind: .plex(
-                PlexPlaybackSelectionContext(
-                    ratingKey: ratingKey,
-                    partID: partID
-                )
-            )
+            selectedSubtitleID: part.selectedSubtitleID
         )
     }
 

@@ -34,7 +34,7 @@ struct AppView: View {
                 .task {
                     await model.restoreIfNeeded()
                 }
-                .onChange(of: model.connectedSummary?.serverID) { _, serverID in
+                .onChange(of: model.connectedServer?.id) { _, serverID in
                     if serverID != nil {
                         path.removeAll()
                     }
@@ -44,10 +44,14 @@ struct AppView: View {
 
     @ViewBuilder
     private var rootView: some View {
-        if let summary = model.connectedSummary {
-            LibrariesView(summary: summary, path: $path)
-        } else if case .checking = model.plexState {
+        if let server = model.connectedServer {
+            LibrariesView(model: model, server: server, path: $path)
+        } else if case .checking = model.connectionState {
             ProgressView("Checking saved Plex connection...")
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(AppBackground())
+        } else if case .connecting(let message) = model.connectionState {
+            ProgressView(message)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(AppBackground())
         } else {

@@ -69,6 +69,7 @@ struct PlexLibraryContext: Hashable, Identifiable {
 
 struct PlexMediaItem: Decodable, Identifiable, Hashable {
     let ratingKey: String
+    let type: String?
     let title: String
     let summary: String?
     let addedAt: Int?
@@ -89,6 +90,7 @@ struct PlexMediaItem: Decodable, Identifiable, Hashable {
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         ratingKey = try container.decodeLossyString(forKey: .ratingKey)
+        type = try container.decodeLossyStringIfPresent(forKey: .type)
         title = try container.decode(String.self, forKey: .title)
         summary = try container.decodeLossyStringIfPresent(forKey: .summary)
         addedAt = try container.decodeLossyIntIfPresent(forKey: .addedAt)
@@ -187,6 +189,7 @@ struct PlexMediaItem: Decodable, Identifiable, Hashable {
 
     private enum CodingKeys: String, CodingKey {
         case ratingKey
+        case type
         case title
         case summary
         case addedAt
@@ -224,4 +227,137 @@ struct PlexPin: Decodable {
     let code: String
     let authToken: String?
     let expiresIn: Int?
+}
+
+extension PlexConnectionSummary {
+    func connectedServer(providerID: MediaProviderID = .plex) -> ConnectedServer {
+        ConnectedServer(
+            providerID: providerID,
+            serverID: serverID,
+            serverName: serverName,
+            accountName: accountName,
+            libraries: libraries.map {
+                $0.libraryShelf(
+                    providerID: providerID,
+                    serverID: serverID,
+                    serverURL: serverURL,
+                    serverToken: serverToken
+                )
+            }
+        )
+    }
+}
+
+extension PlexLibrarySection {
+    func libraryShelf(
+        providerID: MediaProviderID,
+        serverID: String,
+        serverURL: String,
+        serverToken: String
+    ) -> LibraryShelf {
+        let reference = context.libraryReference(providerID: providerID, serverID: serverID)
+
+        return LibraryShelf(
+            id: id,
+            title: title,
+            reference: reference,
+            items: items.map {
+                $0.mediaItem(
+                    providerID: providerID,
+                    serverID: serverID,
+                    serverURL: serverURL,
+                    serverToken: serverToken,
+                    fallbackKind: context.defaultItemKind
+                )
+            }
+        )
+    }
+}
+
+extension PlexLibraryContext {
+    var defaultItemKind: MediaItemKind {
+        switch type {
+        case "show":
+            return .series
+        case "movie":
+            return .movie
+        default:
+            return usesPosterArtwork ? .movie : .other
+        }
+    }
+
+    func libraryReference(providerID: MediaProviderID, serverID: String) -> LibraryReference {
+        LibraryReference(
+            providerID: providerID,
+            serverID: serverID,
+            id: id,
+            title: title,
+            itemTitle: itemName,
+            artworkStyle: usesPosterArtwork ? .poster : .landscape,
+            defaultItemKind: defaultItemKind
+        )
+    }
+}
+
+extension PlexMediaItem {
+    func mediaItem(
+        providerID: MediaProviderID,
+        serverID: String,
+        serverURL: String,
+        serverToken: String,
+        fallbackKind: MediaItemKind
+    ) -> MediaItem {
+        MediaItem(
+            providerID: providerID,
+            serverID: serverID,
+            id: ratingKey,
+            title: title,
+            kind: mediaItemKind ?? fallbackKind,
+            synopsis: synopsis,
+            addedAt: addedAt,
+            year: year,
+            durationMilliseconds: duration,
+            contentRating: contentRating,
+            isWatched: isWatched,
+            progress: progress,
+            resumeOffsetMilliseconds: !isWatched ? viewOffset : nil,
+            artwork: MediaArtworkSet(
+                posterURL: artworkURL(
+                    baseURL: serverURL,
+                    token: serverToken,
+                    width: 480,
+                    height: 720
+                ),
+                landscapeURL: artworkURL(
+                    baseURL: serverURL,
+                    token: serverToken,
+                    width: 780,
+                    height: 439,
+                    preferCoverArt: true
+                ),
+                backdropURL: artworkURL(
+                    baseURL: serverURL,
+                    token: serverToken,
+                    width: 1920,
+                    height: 1080,
+                    preferCoverArt: true
+                )
+            )
+        )
+    }
+
+    private var mediaItemKind: MediaItemKind? {
+        switch type {
+        case "movie":
+            return .movie
+        case "show":
+            return .series
+        case "season":
+            return .season
+        case "episode":
+            return .episode
+        default:
+            return nil
+        }
+    }
 }

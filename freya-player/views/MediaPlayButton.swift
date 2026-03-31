@@ -210,7 +210,7 @@ struct MediaPlayButton: View {
         player = nil
     }
 
-    private func reportTimeline(state: PlexClient.TimelineState, time: Int, duration: Int?) {
+    private func reportTimeline(state: MediaPlaybackTimelineState, time: Int, duration: Int?) {
         Task {
             await model.reportPlaybackTimeline(
                 for: id,
@@ -240,7 +240,7 @@ struct MediaPlayButton: View {
 private struct StockPlayerView: UIViewControllerRepresentable {
     let player: AVPlayer
     let resumeOffsetMilliseconds: Int?
-    let onTimelineEvent: (PlexClient.TimelineState, Int, Int?) -> Void
+    let onTimelineEvent: (MediaPlaybackTimelineState, Int, Int?) -> Void
     let onPlaybackEnded: (Int, Int?) -> Void
 
     func makeUIViewController(context: Context) -> AVPlayerViewController {
@@ -280,15 +280,15 @@ private struct StockPlayerView: UIViewControllerRepresentable {
         private var timeControlObservation: NSKeyValueObservation?
         private var itemStatusObservation: NSKeyValueObservation?
         private var endObserver: NSObjectProtocol?
-        private var onTimelineEvent: ((PlexClient.TimelineState, Int, Int?) -> Void)?
+        private var onTimelineEvent: ((MediaPlaybackTimelineState, Int, Int?) -> Void)?
         private var onPlaybackEnded: ((Int, Int?) -> Void)?
-        private var lastState: PlexClient.TimelineState?
+        private var lastState: MediaPlaybackTimelineState?
         private var didSeekInitialPosition = false
 
         func bind(
             to player: AVPlayer,
             resumeOffsetMilliseconds: Int?,
-            onTimelineEvent: @escaping (PlexClient.TimelineState, Int, Int?) -> Void,
+            onTimelineEvent: @escaping (MediaPlaybackTimelineState, Int, Int?) -> Void,
             onPlaybackEnded: @escaping (Int, Int?) -> Void
         ) {
             guard self.player !== player else { return }
@@ -374,7 +374,7 @@ private struct StockPlayerView: UIViewControllerRepresentable {
             )
         }
 
-        private func state(for player: AVPlayer) -> PlexClient.TimelineState {
+        private func state(for player: AVPlayer) -> MediaPlaybackTimelineState {
             switch player.timeControlStatus {
             case .paused:
                 return .paused

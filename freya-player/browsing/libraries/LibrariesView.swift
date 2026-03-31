@@ -2,35 +2,41 @@ import SwiftUI
 import UIKit
 
 struct LibrariesView: View {
-    let summary: PlexConnectionSummary
+    @ObservedObject var model: AppModel
+    let server: ConnectedServer
     @Binding var path: [AppRoute]
 
     var body: some View {
         LibrariesCollectionView(
-            summary: summary,
+            server: server,
             onSelectRoute: { path.append($0) },
-            onManageServer: { path.append(.plexSettings) }
+            onManageServer: { path.append(server.providerID.settingsRoute) }
         )
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(LibrariesAmbientBackground())
+        .task(id: server.id) {
+            await PollingLoop.run {
+                await model.refreshConnection()
+            }
+        }
     }
 }
 
 private struct LibrariesCollectionView: UIViewControllerRepresentable {
-    let summary: PlexConnectionSummary
+    let server: ConnectedServer
     let onSelectRoute: (AppRoute) -> Void
     let onManageServer: () -> Void
 
     func makeUIViewController(context: Context) -> LibrariesCollectionViewController {
         LibrariesCollectionViewController(
-            summary: summary,
+            server: server,
             onSelectRoute: onSelectRoute,
             onManageServer: onManageServer
         )
     }
 
     func updateUIViewController(_ viewController: LibrariesCollectionViewController, context: Context) {
-        viewController.update(summary: summary)
+        viewController.update(server: server)
     }
 }
 
@@ -40,7 +46,7 @@ private final class LibrariesCollectionViewController: UIViewController, UIColle
     private let onSelectRoute: (AppRoute) -> Void
     private let onManageServer: () -> Void
 
-    private var summary: PlexConnectionSummary
+    private var server: ConnectedServer
     private var sections: [LibrariesSection] = []
     private var selectedTitles: [String: String] = [:]
     private var focusedSectionID: String?
@@ -51,15 +57,15 @@ private final class LibrariesCollectionViewController: UIViewController, UIColle
     )
 
     init(
-        summary: PlexConnectionSummary,
+        server: ConnectedServer,
         onSelectRoute: @escaping (AppRoute) -> Void,
         onManageServer: @escaping () -> Void
     ) {
-        self.summary = summary
+        self.server = server
         self.onSelectRoute = onSelectRoute
         self.onManageServer = onManageServer
         super.init(nibName: nil, bundle: nil)
-        sections = makeSections(from: summary)
+        sections = makeSections(from: server)
         selectedTitles = makeSelectedTitles(from: sections)
     }
 
@@ -85,7 +91,7 @@ private final class LibrariesCollectionViewController: UIViewController, UIColle
         collectionView.insetsLayoutMarginsFromSafeArea = false
         collectionView.layoutMargins = .zero
 
-        collectionView.register(PlexTileCell.self, forCellWithReuseIdentifier: PlexTileCell.reuseIdentifier)
+        collectionView.register(LibraryTileCell.self, forCellWithReuseIdentifier: LibraryTileCell.reuseIdentifier)
         collectionView.register(ManageServerCell.self, forCellWithReuseIdentifier: ManageServerCell.reuseIdentifier)
         collectionView.register(
             LibrariesSectionHeaderView.self,
@@ -113,14 +119,14 @@ private final class LibrariesCollectionViewController: UIViewController, UIColle
         ])
     }
 
-    func update(summary: PlexConnectionSummary) {
-        self.summary = summary
-        sections = makeSections(from: summary)
+    func update(server: ConnectedServer) {
+        let shouldPreserveScrollPosition = self.server.id == server.id
+        self.server = server
+        sections = makeSections(from: server)
         selectedTitles = makeSelectedTitles(from: sections)
 
         guard isViewLoaded else { return }
-        collectionView.setCollectionViewLayout(makeLayout(), animated: false)
-        collectionView.reloadData()
+        reloadDataPreservingScrollPosition(shouldPreserveScrollPosition)
     }
 
     func numberOfSections(in collectionView: UICollectionView) -> Int {
@@ -144,9 +150,9 @@ private final class LibrariesCollectionViewController: UIViewController, UIColle
 
         case .openLibrary, .media:
             let cell = collectionView.dequeueReusableCell(
-                withReuseIdentifier: PlexTileCell.reuseIdentifier,
+                withReuseIdentifier: LibraryTileCell.reuseIdentifier,
                 for: indexPath
-            ) as! PlexTileCell
+            ) as! LibraryTileCell
             cell.configure(item: item)
             return cell
         }
@@ -163,7 +169,7 @@ private final class LibrariesCollectionViewController: UIViewController, UIColle
                 withReuseIdentifier: LibrariesServerHeaderView.reuseIdentifier,
                 for: indexPath
             ) as! LibrariesServerHeaderView
-            view.title = summary.serverName
+            view.title = server.serverName
             return view
         }
 
@@ -295,16 +301,16 @@ private final class LibrariesCollectionViewController: UIViewController, UIColle
         }, configuration: configuration)
     }
 
-    private func makeSections(from summary: PlexConnectionSummary) -> [LibrariesSection] {
-        let librarySections = summary.libraries.map { library in
-            let style = library.usesPosterArtwork ? PlexShelfStyle.poster : .wide
+    private func makeSections(from server: ConnectedServer) -> [LibrariesSection] {
+        let librarySections = server.libraries.map { library in
+            let style = library.reference.artworkStyle == .poster ? LibrariesShelfStyle.poster : .wide
             let openItem = LibrariesItem(
                 id: "\(library.id)-open",
                 title: library.title,
                 artworkURL: nil,
                 progress: nil,
                 isWatched: false,
-                route: library.context.route,
+                route: library.reference.route,
                 style: style,
                 kind: .openLibrary,
                 iconName: "arrow.right"
@@ -314,16 +320,10 @@ private final class LibrariesCollectionViewController: UIViewController, UIColle
                 LibrariesItem(
                     id: item.id,
                     title: item.title,
-                    artworkURL: item.artworkURL(
-                        baseURL: summary.serverURL,
-                        token: summary.serverToken,
-                        width: style.imageSize.width,
-                        height: style.imageSize.height,
-                        preferCoverArt: style == .wide
-                    ),
+                    artworkURL: item.artwork.url(for: style.mediaArtworkStyle),
                     progress: item.progress,
                     isWatched: item.isWatched,
-                    route: library.context.itemRoute(for: item),
+                    route: item.route,
                     style: style,
                     kind: .media,
                     iconName: style.placeholderIconName
@@ -332,13 +332,13 @@ private final class LibrariesCollectionViewController: UIViewController, UIColle
 
             return LibrariesSection(
                 id: library.id,
-                    title: library.title,
-                    kind: .library(style),
-                    items: [openItem] + mediaItems,
-                    defaultSelectionTitle: library.title,
-                    emptyMessage: library.items.isEmpty ? "No recent items yet." : nil
-                )
-            }
+                title: library.title,
+                kind: .library(style),
+                items: [openItem] + mediaItems,
+                defaultSelectionTitle: library.title,
+                emptyMessage: library.items.isEmpty ? "No recent items yet." : nil
+            )
+        }
 
         let manageSection = LibrariesSection(
             id: "manage-server",
@@ -391,6 +391,29 @@ private final class LibrariesCollectionViewController: UIViewController, UIColle
         }
     }
 
+    private func reloadDataPreservingScrollPosition(_ shouldPreserveScrollPosition: Bool) {
+        let contentOffset = collectionView.contentOffset
+
+        UIView.performWithoutAnimation {
+            collectionView.reloadData()
+            collectionView.layoutIfNeeded()
+        }
+
+        guard shouldPreserveScrollPosition else { return }
+
+        let minOffsetY = -collectionView.adjustedContentInset.top
+        let maxOffsetY = max(
+            collectionView.contentSize.height - collectionView.bounds.height + collectionView.adjustedContentInset.bottom,
+            minOffsetY
+        )
+        let restoredOffset = CGPoint(
+            x: contentOffset.x,
+            y: min(max(contentOffset.y, minOffsetY), maxOffsetY)
+        )
+
+        collectionView.setContentOffset(restoredOffset, animated: false)
+    }
+
     private func indexPath(for focusedView: UIView?) -> IndexPath? {
         var view = focusedView
 
@@ -416,7 +439,7 @@ private struct LibrariesSection: Hashable {
 }
 
 private enum LibrariesSectionKind: Hashable {
-    case library(PlexShelfStyle)
+    case library(LibrariesShelfStyle)
     case manage
 }
 
@@ -427,7 +450,7 @@ private struct LibrariesItem: Hashable {
     let progress: Double?
     let isWatched: Bool
     let route: AppRoute?
-    let style: PlexShelfStyle
+    let style: LibrariesShelfStyle
     let kind: LibrariesItemKind
     let iconName: String?
 }
@@ -438,8 +461,8 @@ private enum LibrariesItemKind: Hashable {
     case manageServer
 }
 
-private final class PlexTileCell: UICollectionViewCell {
-    static let reuseIdentifier = "PlexTileCell"
+private final class LibraryTileCell: UICollectionViewCell {
+    static let reuseIdentifier = "LibraryTileCell"
     private static let placeholderImage = UIGraphicsImageRenderer(size: CGSize(width: 8, height: 8)).image { context in
         UIColor.white.withAlphaComponent(0.08).setFill()
         context.fill(CGRect(origin: .zero, size: CGSize(width: 8, height: 8)))
@@ -525,14 +548,14 @@ private final class PlexTileCell: UICollectionViewCell {
 
         guard let artworkURL = item.artworkURL else { return }
 
-        if let image = PlexArtworkImageCache.shared.image(for: artworkURL) {
+        if let image = ArtworkImageCache.shared.image(for: artworkURL) {
             imageView.image = image
             placeholderStack.isHidden = true
             return
         }
 
         imageTask = Task { [weak self] in
-            guard let image = await PlexArtworkImageCache.shared.loadImage(from: artworkURL) else { return }
+            guard let image = await ArtworkImageCache.shared.loadImage(from: artworkURL) else { return }
             guard !Task.isCancelled else { return }
 
             await MainActor.run {
@@ -586,32 +609,6 @@ private final class ManageServerCell: UICollectionViewListCell {
         background.strokeColor = state.isFocused ? .clear : UIColor.white.withAlphaComponent(0.28)
         background.strokeWidth = state.isFocused ? 0 : 1
         backgroundConfiguration = background
-    }
-}
-
-@MainActor
-private final class PlexArtworkImageCache {
-    static let shared = PlexArtworkImageCache()
-
-    private let cache = NSCache<NSURL, UIImage>()
-
-    func image(for url: URL) -> UIImage? {
-        cache.object(forKey: url as NSURL)
-    }
-
-    func loadImage(from url: URL) async -> UIImage? {
-        if let cached = image(for: url) {
-            return cached
-        }
-
-        do {
-            let (data, _) = try await URLSession.shared.data(from: url)
-            guard let image = UIImage(data: data) else { return nil }
-            cache.setObject(image, forKey: url as NSURL)
-            return image
-        } catch {
-            return nil
-        }
     }
 }
 
@@ -722,7 +719,7 @@ private final class LibrariesSectionHeaderView: UICollectionReusableView {
     }
 }
 
-private enum PlexShelfStyle: Hashable {
+private enum LibrariesShelfStyle: Hashable {
     case poster
     case wide
 
@@ -744,20 +741,20 @@ private enum PlexShelfStyle: Hashable {
         }
     }
 
+    var mediaArtworkStyle: MediaArtworkStyle {
+        switch self {
+        case .poster:
+            return .poster
+        case .wide:
+            return .landscape
+        }
+    }
+
     func cellSize(for availableWidth: CGFloat) -> CGSize {
         let spacing: CGFloat = 44
         let width = floor((availableWidth - (spacing * (columns - 1))) / columns)
         let height = floor(width / aspectRatio)
         return CGSize(width: width, height: height)
-    }
-
-    var imageSize: (width: Int, height: Int) {
-        switch self {
-        case .poster:
-            return (480, 720)
-        case .wide:
-            return (640, 360)
-        }
     }
 
     var placeholderIconName: String {

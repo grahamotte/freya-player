@@ -12,7 +12,7 @@ struct PlexSetupView: View {
                 Label("Plex", systemImage: "play.rectangle.fill")
                     .font(.title3.weight(.semibold))
 
-                switch model.plexState {
+                switch model.connectionState {
                 case .checking:
                     ProgressView("Checking saved Plex connection...")
 
@@ -24,21 +24,23 @@ struct PlexSetupView: View {
                         model.startPlexLogin()
                     }
 
-                case .waitingForLink(let code):
-                    Text("Visit this link in your browser")
-                        .foregroundStyle(.secondary)
+                case .connecting(let message):
+                    if let code = model.plexLinkCode {
+                        Text("Visit this link in your browser")
+                            .foregroundStyle(.secondary)
 
-                    Text("plex.tv/link")
-                        .font(.headline)
+                        Text("plex.tv/link")
+                            .font(.headline)
 
-                    Text("and enter this code")
-                        .foregroundStyle(.secondary)
+                        Text("and enter this code")
+                            .foregroundStyle(.secondary)
 
-                    Text(code)
-                        .font(.system(size: 42, weight: .bold, design: .rounded))
-                        .monospaced()
+                        Text(code)
+                            .font(.system(size: 42, weight: .bold, design: .rounded))
+                            .monospaced()
+                    }
 
-                    Text("Waiting for approval...")
+                    Text(message)
                         .foregroundStyle(.secondary)
 
                 case .failed(let message):
