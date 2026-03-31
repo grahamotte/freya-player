@@ -304,6 +304,12 @@ private final class LibrariesCollectionViewController: UIViewController, UIColle
     private func makeSections(from server: ConnectedServer) -> [LibrariesSection] {
         let librarySections = server.libraries.map { library in
             let style = library.reference.artworkStyle == .poster ? LibrariesShelfStyle.poster : .wide
+            let previewItems = Array(
+                library.items
+                    .filter { !$0.isWatched }
+                    .sorted { ($0.addedAt ?? .min) > ($1.addedAt ?? .min) }
+                    .prefix(20)
+            )
             let openItem = LibrariesItem(
                 id: "\(library.id)-open",
                 title: library.title,
@@ -316,7 +322,7 @@ private final class LibrariesCollectionViewController: UIViewController, UIColle
                 iconName: "arrow.right"
             )
 
-            let mediaItems = library.items.map { item in
+            let mediaItems = previewItems.map { item in
                 LibrariesItem(
                     id: item.id,
                     title: item.title,
@@ -336,7 +342,7 @@ private final class LibrariesCollectionViewController: UIViewController, UIColle
                 kind: .library(style),
                 items: [openItem] + mediaItems,
                 defaultSelectionTitle: library.title,
-                emptyMessage: library.items.isEmpty ? "No recent items yet." : nil
+                emptyMessage: previewItems.isEmpty ? "No recent items yet." : nil
             )
         }
 

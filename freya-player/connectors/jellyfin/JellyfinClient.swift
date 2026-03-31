@@ -416,7 +416,7 @@ final class JellyfinClient {
         var items = baseItemQueryItems(userID: userID, parentID: library.id)
         items += [
             URLQueryItem(name: "recursive", value: "true"),
-            URLQueryItem(name: "limit", value: "18"),
+            URLQueryItem(name: "limit", value: "100"),
             URLQueryItem(name: "sortBy", value: "DateCreated"),
             URLQueryItem(name: "sortOrder", value: "Descending")
         ]
