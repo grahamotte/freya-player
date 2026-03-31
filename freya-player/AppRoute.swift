@@ -5,12 +5,24 @@ enum AppRoute: Hashable {
     case jellyfinSetup
     case plexSettings
     case jellyfinSettings
-    case movieLibrary(String)
+    case library(PlexLibraryContext)
     case movie(PlexMediaItem)
-    case tvLibrary(String)
     case series(PlexMediaItem)
     case season(PlexMediaItem)
     case episode(PlexMediaItem)
-    case otherLibrary(String)
     case other(PlexMediaItem)
+}
+
+extension PlexLibraryContext {
+    var route: AppRoute {
+        .library(self)
+    }
+
+    func itemRoute(for item: PlexMediaItem) -> AppRoute {
+        if type == "show" {
+            return .series(item)
+        }
+
+        return usesPosterArtwork ? .movie(item) : .other(item)
+    }
 }

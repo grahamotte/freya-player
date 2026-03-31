@@ -153,12 +153,53 @@ final class AppModel: ObservableObject {
         }
     }
 
+    func reportPlaybackTimeline(
+        for id: MediaPlaybackID,
+        state: PlexClient.TimelineState,
+        time: Int,
+        duration: Int?,
+        sessionID: String
+    ) async {
+        switch id {
+        case .plex(let ratingKey):
+            guard let summary = connectedSummary else { return }
+            try? await client.reportTimeline(
+                for: ratingKey,
+                connection: summary,
+                state: state,
+                time: time,
+                duration: duration,
+                sessionID: sessionID
+            )
+        case .jellyfin:
+            return
+        }
+    }
+
+    func markPlaybackCompleted(for id: MediaPlaybackID) async {
+        switch id {
+        case .plex(let ratingKey):
+            guard let summary = connectedSummary else { return }
+            try? await client.scrobble(for: ratingKey, connection: summary)
+        case .jellyfin:
+            return
+        }
+    }
+
     func plexChildren(for item: PlexMediaItem) async throws -> [PlexMediaItem] {
         guard let summary = connectedSummary else {
             throw PlaybackError.unavailable
         }
 
         return try await client.children(for: item.ratingKey, connection: summary)
+    }
+
+    func plexLibraryItems(for library: PlexLibraryContext) async throws -> [PlexMediaItem] {
+        guard let summary = connectedSummary else {
+            throw PlaybackError.unavailable
+        }
+
+        return try await client.libraryItems(for: library, connection: summary)
     }
 
     private func pollForAuth(pin: PlexPin) async {

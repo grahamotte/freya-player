@@ -8,6 +8,8 @@ struct MediaViewData {
     let artworkStyle: MediaArtworkStyle
     let backdropURL: URL?
     let playbackID: MediaPlaybackID?
+    let hasResume: Bool
+    let resumeOffsetMilliseconds: Int?
 
     struct Metadata: Identifiable {
         let label: String
@@ -33,10 +35,18 @@ enum MediaArtworkStyle {
     var width: CGFloat {
         switch self {
         case .poster:
-            return 420
+            return 480
         case .landscape:
-            return 720
+            return 780
         }
+    }
+
+    var imageRequestWidth: Int {
+        Int(width * 2)
+    }
+
+    var imageRequestHeight: Int {
+        Int(CGFloat(imageRequestWidth) / aspectRatio)
     }
 
     func fittedSize(in bounds: CGSize) -> CGSize {
@@ -107,7 +117,12 @@ struct MediaView<Content: View>: View {
                             .frame(maxWidth: synopsisWidth, maxHeight: 220, alignment: .topLeading)
 
                         if let playbackID = data.playbackID {
-                            MediaPlayButton(model: model, id: playbackID)
+                            MediaPlayButton(
+                                model: model,
+                                id: playbackID,
+                                hasResume: data.hasResume,
+                                resumeOffsetMilliseconds: data.resumeOffsetMilliseconds
+                            )
                         }
 
                         content
@@ -209,7 +224,7 @@ private struct MediaArtworkView: View {
                 case .success(let image):
                     image
                         .resizable()
-                        .scaledToFit()
+                        .scaledToFill()
                 default:
                     Image(systemName: "film.fill")
                         .font(.system(size: 48, weight: .semibold))

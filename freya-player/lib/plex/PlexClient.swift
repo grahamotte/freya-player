@@ -1,6 +1,13 @@
 import Foundation
 
 final class PlexClient {
+    enum TimelineState: String {
+        case stopped
+        case buffering
+        case playing
+        case paused
+    }
+
     private let session: URLSession
     private let clientIdentifier: String
     private let hlsSubtitleProfileExtra = "add-transcode-target(type=subtitleProfile&context=all&protocol=hls&container=webvtt&subtitleCodec=webvtt)"
@@ -142,6 +149,67 @@ final class PlexClient {
             baseURL: connection.serverURL,
             extraQueryItems: [URLQueryItem(name: "sort", value: "index:asc")]
         )
+    }
+
+    func reportTimeline(
+        for ratingKey: String,
+        connection: PlexConnectionSummary,
+        state: TimelineState,
+        time: Int,
+        duration: Int?,
+        sessionID: String
+    ) async throws {
+        guard var components = URLComponents(string: "\(connection.serverURL)/:/timeline") else {
+            throw PlexError.invalidURL
+        }
+
+        components.queryItems = [
+            URLQueryItem(name: "ratingKey", value: ratingKey),
+            URLQueryItem(name: "state", value: state.rawValue),
+            URLQueryItem(name: "time", value: String(max(time, 0))),
+            duration.map { URLQueryItem(name: "duration", value: String(max($0, 0))) },
+            state == .stopped ? URLQueryItem(name: "continuing", value: "0") : nil,
+            URLQueryItem(name: "X-Plex-Token", value: connection.serverToken)
+        ]
+        .compactMap { $0 }
+
+        var request = URLRequest(url: components.url!)
+        request.httpMethod = "POST"
+        applyPlexHeaders(to: &request, token: connection.serverToken, sessionID: sessionID)
+        try await sendVoid(request)
+    }
+
+    func scrobble(
+        for ratingKey: String,
+        connection: PlexConnectionSummary
+    ) async throws {
+        guard var components = URLComponents(string: "\(connection.serverURL)/:/scrobble") else {
+            throw PlexError.invalidURL
+        }
+
+        components.queryItems = [
+            URLQueryItem(name: "identifier", value: "com.plexapp.plugins.library"),
+            URLQueryItem(name: "key", value: ratingKey),
+            URLQueryItem(name: "X-Plex-Token", value: connection.serverToken)
+        ]
+
+        var request = URLRequest(url: components.url!)
+        request.httpMethod = "PUT"
+        applyPlexHeaders(to: &request, token: connection.serverToken)
+        try await sendVoid(request)
+    }
+
+    func libraryItems(for library: PlexLibraryContext, connection: PlexConnectionSummary) async throws -> [PlexMediaItem] {
+        let items = try await fetchMetadataItems(
+            path: "/library/sections/\(library.id)/all",
+            token: connection.serverToken,
+            baseURL: connection.serverURL,
+            pageSize: 500
+        )
+
+        return items.sorted {
+            $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending
+        }
     }
 
     private func setStreamSelection(
@@ -383,23 +451,37 @@ final class PlexClient {
         path: String,
         token: String,
         baseURL: String,
-        extraQueryItems: [URLQueryItem] = []
+        extraQueryItems: [URLQueryItem] = [],
+        pageSize: Int = 200
     ) async throws -> [PlexMediaItem] {
-        guard var components = URLComponents(string: "\(baseURL)\(path)") else {
-            throw PlexError.invalidURL
+        var items: [PlexMediaItem] = []
+        var start = 0
+
+        while true {
+            guard var components = URLComponents(string: "\(baseURL)\(path)") else {
+                throw PlexError.invalidURL
+            }
+
+            components.queryItems = extraQueryItems + [
+                URLQueryItem(name: "X-Plex-Container-Start", value: String(start)),
+                URLQueryItem(name: "X-Plex-Container-Size", value: String(pageSize)),
+                URLQueryItem(name: "X-Plex-Token", value: token)
+            ]
+
+            var request = URLRequest(url: components.url!)
+            applyPlexHeaders(to: &request, token: token)
+
+            let response: PlexMetadataContainer<PlexMediaItem> = try await send(request)
+            let batch = response.mediaContainer.metadata ?? []
+            items += batch
+
+            let totalSize = response.mediaContainer.totalSize ?? batch.count
+            start += batch.count
+
+            if batch.isEmpty || start >= totalSize || batch.count < pageSize {
+                return items
+            }
         }
-
-        components.queryItems = extraQueryItems + [
-            URLQueryItem(name: "X-Plex-Container-Start", value: "0"),
-            URLQueryItem(name: "X-Plex-Container-Size", value: "200"),
-            URLQueryItem(name: "X-Plex-Token", value: token)
-        ]
-
-        var request = URLRequest(url: components.url!)
-        applyPlexHeaders(to: &request, token: token)
-
-        let response: PlexMetadataContainer<PlexMediaItem> = try await send(request)
-        return response.mediaContainer.metadata ?? []
     }
 
     private func send<T: Decodable>(_ request: URLRequest, as type: T.Type = T.self) async throws -> T {
@@ -426,7 +508,7 @@ final class PlexClient {
         }
     }
 
-    private func applyPlexHeaders(to request: inout URLRequest, token: String? = nil) {
+    private func applyPlexHeaders(to request: inout URLRequest, token: String? = nil, sessionID: String? = nil) {
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         request.setValue(clientIdentifier, forHTTPHeaderField: "X-Plex-Client-Identifier")
         request.setValue("Freya Player", forHTTPHeaderField: "X-Plex-Product")
@@ -437,6 +519,10 @@ final class PlexClient {
 
         if let token {
             request.setValue(token, forHTTPHeaderField: "X-Plex-Token")
+        }
+
+        if let sessionID {
+            request.setValue(sessionID, forHTTPHeaderField: "X-Plex-Session-Identifier")
         }
     }
 
@@ -564,9 +650,17 @@ private struct PlexMetadataContainer<Item: Decodable>: Decodable {
 
     struct MediaContainer: Decodable {
         let metadata: [Item]?
+        let totalSize: Int?
 
         private enum CodingKeys: String, CodingKey {
             case metadata = "Metadata"
+            case totalSize
+        }
+
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            metadata = try container.decodeIfPresent([Item].self, forKey: .metadata)
+            totalSize = try container.decodeLossyIntIfPresent(forKey: .totalSize)
         }
     }
 

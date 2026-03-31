@@ -1,170 +1,728 @@
 import SwiftUI
+import UIKit
 
 struct LibrariesView: View {
     let summary: PlexConnectionSummary
+    @Binding var path: [AppRoute]
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 36) {
-                Text(summary.serverName)
-                    .font(.largeTitle.weight(.semibold))
-
-                ForEach(summary.libraries) { library in
-                    PlexLibraryShelfView(library: library, summary: summary)
-                }
-
-                NavigationLink(value: AppRoute.plexSettings) {
-                    Text("Manage Server")
-                        .frame(minWidth: 260)
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.large)
-                .padding(.top, 12)
-                .focusSection()
-            }
-            .padding(48)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        LibrariesCollectionView(
+            summary: summary,
+            onSelectRoute: { path.append($0) },
+            onManageServer: { path.append(.plexSettings) }
+        )
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(LibrariesAmbientBackground())
     }
 }
 
-private struct PlexLibraryShelfView: View {
-    let library: PlexLibrarySection
+private struct LibrariesCollectionView: UIViewControllerRepresentable {
     let summary: PlexConnectionSummary
-    @FocusState private var focusedTileID: String?
+    let onSelectRoute: (AppRoute) -> Void
+    let onManageServer: () -> Void
 
-    private var openTileID: String { "\(library.id)-open" }
-
-    private var shelfStyle: PlexShelfStyle {
-        if library.usesPosterArtwork {
-            return .poster
-        } else {
-            return .wide
-        }
+    func makeUIViewController(context: Context) -> LibrariesCollectionViewController {
+        LibrariesCollectionViewController(
+            summary: summary,
+            onSelectRoute: onSelectRoute,
+            onManageServer: onManageServer
+        )
     }
 
-    private var selectedLabel: String {
-        if focusedTileID == openTileID {
-            return library.title
-        }
-
-        return library.items.first(where: { $0.id == focusedTileID })?.title ?? library.title
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            Text(library.title)
-                .font(.title3.weight(.semibold))
-
-            ScrollView(.horizontal) {
-                LazyHStack(alignment: .top, spacing: 40) {
-                    NavigationLink(value: library.indexRoute) {
-                        PlexTilePlaceholderView(
-                            title: library.title,
-                            iconName: "arrow.right",
-                            aspectRatio: shelfStyle.aspectRatio
-                        )
-                        .containerRelativeFrame(.horizontal, count: shelfStyle.columns, spacing: 40)
-                    }
-                    .focused($focusedTileID, equals: openTileID)
-
-                    ForEach(library.items) { item in
-                        NavigationLink(value: library.itemRoute(for: item)) {
-                            PlexArtworkView(
-                                url: item.artworkURL(
-                                    baseURL: summary.serverURL,
-                                    token: summary.serverToken,
-                                    width: shelfStyle.imageSize.width,
-                                    height: shelfStyle.imageSize.height,
-                                    preferCoverArt: shelfStyle == .wide
-                                ),
-                                title: item.title,
-                                iconName: shelfStyle.placeholderIconName,
-                                aspectRatio: shelfStyle.aspectRatio
-                            )
-                            .containerRelativeFrame(.horizontal, count: shelfStyle.columns, spacing: 40)
-                        }
-                        .focused($focusedTileID, equals: item.id)
-                        .accessibilityLabel(item.title)
-                    }
-                }
-                .padding(.vertical, 12)
-            }
-            .scrollClipDisabled()
-            .buttonStyle(.card)
-
-            if library.items.isEmpty {
-                Text("No recent items yet.")
-                    .font(.body)
-                    .lineLimit(2, reservesSpace: true)
-                    .foregroundStyle(.secondary)
-                    .frame(minHeight: 48, alignment: .topLeading)
-            } else {
-                Text(selectedLabel)
-                    .font(.body)
-                    .lineLimit(2, reservesSpace: true)
-                    .foregroundStyle(.secondary)
-                    .frame(minHeight: 48, alignment: .topLeading)
-            }
-        }
-        .focusSection()
+    func updateUIViewController(_ viewController: LibrariesCollectionViewController, context: Context) {
+        viewController.update(summary: summary)
     }
 }
 
-private struct PlexArtworkView: View {
-    let url: URL?
-    let title: String
-    let iconName: String
-    let aspectRatio: CGFloat
+private final class LibrariesCollectionViewController: UIViewController, UICollectionViewDataSource, UICollectionViewDelegate {
+    private static let serverHeaderKind = "LibrariesServerHeader"
 
-    var body: some View {
-        AsyncImage(url: url) { phase in
-            switch phase {
-            case .success(let image):
-                image
-                    .resizable()
-                    .scaledToFill()
-            default:
-                PlexTilePlaceholderView(
-                    title: title,
-                    iconName: iconName,
-                    aspectRatio: aspectRatio
+    private let onSelectRoute: (AppRoute) -> Void
+    private let onManageServer: () -> Void
+
+    private var summary: PlexConnectionSummary
+    private var sections: [LibrariesSection] = []
+    private var selectedTitles: [String: String] = [:]
+    private var focusedSectionID: String?
+
+    private lazy var collectionView = UICollectionView(
+        frame: .zero,
+        collectionViewLayout: makeLayout()
+    )
+
+    init(
+        summary: PlexConnectionSummary,
+        onSelectRoute: @escaping (AppRoute) -> Void,
+        onManageServer: @escaping () -> Void
+    ) {
+        self.summary = summary
+        self.onSelectRoute = onSelectRoute
+        self.onManageServer = onManageServer
+        super.init(nibName: nil, bundle: nil)
+        sections = makeSections(from: summary)
+        selectedTitles = makeSelectedTitles(from: sections)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+
+        view.backgroundColor = .clear
+        view.clipsToBounds = false
+        view.insetsLayoutMarginsFromSafeArea = false
+
+        collectionView.backgroundColor = .clear
+        collectionView.clipsToBounds = false
+        collectionView.delegate = self
+        collectionView.dataSource = self
+        collectionView.translatesAutoresizingMaskIntoConstraints = false
+        collectionView.contentInsetAdjustmentBehavior = .never
+        collectionView.contentInset = .init(top: 12, left: 0, bottom: 64, right: 0)
+        collectionView.insetsLayoutMarginsFromSafeArea = false
+        collectionView.layoutMargins = .zero
+
+        collectionView.register(PlexTileCell.self, forCellWithReuseIdentifier: PlexTileCell.reuseIdentifier)
+        collectionView.register(ManageServerCell.self, forCellWithReuseIdentifier: ManageServerCell.reuseIdentifier)
+        collectionView.register(
+            LibrariesSectionHeaderView.self,
+            forSupplementaryViewOfKind: UICollectionView.elementKindSectionHeader,
+            withReuseIdentifier: LibrariesSectionHeaderView.reuseIdentifier
+        )
+        collectionView.register(
+            LibrariesSectionFooterView.self,
+            forSupplementaryViewOfKind: UICollectionView.elementKindSectionFooter,
+            withReuseIdentifier: LibrariesSectionFooterView.reuseIdentifier
+        )
+        collectionView.register(
+            LibrariesServerHeaderView.self,
+            forSupplementaryViewOfKind: Self.serverHeaderKind,
+            withReuseIdentifier: LibrariesServerHeaderView.reuseIdentifier
+        )
+
+        view.addSubview(collectionView)
+
+        NSLayoutConstraint.activate([
+            collectionView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            collectionView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            collectionView.topAnchor.constraint(equalTo: view.topAnchor),
+            collectionView.bottomAnchor.constraint(equalTo: view.bottomAnchor)
+        ])
+    }
+
+    func update(summary: PlexConnectionSummary) {
+        self.summary = summary
+        sections = makeSections(from: summary)
+        selectedTitles = makeSelectedTitles(from: sections)
+
+        guard isViewLoaded else { return }
+        collectionView.setCollectionViewLayout(makeLayout(), animated: false)
+        collectionView.reloadData()
+    }
+
+    func numberOfSections(in collectionView: UICollectionView) -> Int {
+        sections.count
+    }
+
+    func collectionView(_ collectionView: UICollectionView, numberOfItemsInSection section: Int) -> Int {
+        sections[section].items.count
+    }
+
+    func collectionView(_ collectionView: UICollectionView, cellForItemAt indexPath: IndexPath) -> UICollectionViewCell {
+        let item = sections[indexPath.section].items[indexPath.item]
+
+        switch item.kind {
+        case .manageServer:
+            let cell = collectionView.dequeueReusableCell(
+                withReuseIdentifier: ManageServerCell.reuseIdentifier,
+                for: indexPath
+            ) as! ManageServerCell
+            return cell
+
+        case .openLibrary, .media:
+            let cell = collectionView.dequeueReusableCell(
+                withReuseIdentifier: PlexTileCell.reuseIdentifier,
+                for: indexPath
+            ) as! PlexTileCell
+            cell.configure(item: item)
+            return cell
+        }
+    }
+
+    func collectionView(
+        _ collectionView: UICollectionView,
+        viewForSupplementaryElementOfKind kind: String,
+        at indexPath: IndexPath
+    ) -> UICollectionReusableView {
+        if kind == Self.serverHeaderKind {
+            let view = collectionView.dequeueReusableSupplementaryView(
+                ofKind: kind,
+                withReuseIdentifier: LibrariesServerHeaderView.reuseIdentifier,
+                for: indexPath
+            ) as! LibrariesServerHeaderView
+            view.title = summary.serverName
+            return view
+        }
+
+        let section = sections[indexPath.section]
+        switch kind {
+        case UICollectionView.elementKindSectionHeader:
+            let view = collectionView.dequeueReusableSupplementaryView(
+                ofKind: kind,
+                withReuseIdentifier: LibrariesSectionHeaderView.reuseIdentifier,
+                for: indexPath
+            ) as! LibrariesSectionHeaderView
+            view.title = section.title
+            return view
+
+        default:
+            let view = collectionView.dequeueReusableSupplementaryView(
+                ofKind: kind,
+                withReuseIdentifier: LibrariesSectionFooterView.reuseIdentifier,
+                for: indexPath
+            ) as! LibrariesSectionFooterView
+            view.title = footerTitle(for: section)
+            return view
+        }
+    }
+
+    func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {
+        let item = sections[indexPath.section].items[indexPath.item]
+
+        switch item.kind {
+        case .manageServer:
+            onManageServer()
+        case .openLibrary, .media:
+            guard let route = item.route else { return }
+            onSelectRoute(route)
+        }
+    }
+
+    override func didUpdateFocus(in context: UIFocusUpdateContext, with coordinator: UIFocusAnimationCoordinator) {
+        super.didUpdateFocus(in: context, with: coordinator)
+
+        if
+            let indexPath = indexPath(for: context.nextFocusedView),
+            sections.indices.contains(indexPath.section)
+        {
+            let section = sections[indexPath.section]
+            if case .library = section.kind {
+                focusedSectionID = section.id
+
+                if section.emptyMessage == nil {
+                    selectedTitles[section.id] = section.items[indexPath.item].title
+                }
+            } else {
+                focusedSectionID = nil
+            }
+        } else {
+            focusedSectionID = nil
+        }
+
+        coordinator.addCoordinatedAnimations {
+            self.refreshVisibleFooters()
+        }
+    }
+
+    private func makeLayout() -> UICollectionViewLayout {
+        let horizontalInset: CGFloat = 48
+        let configuration = UICollectionViewCompositionalLayoutConfiguration()
+        configuration.contentInsetsReference = .none
+        configuration.interSectionSpacing = 40
+        configuration.boundarySupplementaryItems = [
+            NSCollectionLayoutBoundarySupplementaryItem(
+                layoutSize: .init(widthDimension: .fractionalWidth(1), heightDimension: .absolute(144)),
+                elementKind: Self.serverHeaderKind,
+                alignment: .top
+            )
+        ]
+
+        return UICollectionViewCompositionalLayout(sectionProvider: { [weak self] sectionIndex, environment in
+            guard let self else { return nil }
+            let section = sections[sectionIndex]
+
+            switch section.kind {
+            case .library(let style):
+                let cellSize = style.cellSize(
+                    for: environment.container.effectiveContentSize.width - (horizontalInset * 2)
+                )
+                let itemSize = NSCollectionLayoutSize(
+                    widthDimension: .absolute(cellSize.width),
+                    heightDimension: .absolute(cellSize.height)
+                )
+                let item = NSCollectionLayoutItem(layoutSize: itemSize)
+                let group = NSCollectionLayoutGroup.horizontal(layoutSize: itemSize, subitems: [item])
+                let layoutSection = NSCollectionLayoutSection(group: group)
+                layoutSection.interGroupSpacing = 44
+                layoutSection.orthogonalScrollingBehavior = .continuousGroupLeadingBoundary
+                layoutSection.contentInsets = .init(top: 8, leading: horizontalInset, bottom: 8, trailing: horizontalInset)
+
+                let headerSize = NSCollectionLayoutSize(
+                    widthDimension: .fractionalWidth(1),
+                    heightDimension: .absolute(56)
+                )
+                let header = NSCollectionLayoutBoundarySupplementaryItem(
+                    layoutSize: headerSize,
+                    elementKind: UICollectionView.elementKindSectionHeader,
+                    alignment: .top
+                )
+                let footerSize = NSCollectionLayoutSize(
+                    widthDimension: .fractionalWidth(1),
+                    heightDimension: .absolute(56)
+                )
+                let footer = NSCollectionLayoutBoundarySupplementaryItem(
+                    layoutSize: footerSize,
+                    elementKind: UICollectionView.elementKindSectionFooter,
+                    alignment: .bottom
+                )
+                layoutSection.boundarySupplementaryItems = [header, footer]
+                return layoutSection
+
+            case .manage:
+                let itemSize = NSCollectionLayoutSize(
+                    widthDimension: .absolute(360),
+                    heightDimension: .absolute(72)
+                )
+                let item = NSCollectionLayoutItem(layoutSize: itemSize)
+                let group = NSCollectionLayoutGroup.horizontal(layoutSize: itemSize, subitems: [item])
+                let layoutSection = NSCollectionLayoutSection(group: group)
+                layoutSection.contentInsets = .init(top: 28, leading: horizontalInset, bottom: 36, trailing: horizontalInset)
+                return layoutSection
+            }
+        }, configuration: configuration)
+    }
+
+    private func makeSections(from summary: PlexConnectionSummary) -> [LibrariesSection] {
+        let librarySections = summary.libraries.map { library in
+            let style = library.usesPosterArtwork ? PlexShelfStyle.poster : .wide
+            let openItem = LibrariesItem(
+                id: "\(library.id)-open",
+                title: library.title,
+                artworkURL: nil,
+                progress: nil,
+                isWatched: false,
+                route: library.context.route,
+                style: style,
+                kind: .openLibrary,
+                iconName: "arrow.right"
+            )
+
+            let mediaItems = library.items.map { item in
+                LibrariesItem(
+                    id: item.id,
+                    title: item.title,
+                    artworkURL: item.artworkURL(
+                        baseURL: summary.serverURL,
+                        token: summary.serverToken,
+                        width: style.imageSize.width,
+                        height: style.imageSize.height,
+                        preferCoverArt: style == .wide
+                    ),
+                    progress: item.progress,
+                    isWatched: item.isWatched,
+                    route: library.context.itemRoute(for: item),
+                    style: style,
+                    kind: .media,
+                    iconName: style.placeholderIconName
                 )
             }
-        }
-        .aspectRatio(aspectRatio, contentMode: .fit)
-        .clipped()
-    }
-}
 
-private struct PlexTilePlaceholderView: View {
-    let title: String
-    let iconName: String
-    let aspectRatio: CGFloat
-
-    var body: some View {
-        ZStack {
-            Rectangle()
-                .fill(Color.white.opacity(0.08))
-
-            VStack(spacing: 16) {
-                Image(systemName: iconName)
-                    .font(.system(size: 44, weight: .semibold))
-
-                Text(title)
-                    .font(.headline)
-                    .multilineTextAlignment(.center)
-                    .lineLimit(2)
+            return LibrariesSection(
+                id: library.id,
+                    title: library.title,
+                    kind: .library(style),
+                    items: [openItem] + mediaItems,
+                    defaultSelectionTitle: library.title,
+                    emptyMessage: library.items.isEmpty ? "No recent items yet." : nil
+                )
             }
-            .foregroundStyle(.secondary)
-            .padding(24)
+
+        let manageSection = LibrariesSection(
+            id: "manage-server",
+            title: nil,
+            kind: .manage,
+            items: [
+                LibrariesItem(
+                    id: "manage-server",
+                    title: "Manage Server",
+                    artworkURL: nil,
+                    progress: nil,
+                    isWatched: false,
+                    route: nil,
+                    style: .wide,
+                    kind: .manageServer,
+                    iconName: nil
+                )
+            ],
+            defaultSelectionTitle: nil,
+            emptyMessage: nil
+        )
+
+        return librarySections + [manageSection]
+    }
+
+    private func makeSelectedTitles(from sections: [LibrariesSection]) -> [String: String] {
+        sections.reduce(into: [:]) { titles, section in
+            guard let title = section.defaultSelectionTitle, section.emptyMessage == nil else { return }
+            titles[section.id] = title
         }
-        .aspectRatio(aspectRatio, contentMode: .fit)
+    }
+
+    private func footerTitle(for section: LibrariesSection) -> String? {
+        if let emptyMessage = section.emptyMessage {
+            return emptyMessage
+        }
+
+        guard section.id == focusedSectionID else { return nil }
+        return selectedTitles[section.id] ?? section.defaultSelectionTitle
+    }
+
+    private func refreshVisibleFooters() {
+        for sectionIndex in sections.indices {
+            let footerIndexPath = IndexPath(item: 0, section: sectionIndex)
+            let footer = collectionView.supplementaryView(
+                forElementKind: UICollectionView.elementKindSectionFooter,
+                at: footerIndexPath
+            ) as? LibrariesSectionFooterView
+            footer?.title = footerTitle(for: sections[sectionIndex])
+        }
+    }
+
+    private func indexPath(for focusedView: UIView?) -> IndexPath? {
+        var view = focusedView
+
+        while let current = view {
+            if let cell = current as? UICollectionViewCell {
+                return collectionView.indexPath(for: cell)
+            }
+
+            view = current.superview
+        }
+
+        return nil
     }
 }
 
-private enum PlexShelfStyle: Equatable {
+private struct LibrariesSection: Hashable {
+    let id: String
+    let title: String?
+    let kind: LibrariesSectionKind
+    let items: [LibrariesItem]
+    let defaultSelectionTitle: String?
+    let emptyMessage: String?
+}
+
+private enum LibrariesSectionKind: Hashable {
+    case library(PlexShelfStyle)
+    case manage
+}
+
+private struct LibrariesItem: Hashable {
+    let id: String
+    let title: String
+    let artworkURL: URL?
+    let progress: Double?
+    let isWatched: Bool
+    let route: AppRoute?
+    let style: PlexShelfStyle
+    let kind: LibrariesItemKind
+    let iconName: String?
+}
+
+private enum LibrariesItemKind: Hashable {
+    case openLibrary
+    case media
+    case manageServer
+}
+
+private final class PlexTileCell: UICollectionViewCell {
+    static let reuseIdentifier = "PlexTileCell"
+    private static let placeholderImage = UIGraphicsImageRenderer(size: CGSize(width: 8, height: 8)).image { context in
+        UIColor.white.withAlphaComponent(0.08).setFill()
+        context.fill(CGRect(origin: .zero, size: CGSize(width: 8, height: 8)))
+    }
+
+    private let imageView = UIImageView()
+    private let progressView = ArtworkProgressIndicatorView()
+    private let placeholderStack = UIStackView()
+    private let iconView = UIImageView()
+    private let titleLabel = UILabel()
+    private var imageTask: Task<Void, Never>?
+    private var currentArtworkURL: URL?
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        clipsToBounds = false
+        contentView.clipsToBounds = false
+        backgroundConfiguration = .clear()
+
+        imageView.translatesAutoresizingMaskIntoConstraints = false
+        imageView.clipsToBounds = false
+        imageView.layer.cornerRadius = 24
+        imageView.layer.cornerCurve = .continuous
+        imageView.contentMode = .scaleAspectFill
+        imageView.adjustsImageWhenAncestorFocused = true
+        imageView.overlayContentView.clipsToBounds = false
+
+        iconView.tintColor = .secondaryLabel
+        iconView.preferredSymbolConfiguration = UIImage.SymbolConfiguration(pointSize: 44, weight: .semibold)
+
+        titleLabel.font = .preferredFont(forTextStyle: .headline)
+        titleLabel.textColor = .secondaryLabel
+        titleLabel.numberOfLines = 2
+        titleLabel.textAlignment = .center
+
+        placeholderStack.axis = .vertical
+        placeholderStack.alignment = .center
+        placeholderStack.spacing = 16
+        placeholderStack.translatesAutoresizingMaskIntoConstraints = false
+
+        placeholderStack.addArrangedSubview(iconView)
+        placeholderStack.addArrangedSubview(titleLabel)
+        imageView.overlayContentView.addSubview(placeholderStack)
+        progressView.translatesAutoresizingMaskIntoConstraints = false
+        imageView.overlayContentView.addSubview(progressView)
+
+        contentView.addSubview(imageView)
+
+        NSLayoutConstraint.activate([
+            imageView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
+            imageView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
+            imageView.topAnchor.constraint(equalTo: contentView.topAnchor),
+            imageView.bottomAnchor.constraint(equalTo: contentView.bottomAnchor),
+
+            placeholderStack.leadingAnchor.constraint(greaterThanOrEqualTo: imageView.overlayContentView.leadingAnchor, constant: 24),
+            placeholderStack.trailingAnchor.constraint(lessThanOrEqualTo: imageView.overlayContentView.trailingAnchor, constant: -24),
+            placeholderStack.centerXAnchor.constraint(equalTo: imageView.overlayContentView.centerXAnchor),
+            placeholderStack.centerYAnchor.constraint(equalTo: imageView.overlayContentView.centerYAnchor),
+
+            progressView.leadingAnchor.constraint(equalTo: imageView.overlayContentView.leadingAnchor),
+            progressView.trailingAnchor.constraint(equalTo: imageView.overlayContentView.trailingAnchor),
+            progressView.topAnchor.constraint(equalTo: imageView.overlayContentView.topAnchor),
+            progressView.bottomAnchor.constraint(equalTo: imageView.overlayContentView.bottomAnchor)
+        ])
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    func configure(item: LibrariesItem) {
+        accessibilityLabel = item.title
+        currentArtworkURL = item.artworkURL
+        titleLabel.text = item.title
+        iconView.image = UIImage(systemName: item.iconName ?? item.style.placeholderIconName)
+        progressView.setProgress(item.progress, isWatched: item.isWatched)
+        imageView.image = Self.placeholderImage
+        placeholderStack.isHidden = false
+
+        imageTask?.cancel()
+        imageTask = nil
+
+        guard let artworkURL = item.artworkURL else { return }
+
+        if let image = PlexArtworkImageCache.shared.image(for: artworkURL) {
+            imageView.image = image
+            placeholderStack.isHidden = true
+            return
+        }
+
+        imageTask = Task { [weak self] in
+            guard let image = await PlexArtworkImageCache.shared.loadImage(from: artworkURL) else { return }
+            guard !Task.isCancelled else { return }
+
+            await MainActor.run {
+                guard let self, self.currentArtworkURL == artworkURL else { return }
+                self.imageView.image = image
+                self.placeholderStack.isHidden = true
+            }
+        }
+    }
+
+    override func prepareForReuse() {
+        super.prepareForReuse()
+        imageTask?.cancel()
+        imageTask = nil
+        currentArtworkURL = nil
+        imageView.image = Self.placeholderImage
+        placeholderStack.isHidden = false
+        progressView.setProgress(nil, isWatched: false)
+    }
+}
+
+private final class ManageServerCell: UICollectionViewListCell {
+    static let reuseIdentifier = "ManageServerCell"
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        clipsToBounds = false
+        contentView.clipsToBounds = false
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func updateConfiguration(using state: UICellConfigurationState) {
+        super.updateConfiguration(using: state)
+
+        var content = UIListContentConfiguration.cell().updated(for: state)
+        content.text = "Manage Server"
+        content.textProperties.font = .preferredFont(forTextStyle: .headline)
+        content.textProperties.alignment = .center
+        content.textProperties.numberOfLines = 1
+        content.textProperties.color = state.isFocused ? .black : .white
+        content.directionalLayoutMargins = .init(top: 0, leading: 28, bottom: 0, trailing: 28)
+        contentConfiguration = content
+
+        var background = UIBackgroundConfiguration.clear().updated(for: state)
+        background.cornerRadius = 36
+        background.backgroundColor = state.isFocused ? .white : UIColor.white.withAlphaComponent(0.12)
+        background.strokeColor = state.isFocused ? .clear : UIColor.white.withAlphaComponent(0.28)
+        background.strokeWidth = state.isFocused ? 0 : 1
+        backgroundConfiguration = background
+    }
+}
+
+@MainActor
+private final class PlexArtworkImageCache {
+    static let shared = PlexArtworkImageCache()
+
+    private let cache = NSCache<NSURL, UIImage>()
+
+    func image(for url: URL) -> UIImage? {
+        cache.object(forKey: url as NSURL)
+    }
+
+    func loadImage(from url: URL) async -> UIImage? {
+        if let cached = image(for: url) {
+            return cached
+        }
+
+        do {
+            let (data, _) = try await URLSession.shared.data(from: url)
+            guard let image = UIImage(data: data) else { return nil }
+            cache.setObject(image, forKey: url as NSURL)
+            return image
+        } catch {
+            return nil
+        }
+    }
+}
+
+private final class LibrariesSectionFooterView: UICollectionReusableView {
+    static let reuseIdentifier = "LibrariesSectionFooterView"
+    private let verticalInset: CGFloat = 12
+
+    private let label = UILabel()
+
+    var title: String? {
+        didSet {
+            label.text = title
+            setNeedsLayout()
+        }
+    }
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+
+        label.font = .preferredFont(forTextStyle: .body)
+        label.textColor = .secondaryLabel
+        label.numberOfLines = 1
+        label.lineBreakMode = .byClipping
+        label.setContentCompressionResistancePriority(.required, for: .horizontal)
+
+        addSubview(label)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+
+        let availableHeight = max(bounds.height - verticalInset, 0)
+        let labelSize = label.sizeThatFits(
+            CGSize(width: .greatestFiniteMagnitude, height: availableHeight)
+        )
+        label.frame = CGRect(
+            x: 0,
+            y: verticalInset,
+            width: labelSize.width,
+            height: min(labelSize.height, availableHeight)
+        )
+    }
+}
+
+private final class LibrariesServerHeaderView: UICollectionReusableView {
+    static let reuseIdentifier = "LibrariesServerHeaderView"
+    private let horizontalInset: CGFloat = 48
+    private let label = UILabel()
+
+    var title: String? {
+        didSet { label.text = title }
+    }
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+
+        label.font = .preferredFont(forTextStyle: .title1).withTraits(.traitBold)
+        label.translatesAutoresizingMaskIntoConstraints = false
+
+        addSubview(label)
+        NSLayoutConstraint.activate([
+            label.leadingAnchor.constraint(equalTo: leadingAnchor, constant: horizontalInset),
+            label.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -horizontalInset),
+            label.topAnchor.constraint(equalTo: topAnchor, constant: 44),
+            label.bottomAnchor.constraint(lessThanOrEqualTo: bottomAnchor, constant: -40)
+        ])
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+}
+
+private final class LibrariesSectionHeaderView: UICollectionReusableView {
+    static let reuseIdentifier = "LibrariesSectionHeaderView"
+    private let verticalInset: CGFloat = 12
+
+    private let label = UILabel()
+
+    var title: String? {
+        didSet { label.text = title }
+    }
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+
+        label.font = .preferredFont(forTextStyle: .title3).withTraits(.traitBold)
+        label.translatesAutoresizingMaskIntoConstraints = false
+
+        addSubview(label)
+        NSLayoutConstraint.activate([
+            label.leadingAnchor.constraint(equalTo: leadingAnchor),
+            label.trailingAnchor.constraint(equalTo: trailingAnchor),
+            label.topAnchor.constraint(greaterThanOrEqualTo: topAnchor),
+            label.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -verticalInset)
+        ])
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+}
+
+private enum PlexShelfStyle: Hashable {
     case poster
     case wide
 
@@ -177,13 +735,20 @@ private enum PlexShelfStyle: Equatable {
         }
     }
 
-    var columns: Int {
+    var columns: CGFloat {
         switch self {
         case .poster:
             return 6
         case .wide:
             return 4
         }
+    }
+
+    func cellSize(for availableWidth: CGFloat) -> CGSize {
+        let spacing: CGFloat = 44
+        let width = floor((availableWidth - (spacing * (columns - 1))) / columns)
+        let height = floor(width / aspectRatio)
+        return CGSize(width: width, height: height)
     }
 
     var imageSize: (width: Int, height: Int) {
@@ -205,39 +770,12 @@ private enum PlexShelfStyle: Equatable {
     }
 }
 
-private extension PlexLibrarySection {
-    var usesPosterArtwork: Bool {
-        switch type {
-        case "show":
-            return true
-        case "movie":
-            return agent != "tv.plex.agents.none"
-        default:
-            return false
-        }
-    }
-
-    var indexRoute: AppRoute {
-        if type == "show" {
-            return .tvLibrary(title)
+private extension UIFont {
+    func withTraits(_ traits: UIFontDescriptor.SymbolicTraits) -> UIFont {
+        guard let descriptor = fontDescriptor.withSymbolicTraits(traits) else {
+            return self
         }
 
-        if usesPosterArtwork {
-            return .movieLibrary(title)
-        } else {
-            return .otherLibrary(title)
-        }
-    }
-
-    func itemRoute(for item: PlexMediaItem) -> AppRoute {
-        if type == "show" {
-            return .series(item)
-        }
-
-        if usesPosterArtwork {
-            return .movie(item)
-        } else {
-            return .other(item)
-        }
+        return UIFont(descriptor: descriptor, size: pointSize)
     }
 }

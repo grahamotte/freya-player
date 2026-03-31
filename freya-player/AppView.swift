@@ -17,20 +17,16 @@ struct AppView: View {
                         PlexSettingsView(model: model, path: $path)
                     case .jellyfinSettings:
                         JellyfinSettingsView()
-                    case .movieLibrary(let title):
-                        MovieLibraryIndexView(title: title)
+                    case .library(let library):
+                        LibraryPageView(model: model, library: library, path: $path)
                     case .movie(let item):
                         ShowMovieView(model: model, item: item)
-                    case .tvLibrary(let title):
-                        TVLibraryIndexView(title: title)
                     case .series(let item):
                         ShowSeriesView(model: model, item: item)
                     case .season(let item):
                         ShowSeasonView(model: model, item: item)
                     case .episode(let item):
                         ShowEpisodeView(model: model, item: item)
-                    case .otherLibrary(let title):
-                        OtherLibraryIndexView(title: title)
                     case .other(let item):
                         ShowOtherItemView(model: model, item: item)
                     }
@@ -49,7 +45,7 @@ struct AppView: View {
     @ViewBuilder
     private var rootView: some View {
         if let summary = model.connectedSummary {
-            LibrariesView(summary: summary)
+            LibrariesView(summary: summary, path: $path)
         } else if case .checking = model.plexState {
             ProgressView("Checking saved Plex connection...")
                 .frame(maxWidth: .infinity, maxHeight: .infinity)

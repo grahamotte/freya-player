@@ -18,8 +18,8 @@ extension PlexMediaItem {
             artworkURL: artworkURL(
                 baseURL: summary.serverURL,
                 token: summary.serverToken,
-                width: 720,
-                height: artworkStyle == .poster ? 1080 : 405,
+                width: artworkStyle.imageRequestWidth,
+                height: artworkStyle.imageRequestHeight,
                 preferCoverArt: artworkStyle == .landscape
             ),
             artworkStyle: artworkStyle,
@@ -30,7 +30,9 @@ extension PlexMediaItem {
                 height: 1080,
                 preferCoverArt: true
             ),
-            playbackID: playbackID
+            playbackID: playbackID,
+            hasResume: viewOffset != nil && !isWatched,
+            resumeOffsetMilliseconds: !isWatched ? viewOffset : nil
         )
     }
 }

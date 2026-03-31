@@ -4,6 +4,8 @@ import SwiftUI
 struct MediaPlayButton: View {
     @ObservedObject var model: AppModel
     let id: MediaPlaybackID
+    let hasResume: Bool
+    let resumeOffsetMilliseconds: Int?
 
     @FocusState private var focusedControl: FocusedControl?
 
@@ -15,6 +17,8 @@ struct MediaPlayButton: View {
     @State private var selectedSubtitleID: String?
     @State private var player: AVPlayer?
     @State private var isShowingPlayer = false
+    @State private var playbackSessionID = UUID().uuidString
+    @State private var didCompletePlayback = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -27,7 +31,7 @@ struct MediaPlayButton: View {
                     if isLoading {
                         ProgressView()
                     } else {
-                        Text("Play")
+                        Text(hasResume ? "Resume" : "Play")
                             .frame(minWidth: 140)
                     }
                 }
@@ -92,7 +96,12 @@ struct MediaPlayButton: View {
         }
         .fullScreenCover(isPresented: $isShowingPlayer, onDismiss: stopPlayback) {
             if let player {
-                StockPlayerView(player: player)
+                StockPlayerView(
+                    player: player,
+                    resumeOffsetMilliseconds: resumeOffsetMilliseconds,
+                    onTimelineEvent: reportTimeline(state:time:duration:),
+                    onPlaybackEnded: playbackEnded(time:duration:)
+                )
                     .ignoresSafeArea()
             }
         }
@@ -118,6 +127,8 @@ struct MediaPlayButton: View {
 
             let url = try await model.playbackURL(for: id, selection: playbackSelection)
             playbackError = nil
+            playbackSessionID = UUID().uuidString
+            didCompletePlayback = false
             player = AVPlayer(url: url)
             isShowingPlayer = true
         } catch {
@@ -188,8 +199,36 @@ struct MediaPlayButton: View {
     }
 
     private func stopPlayback() {
+        if !didCompletePlayback {
+            reportTimeline(
+                state: .stopped,
+                time: player?.currentTime().milliseconds ?? 0,
+                duration: player?.currentItem?.duration.milliseconds
+            )
+        }
         player?.pause()
         player = nil
+    }
+
+    private func reportTimeline(state: PlexClient.TimelineState, time: Int, duration: Int?) {
+        Task {
+            await model.reportPlaybackTimeline(
+                for: id,
+                state: state,
+                time: time,
+                duration: duration,
+                sessionID: playbackSessionID
+            )
+        }
+    }
+
+    private func playbackEnded(time: Int, duration: Int?) {
+        didCompletePlayback = true
+        reportTimeline(state: .stopped, time: time, duration: duration)
+
+        Task {
+            await model.markPlaybackCompleted(for: id)
+        }
     }
 
     private enum FocusedControl {
@@ -200,15 +239,163 @@ struct MediaPlayButton: View {
 
 private struct StockPlayerView: UIViewControllerRepresentable {
     let player: AVPlayer
+    let resumeOffsetMilliseconds: Int?
+    let onTimelineEvent: (PlexClient.TimelineState, Int, Int?) -> Void
+    let onPlaybackEnded: (Int, Int?) -> Void
 
     func makeUIViewController(context: Context) -> AVPlayerViewController {
         let controller = AVPlayerViewController()
         controller.player = player
+        context.coordinator.bind(
+            to: player,
+            resumeOffsetMilliseconds: resumeOffsetMilliseconds,
+            onTimelineEvent: onTimelineEvent,
+            onPlaybackEnded: onPlaybackEnded
+        )
         return controller
     }
 
     func updateUIViewController(_ controller: AVPlayerViewController, context: Context) {
         controller.player = player
+        context.coordinator.bind(
+            to: player,
+            resumeOffsetMilliseconds: resumeOffsetMilliseconds,
+            onTimelineEvent: onTimelineEvent,
+            onPlaybackEnded: onPlaybackEnded
+        )
         player.play()
+    }
+
+    static func dismantleUIViewController(_ controller: AVPlayerViewController, coordinator: Coordinator) {
+        coordinator.unbind()
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator()
+    }
+
+    final class Coordinator {
+        private weak var player: AVPlayer?
+        private var timeObserver: Any?
+        private var timeControlObservation: NSKeyValueObservation?
+        private var itemStatusObservation: NSKeyValueObservation?
+        private var endObserver: NSObjectProtocol?
+        private var onTimelineEvent: ((PlexClient.TimelineState, Int, Int?) -> Void)?
+        private var onPlaybackEnded: ((Int, Int?) -> Void)?
+        private var lastState: PlexClient.TimelineState?
+        private var didSeekInitialPosition = false
+
+        func bind(
+            to player: AVPlayer,
+            resumeOffsetMilliseconds: Int?,
+            onTimelineEvent: @escaping (PlexClient.TimelineState, Int, Int?) -> Void,
+            onPlaybackEnded: @escaping (Int, Int?) -> Void
+        ) {
+            guard self.player !== player else { return }
+
+            unbind()
+            self.player = player
+            self.onTimelineEvent = onTimelineEvent
+            self.onPlaybackEnded = onPlaybackEnded
+            didSeekInitialPosition = resumeOffsetMilliseconds == nil
+
+            timeObserver = player.addPeriodicTimeObserver(
+                forInterval: CMTime(seconds: 10, preferredTimescale: 600),
+                queue: .main
+            ) { [weak self] _ in
+                self?.sendCurrentTimeline()
+            }
+
+            if let item = player.currentItem, let resumeOffsetMilliseconds, resumeOffsetMilliseconds > 0 {
+                itemStatusObservation = item.observe(\.status, options: [.initial, .new]) { [weak self] item, _ in
+                    guard let self, !self.didSeekInitialPosition, item.status == .readyToPlay else { return }
+                    self.didSeekInitialPosition = true
+                    player.seek(
+                        to: CMTime(milliseconds: resumeOffsetMilliseconds),
+                        toleranceBefore: .zero,
+                        toleranceAfter: .zero
+                    )
+                }
+            }
+
+            timeControlObservation = player.observe(\.timeControlStatus, options: [.initial, .new]) { [weak self] player, _ in
+                self?.sendState(for: player)
+            }
+
+            endObserver = NotificationCenter.default.addObserver(
+                forName: .AVPlayerItemDidPlayToEndTime,
+                object: player.currentItem,
+                queue: .main
+            ) { [weak self] _ in
+                guard let self else { return }
+                let time = player.currentItem?.duration.milliseconds ?? player.currentTime().milliseconds ?? 0
+                let duration = player.currentItem?.duration.milliseconds
+                self.onPlaybackEnded?(time, duration)
+            }
+        }
+
+        func unbind() {
+            if let timeObserver, let player {
+                player.removeTimeObserver(timeObserver)
+            }
+
+            if let endObserver {
+                NotificationCenter.default.removeObserver(endObserver)
+            }
+
+            timeObserver = nil
+            timeControlObservation = nil
+            itemStatusObservation = nil
+            endObserver = nil
+            self.player = nil
+            onTimelineEvent = nil
+            onPlaybackEnded = nil
+            lastState = nil
+            didSeekInitialPosition = false
+        }
+
+        private func sendCurrentTimeline() {
+            guard let player else { return }
+            onTimelineEvent?(
+                state(for: player),
+                player.currentTime().milliseconds ?? 0,
+                player.currentItem?.duration.milliseconds
+            )
+        }
+
+        private func sendState(for player: AVPlayer) {
+            let state = state(for: player)
+            guard state != lastState else { return }
+            lastState = state
+            onTimelineEvent?(
+                state,
+                player.currentTime().milliseconds ?? 0,
+                player.currentItem?.duration.milliseconds
+            )
+        }
+
+        private func state(for player: AVPlayer) -> PlexClient.TimelineState {
+            switch player.timeControlStatus {
+            case .paused:
+                return .paused
+            case .waitingToPlayAtSpecifiedRate:
+                return .buffering
+            case .playing:
+                return .playing
+            @unknown default:
+                return .paused
+            }
+        }
+    }
+}
+
+private extension CMTime {
+    init(milliseconds: Int) {
+        self.init(seconds: Double(milliseconds) / 1000, preferredTimescale: 600)
+    }
+
+    var milliseconds: Int? {
+        guard isNumeric && seconds.isFinite else { return nil }
+        return max(Int((seconds * 1000).rounded()), 0)
     }
 }
