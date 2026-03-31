@@ -37,11 +37,51 @@ final class AppModel: ObservableObject {
                 activeConnector = plexConnector
                 plexLinkCode = nil
                 connectionState = .connected(server)
-            } else {
-                connectionState = .signedOut(message: "Link your Plex account to discover a server.")
+                return
             }
-        } catch {
-            connectionState = .failed(message: "Couldn't restore the saved Plex connection.")
+        } catch {}
+
+        do {
+            if let server = try await jellyfinConnector.restoreConnection() {
+                activeConnector = jellyfinConnector
+                plexLinkCode = nil
+                connectionState = .connected(server)
+                return
+            }
+        } catch {}
+
+        connectionState = .signedOut(message: "Choose a server to connect.")
+    }
+
+    func prepareJellyfinSetup() {
+        guard jellyfinConnector.hasSavedConnection else { return }
+        refreshJellyfinConnection()
+    }
+
+    func connectJellyfin(serverURL: String, username: String, password: String) {
+        restoreTask?.cancel()
+        pollTask?.cancel()
+        plexLinkCode = nil
+        activeConnector = jellyfinConnector
+        connectionState = .connecting(message: "Connecting to Jellyfin...")
+
+        restoreTask = Task { [weak self] in
+            guard let self else { return }
+
+            do {
+                let server = try await jellyfinConnector.connect(
+                    serverURL: serverURL,
+                    username: username,
+                    password: password
+                )
+                await MainActor.run {
+                    self.connectionState = .connected(server)
+                }
+            } catch {
+                await MainActor.run {
+                    self.connectionState = .failed(message: "Couldn't sign into Jellyfin. Check the server URL and credentials.")
+                }
+            }
         }
     }
 
@@ -99,7 +139,7 @@ final class AppModel: ObservableObject {
         activeConnector?.disconnect()
         activeConnector = nil
         plexLinkCode = nil
-        connectionState = .signedOut(message: "Link your Plex account to discover a server.")
+        connectionState = .signedOut(message: "Choose a server to connect.")
     }
 
     func loadLibraryItems(for library: LibraryReference) async throws -> [MediaItem] {
@@ -165,6 +205,32 @@ final class AppModel: ObservableObject {
                     self.connectionState = .failed(
                         message: "We signed into Plex, but couldn't connect to a Plex Media Server for this account."
                     )
+                }
+            }
+        }
+    }
+
+    private func refreshJellyfinConnection() {
+        restoreTask?.cancel()
+        pollTask?.cancel()
+        plexLinkCode = nil
+        activeConnector = jellyfinConnector
+
+        if connectedServer == nil {
+            connectionState = .connecting(message: "Loading your Jellyfin server...")
+        }
+
+        restoreTask = Task { [weak self] in
+            guard let self else { return }
+
+            do {
+                let server = try await jellyfinConnector.refreshConnection()
+                await MainActor.run {
+                    self.connectionState = .connected(server)
+                }
+            } catch {
+                await MainActor.run {
+                    self.connectionState = .failed(message: "Couldn't restore the saved Jellyfin connection.")
                 }
             }
         }

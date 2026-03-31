@@ -44,7 +44,7 @@ struct MediaArtworkSet: Hashable {
         case .poster:
             posterURL ?? landscapeURL ?? backdropURL
         case .landscape:
-            landscapeURL ?? posterURL ?? backdropURL
+            landscapeURL ?? backdropURL ?? posterURL
         }
     }
 }
@@ -132,7 +132,7 @@ struct MediaItem: Hashable, Identifiable {
     }
 
     var hasResume: Bool {
-        resumeOffsetMilliseconds != nil && !isWatched
+        (resumeOffsetMilliseconds ?? 0) > 0 && !isWatched
     }
 }
 

@@ -1,10 +1,42 @@
 import SwiftUI
 
 struct JellyfinSettingsView: View {
+    @ObservedObject var model: AppModel
+    @Binding var path: [AppRoute]
+    @Environment(\.dismiss) private var dismiss
+
     var body: some View {
-        FeatureStubView(
-            title: "Manage Jellyfin",
-            message: "Jellyfin server settings will live here."
-        )
+        VStack(spacing: 36) {
+            Spacer()
+
+            VStack(alignment: .leading, spacing: 18) {
+                Text("Jellyfin Server")
+                    .font(.title3.weight(.semibold))
+
+                Text(model.connectedServer?.serverName ?? "Unknown Server")
+                    .font(.title2.weight(.semibold))
+
+                Text(model.connectedServer?.accountName ?? "Jellyfin")
+                    .foregroundStyle(.secondary)
+
+                Button("Deactivate Server", role: .destructive) {
+                    model.disconnectCurrentServer()
+                    path.removeAll()
+                }
+
+                Button("Back") {
+                    dismiss()
+                }
+            }
+            .frame(maxWidth: 720, alignment: .leading)
+            .padding(28)
+            .background(PanelBackground())
+
+            Spacer()
+        }
+        .padding(48)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(AppBackground())
+        .navigationTitle("Manage Jellyfin")
     }
 }

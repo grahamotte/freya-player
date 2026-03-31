@@ -12,11 +12,11 @@ struct AppView: View {
                     case .plexSetup:
                         PlexSetupView(model: model)
                     case .jellyfinSetup:
-                        JellyfinSetupView()
+                        JellyfinSetupView(model: model)
                     case .plexSettings:
                         PlexSettingsView(model: model, path: $path)
                     case .jellyfinSettings:
-                        JellyfinSettingsView()
+                        JellyfinSettingsView(model: model, path: $path)
                     case .library(let library):
                         LibraryPageView(model: model, library: library, path: $path)
                     case .movie(let item):
@@ -47,7 +47,7 @@ struct AppView: View {
         if let server = model.connectedServer {
             LibrariesView(model: model, server: server, path: $path)
         } else if case .checking = model.connectionState {
-            ProgressView("Checking saved Plex connection...")
+            ProgressView("Checking saved connections...")
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(AppBackground())
         } else if case .connecting(let message) = model.connectionState {
