@@ -155,28 +155,20 @@ struct PlexMediaItem: Decodable, Identifiable, Hashable {
         return nil
     }
 
-    func artworkURL(
+    private func imageURL(
         baseURL: String,
         token: String,
+        path: String?,
         width: Int,
-        height: Int,
-        preferCoverArt: Bool = false,
-        allowBackdropFallback: Bool = true
+        height: Int
     ) -> URL? {
-        let fallbackArt = allowBackdropFallback ? art : nil
-        let imagePath = if preferCoverArt {
-            art ?? thumb ?? parentThumb ?? grandparentThumb
-        } else {
-            thumb ?? parentThumb ?? grandparentThumb ?? fallbackArt
-        }
-
-        guard let imagePath,
+        guard let path,
               var components = URLComponents(string: "\(baseURL)/photo/:/transcode") else {
             return nil
         }
 
         components.queryItems = [
-            URLQueryItem(name: "url", value: imagePath),
+            URLQueryItem(name: "url", value: path),
             URLQueryItem(name: "width", value: String(width)),
             URLQueryItem(name: "height", value: String(height)),
             URLQueryItem(name: "minSize", value: "1"),
@@ -185,6 +177,37 @@ struct PlexMediaItem: Decodable, Identifiable, Hashable {
         ]
 
         return components.url
+    }
+
+    private func posterImagePath(for kind: MediaItemKind) -> String? {
+        switch kind {
+        case .movie, .series, .season:
+            return thumb ?? parentThumb ?? grandparentThumb
+        case .episode, .other:
+            return nil
+        }
+    }
+
+    private func landscapeImagePath(for kind: MediaItemKind) -> String? {
+        switch kind {
+        case .movie, .series, .season:
+            return nil
+        case .episode:
+            return thumb
+        case .other:
+            return art ?? thumb
+        }
+    }
+
+    private func backdropImagePath(for kind: MediaItemKind) -> String? {
+        switch kind {
+        case .movie, .series, .season:
+            return art
+        case .episode:
+            return thumb
+        case .other:
+            return art ?? thumb
+        }
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -280,7 +303,7 @@ extension PlexLibraryContext {
         case "show":
             return .series
         case "movie":
-            return .movie
+            return usesPosterArtwork ? .movie : .other
         default:
             return usesPosterArtwork ? .movie : .other
         }
@@ -307,12 +330,14 @@ extension PlexMediaItem {
         serverToken: String,
         fallbackKind: MediaItemKind
     ) -> MediaItem {
-        MediaItem(
+        let kind = resolvedKind(fallbackKind: fallbackKind)
+
+        return MediaItem(
             providerID: providerID,
             serverID: serverID,
             id: ratingKey,
             title: title,
-            kind: mediaItemKind ?? fallbackKind,
+            kind: kind,
             synopsis: synopsis,
             addedAt: addedAt,
             year: year,
@@ -322,28 +347,37 @@ extension PlexMediaItem {
             progress: progress,
             resumeOffsetMilliseconds: !isWatched ? viewOffset : nil,
             artwork: MediaArtworkSet(
-                posterURL: artworkURL(
+                posterURL: imageURL(
                     baseURL: serverURL,
                     token: serverToken,
+                    path: posterImagePath(for: kind),
                     width: 480,
                     height: 720
                 ),
-                landscapeURL: artworkURL(
+                landscapeURL: imageURL(
                     baseURL: serverURL,
                     token: serverToken,
+                    path: landscapeImagePath(for: kind),
                     width: 780,
-                    height: 439,
-                    preferCoverArt: true
+                    height: 439
                 ),
-                backdropURL: artworkURL(
+                backdropURL: imageURL(
                     baseURL: serverURL,
                     token: serverToken,
+                    path: backdropImagePath(for: kind),
                     width: 1920,
-                    height: 1080,
-                    preferCoverArt: true
+                    height: 1080
                 )
             )
         )
+    }
+
+    private func resolvedKind(fallbackKind: MediaItemKind) -> MediaItemKind {
+        if fallbackKind == .other {
+            return .other
+        }
+
+        return mediaItemKind ?? fallbackKind
     }
 
     private var mediaItemKind: MediaItemKind? {

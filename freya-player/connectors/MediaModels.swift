@@ -42,9 +42,9 @@ struct MediaArtworkSet: Hashable {
     func url(for style: MediaArtworkStyle) -> URL? {
         switch style {
         case .poster:
-            posterURL ?? landscapeURL ?? backdropURL
+            posterURL
         case .landscape:
-            landscapeURL ?? backdropURL ?? posterURL
+            landscapeURL
         }
     }
 }
@@ -101,7 +101,7 @@ struct MediaItem: Hashable, Identifiable {
     }
 
     var backdropURL: URL? {
-        artwork.backdropURL ?? artwork.landscapeURL ?? artwork.posterURL
+        artwork.backdropURL ?? artwork.landscapeURL
     }
 
     var runtimeText: String? {

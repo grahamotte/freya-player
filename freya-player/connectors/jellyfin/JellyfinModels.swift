@@ -257,6 +257,7 @@ extension JellyfinItem {
         fallbackKind: MediaItemKind
     ) -> MediaItem {
         let userData = userData
+        let kind = resolvedKind(fallbackKind: fallbackKind)
         let isWatched = userData?.played == true || (userData?.playCount ?? 0) > 0
         let resumeOffsetMilliseconds = playbackPositionTicks.flatMap { ticks in
             let milliseconds = Int(ticks / 10_000)
@@ -268,7 +269,7 @@ extension JellyfinItem {
             serverID: serverID,
             id: id,
             title: name,
-            kind: mediaItemKind ?? fallbackKind,
+            kind: kind,
             synopsis: synopsis,
             addedAt: addedAtTimestamp,
             year: productionYear,
@@ -278,19 +279,19 @@ extension JellyfinItem {
             progress: progress,
             resumeOffsetMilliseconds: isWatched ? nil : resumeOffsetMilliseconds,
             artwork: MediaArtworkSet(
-                posterURL: imageURL(
-                    type: "Primary",
-                    itemID: primaryImageItemID,
-                    tag: primaryImageTag,
-                    baseURL: serverURL,
-                    accessToken: accessToken,
-                    maxWidth: 480,
-                    maxHeight: 720
-                ),
-                landscapeURL: landscapeImageURL(baseURL: serverURL, accessToken: accessToken),
-                backdropURL: backdropURL(baseURL: serverURL, accessToken: accessToken)
+                posterURL: posterImageURL(for: kind, baseURL: serverURL, accessToken: accessToken),
+                landscapeURL: landscapeImageURL(for: kind, baseURL: serverURL, accessToken: accessToken),
+                backdropURL: backdropURL(for: kind, baseURL: serverURL, accessToken: accessToken)
             )
         )
+    }
+
+    private func resolvedKind(fallbackKind: MediaItemKind) -> MediaItemKind {
+        if fallbackKind == .other {
+            return .other
+        }
+
+        return mediaItemKind ?? fallbackKind
     }
 
     private var mediaItemKind: MediaItemKind? {
@@ -354,27 +355,31 @@ extension JellyfinItem {
         imageTags?["Primary"] ?? parentPrimaryImageTag ?? seriesPrimaryImageTag
     }
 
-    private var thumbImageItemID: String {
-        if imageTags?["Thumb"] != nil {
-            return id
-        }
-
-        if imageTags?["Primary"] != nil, mediaItemKind == .episode {
-            return id
-        }
-
-        if let parentThumbItemId, parentThumbImageTag != nil {
-            return parentThumbItemId
-        }
-
-        return primaryImageItemID
+    private var hasPrimaryPosterCandidate: Bool {
+        imageTags?["Primary"] != nil || parentPrimaryImageTag != nil || seriesPrimaryImageTag != nil
     }
 
-    private var thumbImageTag: String? {
-        imageTags?["Thumb"] ?? ((mediaItemKind == .episode) ? imageTags?["Primary"] : nil) ?? parentThumbImageTag ?? primaryImageTag
-    }
+    private func posterImageURL(
+        for kind: MediaItemKind,
+        baseURL: String,
+        accessToken: String
+    ) -> URL? {
+        guard kind == .movie || kind == .series || kind == .season else {
+            return nil
+        }
 
-    private func landscapeImageURL(baseURL: String, accessToken: String) -> URL? {
+        if hasPrimaryPosterCandidate {
+            return imageURL(
+                type: "Primary",
+                itemID: primaryImageItemID,
+                tag: primaryImageTag,
+                baseURL: baseURL,
+                accessToken: accessToken,
+                maxWidth: 480,
+                maxHeight: 720
+            )
+        }
+
         if let tag = imageTags?["Thumb"] {
             return imageURL(
                 type: "Thumb",
@@ -382,74 +387,115 @@ extension JellyfinItem {
                 tag: tag,
                 baseURL: baseURL,
                 accessToken: accessToken,
-                maxWidth: 780,
-                maxHeight: 439
-            )
-        }
-
-        if let tag = imageTags?["Primary"] {
-            return imageURL(
-                type: "Primary",
-                itemID: id,
-                tag: tag,
-                baseURL: baseURL,
-                accessToken: accessToken,
-                maxWidth: 780,
-                maxHeight: 439
-            )
-        }
-
-        if let parentThumbItemId, let parentThumbImageTag {
-            return imageURL(
-                type: "Thumb",
-                itemID: parentThumbItemId,
-                tag: parentThumbImageTag,
-                baseURL: baseURL,
-                accessToken: accessToken,
-                maxWidth: 780,
-                maxHeight: 439
-            )
-        }
-
-        return imageURL(
-            type: "Primary",
-            itemID: primaryImageItemID,
-            tag: primaryImageTag,
-            baseURL: baseURL,
-            accessToken: accessToken,
-            maxWidth: 780,
-            maxHeight: 439
-        )
-    }
-
-    private func backdropURL(baseURL: String, accessToken: String) -> URL? {
-        if let tag = backdropImageTags?.first {
-            return imageURL(
-                type: "Backdrop",
-                itemID: id,
-                tag: tag,
-                index: 0,
-                baseURL: baseURL,
-                accessToken: accessToken,
-                maxWidth: 1920,
-                maxHeight: 1080
-            )
-        }
-
-        if let parentBackdropItemId, let tag = parentBackdropImageTags?.first {
-            return imageURL(
-                type: "Backdrop",
-                itemID: parentBackdropItemId,
-                tag: tag,
-                index: 0,
-                baseURL: baseURL,
-                accessToken: accessToken,
-                maxWidth: 1920,
-                maxHeight: 1080
+                maxWidth: 480,
+                maxHeight: 720
             )
         }
 
         return nil
+    }
+
+    private func landscapeImageURL(
+        for kind: MediaItemKind,
+        baseURL: String,
+        accessToken: String
+    ) -> URL? {
+        switch kind {
+        case .movie, .series, .season:
+            return nil
+        case .episode:
+            if let tag = imageTags?["Thumb"] {
+                return imageURL(
+                    type: "Thumb",
+                    itemID: id,
+                    tag: tag,
+                    baseURL: baseURL,
+                    accessToken: accessToken,
+                    maxWidth: 780,
+                    maxHeight: 439
+                )
+            }
+
+            if let tag = imageTags?["Primary"] {
+                return imageURL(
+                    type: "Primary",
+                    itemID: id,
+                    tag: tag,
+                    baseURL: baseURL,
+                    accessToken: accessToken,
+                    maxWidth: 780,
+                    maxHeight: 439
+                )
+            }
+
+            return nil
+        case .other:
+            if let tag = backdropImageTags?.first {
+                return imageURL(
+                    type: "Backdrop",
+                    itemID: id,
+                    tag: tag,
+                    index: 0,
+                    baseURL: baseURL,
+                    accessToken: accessToken,
+                    maxWidth: 780,
+                    maxHeight: 439
+                )
+            }
+
+            if let tag = imageTags?["Thumb"] {
+                return imageURL(
+                    type: "Thumb",
+                    itemID: id,
+                    tag: tag,
+                    baseURL: baseURL,
+                    accessToken: accessToken,
+                    maxWidth: 780,
+                    maxHeight: 439
+                )
+            }
+
+            return nil
+        }
+    }
+
+    private func backdropURL(
+        for kind: MediaItemKind,
+        baseURL: String,
+        accessToken: String
+    ) -> URL? {
+        switch kind {
+        case .movie, .series, .season:
+            if let tag = backdropImageTags?.first {
+                return imageURL(
+                    type: "Backdrop",
+                    itemID: id,
+                    tag: tag,
+                    index: 0,
+                    baseURL: baseURL,
+                    accessToken: accessToken,
+                    maxWidth: 1920,
+                    maxHeight: 1080
+                )
+            }
+
+            if let parentBackdropItemId, let tag = parentBackdropImageTags?.first {
+                return imageURL(
+                    type: "Backdrop",
+                    itemID: parentBackdropItemId,
+                    tag: tag,
+                    index: 0,
+                    baseURL: baseURL,
+                    accessToken: accessToken,
+                    maxWidth: 1920,
+                    maxHeight: 1080
+                )
+            }
+
+            return nil
+        case .episode, .other:
+            return landscapeImageURL(for: kind, baseURL: baseURL, accessToken: accessToken)
+        }
     }
 
     private func imageURL(

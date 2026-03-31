@@ -37,7 +37,7 @@ enum MediaArtworkStyle: Hashable {
         case .poster:
             return 480
         case .landscape:
-            return 780
+            return 620
         }
     }
 
@@ -137,7 +137,7 @@ struct MediaView<Content: View>: View {
                 .scrollIndicators(.hidden)
                 .scrollClipDisabled()
 
-                VStack {
+                VStack(alignment: .trailing) {
                     Spacer(minLength: 0)
 
                     MediaArtworkView(url: data.artworkURL, title: data.title, style: data.artworkStyle)
@@ -145,8 +145,7 @@ struct MediaView<Content: View>: View {
 
                     Spacer(minLength: 0)
                 }
-                .frame(width: panelWidth)
-                .clipped()
+                .frame(width: panelWidth, alignment: .trailing)
             }
             .padding(.horizontal, horizontalPadding)
             .padding(.vertical, 48)
@@ -215,24 +214,25 @@ private struct MediaArtworkView: View {
     private let shape = RoundedRectangle(cornerRadius: 30, style: .continuous)
 
     var body: some View {
-        ZStack {
-            shape
-                .fill(Color.white.opacity(0.08))
-
-            AsyncImage(url: url) { phase in
-                switch phase {
-                case .success(let image):
-                    image
-                        .resizable()
-                        .scaledToFill()
-                default:
-                    Image(systemName: "film.fill")
-                        .font(.system(size: 48, weight: .semibold))
-                        .foregroundStyle(.secondary)
+        shape
+            .fill(Color.white.opacity(0.08))
+            .overlay {
+                AsyncImage(url: url) { phase in
+                    switch phase {
+                    case .success(let image):
+                        image
+                            .resizable()
+                            .scaledToFill()
+                    default:
+                        Image(systemName: "film.fill")
+                            .font(.system(size: 48, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                    }
                 }
+                .padding(1)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .clipped()
             }
-            .padding(1)
-        }
         .aspectRatio(style.aspectRatio, contentMode: .fit)
         .clipShape(shape)
         .shadow(color: .black.opacity(0.35), radius: 28, y: 18)
