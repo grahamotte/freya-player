@@ -6,6 +6,6 @@ name = "freya-player"
 script = ""
 
 [[actions]]
-name = "Run"
+name = "xcode"
 icon = "run"
-command = "mise start"
+command = "mise xcode"

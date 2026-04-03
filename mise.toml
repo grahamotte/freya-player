@@ -9,3 +9,7 @@ run = "./scripts/start.sh"
 [tasks.dist]
 description = "Build an unsigned Release app for tvOS devices"
 run = "./scripts/build-distribution.sh"
+
+[tasks.xcode]
+description = "Open Freya Player in Xcode"
+run = "open freya-player.xcodeproj"
