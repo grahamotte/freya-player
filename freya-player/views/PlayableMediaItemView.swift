@@ -11,16 +11,18 @@ struct PlayableMediaItemView: View {
 
     var body: some View {
         MediaView(model: model, data: item.mediaViewData()) {
-            MediaWatchStatusButton(model: model, item: $item)
+            VStack(alignment: .leading, spacing: 20) {
+                if let playbackID = item.playbackID {
+                    MediaPlayButton(
+                        model: model,
+                        id: playbackID,
+                        hasResume: item.hasResume,
+                        resumeOffsetMilliseconds: item.resumeOffsetMilliseconds,
+                        onPlaybackDismissed: refreshItem
+                    )
+                }
 
-            if let playbackID = item.playbackID {
-                MediaPlayButton(
-                    model: model,
-                    id: playbackID,
-                    hasResume: item.hasResume,
-                    resumeOffsetMilliseconds: item.resumeOffsetMilliseconds,
-                    onPlaybackDismissed: refreshItem
-                )
+                MediaWatchStatusButton(model: model, item: $item)
             }
         }
         .task(id: item.id) {
