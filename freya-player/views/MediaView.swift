@@ -87,46 +87,7 @@ struct MediaView<Content: View>: View {
             let artworkSize = data.artworkStyle.fittedSize(in: artworkBounds)
 
             HStack(spacing: 72) {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 32) {
-                        Spacer(minLength: 0)
-
-                        Text(data.title)
-                            .font(.system(size: 58, weight: .bold))
-                            .lineLimit(3)
-
-                        if !data.metadata.isEmpty {
-                            HStack(alignment: .top, spacing: 44) {
-                                ForEach(data.metadata) { entry in
-                                    VStack(alignment: .leading, spacing: 8) {
-                                        Text(entry.label)
-                                            .font(.footnote.weight(.semibold))
-                                            .foregroundStyle(.secondary)
-
-                                        Text(entry.value)
-                                            .font(.headline.weight(.medium))
-                                    }
-                                }
-                            }
-                        }
-
-                        Text(data.synopsis)
-                            .font(.body)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(6)
-                            .frame(maxWidth: synopsisWidth, maxHeight: 220, alignment: .topLeading)
-
-                        content
-
-                        Spacer(minLength: 0)
-                    }
-                    .padding(.horizontal, 36)
-                    .padding(.vertical, 24)
-                    .frame(minHeight: proxy.size.height - 96, alignment: .center)
-                }
-                .frame(width: panelWidth, alignment: .leading)
-                .scrollIndicators(.hidden)
-                .scrollClipDisabled()
+                detailsPanel(width: panelWidth, minHeight: proxy.size.height - 96, synopsisWidth: synopsisWidth)
 
                 VStack(alignment: .trailing) {
                     Spacer(minLength: 0)
@@ -145,6 +106,49 @@ struct MediaView<Content: View>: View {
         .background {
             MediaBackdropView(url: data.backdropURL)
         }
+    }
+
+    private func detailsPanel(width: CGFloat, minHeight: CGFloat, synopsisWidth: CGFloat) -> some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 32) {
+                Spacer(minLength: 0)
+
+                Text(data.title)
+                    .font(.system(size: 58, weight: .bold))
+                    .lineLimit(3)
+
+                if !data.metadata.isEmpty {
+                    HStack(alignment: .top, spacing: 44) {
+                        ForEach(data.metadata) { entry in
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text(entry.label)
+                                    .font(.footnote.weight(.semibold))
+                                    .foregroundStyle(.secondary)
+
+                                Text(entry.value)
+                                    .font(.headline.weight(.medium))
+                            }
+                        }
+                    }
+                }
+
+                Text(data.synopsis)
+                    .font(.body)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(6)
+                    .frame(maxWidth: synopsisWidth, maxHeight: 220, alignment: .topLeading)
+
+                content
+
+                Spacer(minLength: 0)
+            }
+        }
+        .padding(.horizontal, 36)
+        .padding(.vertical, 24)
+        .frame(width: width, alignment: .leading)
+        .frame(minHeight: minHeight, alignment: .topLeading)
+        .scrollIndicators(.hidden)
+        .scrollClipDisabled()
     }
 }
 

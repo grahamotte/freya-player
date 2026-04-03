@@ -15,7 +15,8 @@ struct ShowSeriesView: View {
                     title: "Seasons",
                     emptyMessage: "No seasons yet.",
                     destination: { $0.route },
-                    rowStyle: .standard
+                    rowStyle: .standard,
+                    autoFocusNextUnwatched: true
                 )
             }
         }
