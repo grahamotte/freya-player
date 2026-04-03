@@ -239,6 +239,7 @@ struct MediaPlayButton: View {
             await reportTimelineNow(state: .stopped, time: time, duration: duration)
             await model.markPlaybackCompleted(for: id)
         }
+        isShowingPlayer = false
     }
 
     private enum FocusedControl {
