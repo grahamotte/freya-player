@@ -74,6 +74,26 @@ final class JellyfinConnector: MediaConnector {
         }
     }
 
+    func loadItem(_ item: MediaItem) async throws -> MediaItem {
+        guard let connection else {
+            throw MediaConnectorError.unavailable
+        }
+
+        return try await client.item(
+            for: item.id,
+            serverURL: connection.serverURL,
+            accessToken: connection.accessToken,
+            userID: connection.userID
+        )
+        .mediaItem(
+            providerID: providerID,
+            serverID: connection.serverID,
+            serverURL: connection.serverURL,
+            accessToken: connection.accessToken,
+            fallbackKind: item.kind
+        )
+    }
+
     func loadChildren(for item: MediaItem) async throws -> [MediaItem] {
         guard let connection else {
             throw MediaConnectorError.unavailable

@@ -12,6 +12,25 @@ struct PlayableMediaItemView: View {
     var body: some View {
         MediaView(model: model, data: item.mediaViewData()) {
             MediaWatchStatusButton(model: model, item: $item)
+
+            if let playbackID = item.playbackID {
+                MediaPlayButton(
+                    model: model,
+                    id: playbackID,
+                    hasResume: item.hasResume,
+                    resumeOffsetMilliseconds: item.resumeOffsetMilliseconds,
+                    onPlaybackDismissed: refreshItem
+                )
+            }
         }
+        .task(id: item.id) {
+            await refreshItem()
+        }
+    }
+
+    private func refreshItem() async {
+        do {
+            item = try await model.loadItem(item)
+        } catch {}
     }
 }

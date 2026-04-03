@@ -90,6 +90,31 @@ final class JellyfinClient {
         )
     }
 
+    func item(
+        for itemID: String,
+        serverURL: String,
+        accessToken: String,
+        userID: String
+    ) async throws -> JellyfinItem {
+        var components = try URLComponents(
+            url: url(serverURL: serverURL, path: "/Users/\(userID)/Items/\(itemID)"),
+            resolvingAgainstBaseURL: false
+        )
+        components?.queryItems = [
+            URLQueryItem(name: "fields", value: "Overview,DateCreated"),
+            URLQueryItem(name: "enableUserData", value: "true"),
+            URLQueryItem(name: "enableImages", value: "true")
+        ]
+
+        guard let url = components?.url else {
+            throw MediaConnectorError.unavailable
+        }
+
+        var request = URLRequest(url: url)
+        applyAuthorizationHeaders(to: &request, accessToken: accessToken)
+        return try await send(request)
+    }
+
     func playbackInfo(
         for itemID: String,
         serverURL: String,

@@ -8,6 +8,7 @@ protocol MediaConnector: AnyObject {
     func disconnect()
 
     func loadLibraryItems(for library: LibraryReference) async throws -> [MediaItem]
+    func loadItem(_ item: MediaItem) async throws -> MediaItem
     func loadChildren(for item: MediaItem) async throws -> [MediaItem]
 
     func playbackOptions(for id: MediaPlaybackID) async throws -> MediaPlaybackOptions?

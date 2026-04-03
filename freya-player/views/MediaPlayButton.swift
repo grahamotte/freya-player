@@ -6,6 +6,7 @@ struct MediaPlayButton: View {
     let id: MediaPlaybackID
     let hasResume: Bool
     let resumeOffsetMilliseconds: Int?
+    var onPlaybackDismissed: () async -> Void = {}
 
     @FocusState private var focusedControl: FocusedControl?
 
@@ -19,6 +20,7 @@ struct MediaPlayButton: View {
     @State private var isShowingPlayer = false
     @State private var playbackSessionID = UUID().uuidString
     @State private var didCompletePlayback = false
+    @State private var playbackUpdateTask: Task<Void, Never>?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -123,6 +125,7 @@ struct MediaPlayButton: View {
             playbackError = nil
             playbackSessionID = UUID().uuidString
             didCompletePlayback = false
+            playbackUpdateTask = nil
             player = AVPlayer(url: url)
             isShowingPlayer = true
         } catch {
@@ -193,34 +196,47 @@ struct MediaPlayButton: View {
     }
 
     private func stopPlayback() {
-        if !didCompletePlayback {
-            reportTimeline(
-                state: .stopped,
-                time: player?.currentTime().milliseconds ?? 0,
-                duration: player?.currentItem?.duration.milliseconds
-            )
-        }
+        let time = player?.currentTime().milliseconds ?? 0
+        let duration = player?.currentItem?.duration.milliseconds
+        let pendingPlaybackUpdateTask = playbackUpdateTask
         player?.pause()
         player = nil
+
+        Task {
+            if didCompletePlayback {
+                await pendingPlaybackUpdateTask?.value
+            } else {
+                await reportTimelineNow(
+                    state: .stopped,
+                    time: time,
+                    duration: duration
+                )
+            }
+
+            await onPlaybackDismissed()
+        }
     }
 
     private func reportTimeline(state: MediaPlaybackTimelineState, time: Int, duration: Int?) {
         Task {
-            await model.reportPlaybackTimeline(
-                for: id,
-                state: state,
-                time: time,
-                duration: duration,
-                sessionID: playbackSessionID
-            )
+            await reportTimelineNow(state: state, time: time, duration: duration)
         }
+    }
+
+    private func reportTimelineNow(state: MediaPlaybackTimelineState, time: Int, duration: Int?) async {
+        await model.reportPlaybackTimeline(
+            for: id,
+            state: state,
+            time: time,
+            duration: duration,
+            sessionID: playbackSessionID
+        )
     }
 
     private func playbackEnded(time: Int, duration: Int?) {
         didCompletePlayback = true
-        reportTimeline(state: .stopped, time: time, duration: duration)
-
-        Task {
+        playbackUpdateTask = Task {
+            await reportTimelineNow(state: .stopped, time: time, duration: duration)
             await model.markPlaybackCompleted(for: id)
         }
     }

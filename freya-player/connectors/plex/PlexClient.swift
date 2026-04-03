@@ -149,6 +149,20 @@ final class PlexClient {
         )
     }
 
+    func item(for ratingKey: String, connection: PlexConnectionSummary) async throws -> PlexMediaItem {
+        let items = try await fetchMetadataItems(
+            path: "/library/metadata/\(ratingKey)",
+            token: connection.serverToken,
+            baseURL: connection.serverURL
+        )
+
+        guard let item = items.first else {
+            throw PlexError.invalidResponse
+        }
+
+        return item
+    }
+
     func reportTimeline(
         for ratingKey: String,
         connection: PlexConnectionSummary,

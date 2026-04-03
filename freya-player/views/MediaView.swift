@@ -116,15 +116,6 @@ struct MediaView<Content: View>: View {
                             .lineLimit(6)
                             .frame(maxWidth: synopsisWidth, maxHeight: 220, alignment: .topLeading)
 
-                        if let playbackID = data.playbackID {
-                            MediaPlayButton(
-                                model: model,
-                                id: playbackID,
-                                hasResume: data.hasResume,
-                                resumeOffsetMilliseconds: data.resumeOffsetMilliseconds
-                            )
-                        }
-
                         content
 
                         Spacer(minLength: 0)

@@ -82,6 +82,20 @@ final class PlexConnector: MediaConnector {
         }
     }
 
+    func loadItem(_ item: MediaItem) async throws -> MediaItem {
+        guard let connection else {
+            throw MediaConnectorError.unavailable
+        }
+
+        return try await client.item(for: item.id, connection: connection).mediaItem(
+            providerID: providerID,
+            serverID: connection.serverID,
+            serverURL: connection.serverURL,
+            serverToken: connection.serverToken,
+            fallbackKind: item.kind
+        )
+    }
+
     func loadChildren(for item: MediaItem) async throws -> [MediaItem] {
         guard let connection else {
             throw MediaConnectorError.unavailable

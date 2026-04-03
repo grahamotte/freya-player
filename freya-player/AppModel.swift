@@ -146,6 +146,10 @@ final class AppModel: ObservableObject {
         try await connector(for: library.providerID).loadLibraryItems(for: library)
     }
 
+    func loadItem(_ item: MediaItem) async throws -> MediaItem {
+        try await connector(for: item.providerID).loadItem(item)
+    }
+
     func loadChildren(for item: MediaItem) async throws -> [MediaItem] {
         try await connector(for: item.providerID).loadChildren(for: item)
     }
