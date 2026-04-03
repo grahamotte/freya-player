@@ -1,13 +1,16 @@
 import SwiftUI
 
 struct MediaGlassButtonStyle: ButtonStyle {
+    var tint: Color? = nil
+
     func makeBody(configuration: Configuration) -> some View {
-        MediaGlassButtonBody(configuration: configuration)
+        MediaGlassButtonBody(configuration: configuration, tint: tint)
     }
 }
 
 private struct MediaGlassButtonBody: View {
     let configuration: ButtonStyle.Configuration
+    let tint: Color?
     @Environment(\.isFocused) private var isFocused
 
     var body: some View {
@@ -23,12 +26,16 @@ private struct MediaGlassButtonBody: View {
 
     private var background: some View {
         RoundedRectangle(cornerRadius: 36, style: .continuous)
-            .fill(isFocused ? Color.white : Color.white.opacity(0.12))
+            .fill(isFocused ? Color.white : baseColor.opacity(tint == nil ? 0.12 : 0.18))
             .overlay {
                 if !isFocused {
                     RoundedRectangle(cornerRadius: 36, style: .continuous)
-                        .stroke(Color.white.opacity(0.28), lineWidth: 1)
+                        .stroke(baseColor.opacity(tint == nil ? 0.28 : 0.4), lineWidth: 1)
                 }
             }
+    }
+
+    private var baseColor: Color {
+        tint ?? .white
     }
 }

@@ -11,6 +11,8 @@ struct MediaWatchStatusButton: View {
         if item.playbackID != nil {
             MediaWatchStatusMenu(
                 title: MediaWatchStatusDisplay.title(progress: item.progress, isWatched: item.isWatched),
+                progress: item.progress,
+                isWatched: item.isWatched,
                 isUpdating: isUpdating,
                 errorMessage: errorMessage,
                 onMarkWatched: {
@@ -62,6 +64,8 @@ struct MediaCollectionWatchStatusButton: View {
     var body: some View {
         MediaWatchStatusMenu(
             title: MediaWatchStatusDisplay.title(progress: displayItem.progress, isWatched: displayItem.isWatched),
+            progress: displayItem.progress,
+            isWatched: displayItem.isWatched,
             isUpdating: isUpdating,
             errorMessage: errorMessage,
             onMarkWatched: {
@@ -159,6 +163,8 @@ struct MediaCollectionWatchStatusButton: View {
 
 private struct MediaWatchStatusMenu: View {
     let title: String
+    let progress: Double?
+    let isWatched: Bool
     let isUpdating: Bool
     let errorMessage: String?
     let onMarkWatched: () -> Void
@@ -173,7 +179,7 @@ private struct MediaWatchStatusMenu: View {
             } label: {
                 Label(title, systemImage: MediaWatchStatusDisplay.iconName)
             }
-            .buttonStyle(MediaGlassButtonStyle())
+            .buttonStyle(MediaGlassButtonStyle(tint: MediaWatchStatusDisplay.buttonColor(progress: progress, isWatched: isWatched)))
             .disabled(isUpdating)
 
             if let errorMessage {
