@@ -3,6 +3,8 @@ import Foundation
 
 @MainActor
 final class AppModel: ObservableObject {
+    private let mediaSessionStore = MediaSessionStore()
+
     enum ConnectionState {
         case checking
         case signedOut(message: String)
@@ -137,6 +139,10 @@ final class AppModel: ObservableObject {
     }
 
     func disconnectCurrentServer() {
+        if let server = connectedServer {
+            mediaSessionStore.clearLibraryManagement(providerID: server.providerID, serverID: server.serverID)
+        }
+
         restoreTask?.cancel()
         pollTask?.cancel()
         activeConnector?.disconnect()
@@ -160,7 +166,7 @@ final class AppModel: ObservableObject {
         var libraries = server.libraries
         let library = libraries.remove(at: index)
         libraries.insert(library, at: destination)
-        rememberLibraryOrder(libraries.map(\.id), for: server.id)
+        rememberLibraryOrder(libraries.map(\.id), for: server)
         connectionState = .connected(server.settingLibraries(libraries))
     }
 
@@ -173,7 +179,7 @@ final class AppModel: ObservableObject {
         libraries[index] = library.settingHidden(isHidden)
         rememberHiddenLibraries(
             Set(libraries.filter(\.isHidden).map(\.id)),
-            for: server.id
+            for: server
         )
         connectionState = .connected(server.settingLibraries(libraries))
     }
@@ -328,26 +334,40 @@ final class AppModel: ObservableObject {
 
     private func setConnectedServer(_ server: ConnectedServer) {
         if activeLibraryOrderServerID != server.id {
-            clearActiveLibraryOrder()
+            loadActiveLibraryState(for: server)
         }
 
         connectionState = .connected(applyActiveLibraryOrder(to: server))
     }
 
-    private func rememberLibraryOrder(_ libraryIDs: [String], for serverID: String) {
-        activeLibraryOrderServerID = serverID
+    private func rememberLibraryOrder(_ libraryIDs: [String], for server: ConnectedServer) {
+        activeLibraryOrderServerID = server.id
         activeLibraryOrder = libraryIDs
+        mediaSessionStore.setLibraryOrder(libraryIDs, providerID: server.providerID, serverID: server.serverID)
     }
 
-    private func rememberHiddenLibraries(_ libraryIDs: Set<String>, for serverID: String) {
-        activeLibraryOrderServerID = serverID
+    private func rememberHiddenLibraries(_ libraryIDs: Set<String>, for server: ConnectedServer) {
+        activeLibraryOrderServerID = server.id
         activeHiddenLibraryIDs = libraryIDs
+        mediaSessionStore.setHiddenLibraryIDs(libraryIDs, providerID: server.providerID, serverID: server.serverID)
     }
 
     private func clearActiveLibraryOrder() {
         activeLibraryOrderServerID = nil
         activeLibraryOrder = []
         activeHiddenLibraryIDs = []
+    }
+
+    private func loadActiveLibraryState(for server: ConnectedServer) {
+        activeLibraryOrderServerID = server.id
+        activeLibraryOrder = mediaSessionStore.libraryOrder(
+            providerID: server.providerID,
+            serverID: server.serverID
+        )
+        activeHiddenLibraryIDs = mediaSessionStore.hiddenLibraryIDs(
+            providerID: server.providerID,
+            serverID: server.serverID
+        )
     }
 
     private func applyActiveLibraryOrder(to server: ConnectedServer) -> ConnectedServer {
@@ -373,10 +393,10 @@ final class AppModel: ObservableObject {
                 library.settingHidden(activeHiddenLibraryIDs.contains(library.id))
             }
 
-        rememberLibraryOrder(libraries.map(\.id), for: server.id)
+        rememberLibraryOrder(libraries.map(\.id), for: server)
         rememberHiddenLibraries(
             Set(libraries.filter(\.isHidden).map(\.id)),
-            for: server.id
+            for: server
         )
         return server.settingLibraries(libraries)
     }
