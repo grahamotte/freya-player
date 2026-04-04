@@ -249,6 +249,7 @@ private final class LibraryPageCollectionViewController: UIViewController, UICol
             selectedFilter: filter,
             selectedSort: sort,
             selectedSortOrder: sortOrder,
+            watchButton: libraryWatchButtonView(),
             onFilterChange: { [weak self] filter in
                 self?.setFilter(filter)
             },
@@ -302,8 +303,60 @@ private final class LibraryPageCollectionViewController: UIViewController, UICol
         return "\(count) \(suffix)"
     }
 
+    private var libraryWatchStatusItem: MediaItem? {
+        let statusItems = items.map(applyingOptimisticWatchStatus)
+        guard !statusItems.isEmpty else { return nil }
+
+        let progress = statusItems.reduce(0.0) { partial, item in
+            partial + (item.isWatched ? 1 : min(max(item.progress ?? 0, 0), 1))
+        } / Double(statusItems.count)
+        let isWatched = statusItems.allSatisfy(\.isWatched)
+
+        return MediaItem(
+            providerID: library.providerID,
+            serverID: library.serverID,
+            id: "library:\(library.id)",
+            title: library.title,
+            kind: library.defaultItemKind,
+            synopsis: "",
+            addedAt: nil,
+            year: nil,
+            durationMilliseconds: nil,
+            contentRating: nil,
+            isWatched: isWatched,
+            progress: isWatched ? 1 : (progress > 0 ? progress : nil),
+            resumeOffsetMilliseconds: nil,
+            artwork: .init(posterURL: nil, landscapeURL: nil, backdropURL: nil)
+        )
+    }
+
+    private var libraryWatchStatusReloadID: String {
+        items.map {
+            "\($0.id):\($0.isWatched):\($0.progress ?? 0):\($0.resumeOffsetMilliseconds ?? 0)"
+        }.joined(separator: ",")
+    }
+
     private func artworkURL(for item: MediaItem) -> URL? {
         item.artwork.url(for: tileStyle.mediaArtworkStyle)
+    }
+
+    private func libraryWatchButtonView() -> AnyView? {
+        guard let item = libraryWatchStatusItem else { return nil }
+
+        return AnyView(
+            MediaCollectionWatchStatusButton(
+                model: model,
+                item: item,
+                reloadID: libraryWatchStatusReloadID,
+                loadItems: { [weak self] in
+                    guard let self else { return [] }
+                    return try await self.loadLibraryWatchTargets()
+                },
+                onUpdateFinished: { [weak self] in
+                    await self?.refreshItemsAfterQuickAction()
+                }
+            )
+        )
     }
 
     private func setFilter(_ filter: WatchFilter) {
@@ -395,6 +448,7 @@ private final class LibraryPageCollectionViewController: UIViewController, UICol
             selectedFilter: filter,
             selectedSort: sort,
             selectedSortOrder: sortOrder,
+            watchButton: libraryWatchButtonView(),
             onFilterChange: { [weak self] filter in
                 self?.setFilter(filter)
             },
@@ -489,6 +543,25 @@ private final class LibraryPageCollectionViewController: UIViewController, UICol
             reconcileOptimisticWatchStates(with: refreshedItems)
             rebuildVisibleStatePreservingScroll()
         } catch {}
+    }
+
+    private func loadLibraryWatchTargets() async throws -> [MediaItem] {
+        try await loadWatchTargets(in: items)
+    }
+
+    private func loadWatchTargets(in items: [MediaItem]) async throws -> [MediaItem] {
+        var targets: [MediaItem] = []
+
+        for item in items {
+            if item.playbackID != nil {
+                targets.append(item)
+            } else {
+                let children = try await model.loadChildren(for: item)
+                targets += try await loadWatchTargets(in: children)
+            }
+        }
+
+        return targets
     }
 
     private func makeLayout() -> UICollectionViewLayout {
@@ -864,6 +937,8 @@ private final class LibraryPageHeaderView: UICollectionReusableView {
     private let countLabel = UILabel()
     private let filterButton = GlassMenuButton()
     private let sortButton = GlassMenuButton()
+    private let watchButtonHostView = UIView()
+    private var watchButtonHostingController: UIHostingController<AnyView>?
     private var onFilterChange: ((WatchFilter) -> Void)?
     private var onSortChange: ((LibrarySort) -> Void)?
 
@@ -889,10 +964,16 @@ private final class LibraryPageHeaderView: UICollectionReusableView {
         sortButton.showsMenuAsPrimaryAction = true
         sortButton.icon = UIImage(systemName: "arrow.up.arrow.down")
 
+        watchButtonHostView.translatesAutoresizingMaskIntoConstraints = false
+        watchButtonHostView.backgroundColor = .clear
+        watchButtonHostView.setContentHuggingPriority(.required, for: .horizontal)
+        watchButtonHostView.setContentCompressionResistancePriority(.required, for: .horizontal)
+
         addSubview(titleLabel)
         addSubview(countLabel)
         addSubview(filterButton)
         addSubview(sortButton)
+        addSubview(watchButtonHostView)
 
         NSLayoutConstraint.activate([
             titleLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 68),
@@ -908,7 +989,13 @@ private final class LibraryPageHeaderView: UICollectionReusableView {
             sortButton.leadingAnchor.constraint(equalTo: filterButton.trailingAnchor, constant: 24),
             sortButton.centerYAnchor.constraint(equalTo: filterButton.centerYAnchor),
             sortButton.widthAnchor.constraint(greaterThanOrEqualToConstant: 220),
-            sortButton.heightAnchor.constraint(equalTo: filterButton.heightAnchor)
+            sortButton.heightAnchor.constraint(equalTo: filterButton.heightAnchor),
+            sortButton.trailingAnchor.constraint(lessThanOrEqualTo: watchButtonHostView.leadingAnchor, constant: -24),
+
+            watchButtonHostView.leadingAnchor.constraint(greaterThanOrEqualTo: sortButton.trailingAnchor, constant: 24),
+            watchButtonHostView.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -68),
+            watchButtonHostView.centerYAnchor.constraint(equalTo: filterButton.centerYAnchor),
+            watchButtonHostView.heightAnchor.constraint(greaterThanOrEqualTo: filterButton.heightAnchor)
         ])
     }
 
@@ -923,6 +1010,7 @@ private final class LibraryPageHeaderView: UICollectionReusableView {
         selectedFilter: WatchFilter,
         selectedSort: LibrarySort,
         selectedSortOrder: LibrarySortOrder,
+        watchButton: AnyView?,
         onFilterChange: @escaping (WatchFilter) -> Void,
         onSortChange: @escaping (LibrarySort) -> Void,
         onSortOrderChange: @escaping (LibrarySortOrder) -> Void
@@ -933,6 +1021,7 @@ private final class LibraryPageHeaderView: UICollectionReusableView {
         self.onSortChange = onSortChange
         updateFilterButton(for: selectedFilter)
         updateSortButton(for: selectedSort, order: selectedSortOrder, onSortOrderChange: onSortOrderChange)
+        updateWatchButton(watchButton)
     }
 
     private func updateFilterButton(for filter: WatchFilter) {
@@ -962,6 +1051,41 @@ private final class LibraryPageHeaderView: UICollectionReusableView {
                 }
             })
         ])
+    }
+
+    private func updateWatchButton(_ watchButton: AnyView?) {
+        guard let watchButton else {
+            watchButtonHostView.isHidden = true
+            watchButtonHostingController?.rootView = AnyView(EmptyView())
+            return
+        }
+
+        watchButtonHostView.isHidden = false
+
+        if let watchButtonHostingController {
+            watchButtonHostingController.rootView = watchButton
+            return
+        }
+
+        let hostingController = UIHostingController(rootView: watchButton)
+        if #available(tvOS 16.0, *) {
+            hostingController.sizingOptions = [.intrinsicContentSize]
+        }
+        hostingController.view.translatesAutoresizingMaskIntoConstraints = false
+        hostingController.view.backgroundColor = .clear
+        hostingController.view.setContentHuggingPriority(.required, for: .horizontal)
+        hostingController.view.setContentCompressionResistancePriority(.required, for: .horizontal)
+
+        watchButtonHostView.addSubview(hostingController.view)
+
+        NSLayoutConstraint.activate([
+            hostingController.view.leadingAnchor.constraint(equalTo: watchButtonHostView.leadingAnchor),
+            hostingController.view.trailingAnchor.constraint(equalTo: watchButtonHostView.trailingAnchor),
+            hostingController.view.topAnchor.constraint(equalTo: watchButtonHostView.topAnchor),
+            hostingController.view.bottomAnchor.constraint(equalTo: watchButtonHostView.bottomAnchor)
+        ])
+
+        watchButtonHostingController = hostingController
     }
 }
 

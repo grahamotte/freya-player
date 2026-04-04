@@ -49,17 +49,45 @@ struct MediaWatchStatusButton: View {
 
 struct MediaCollectionWatchStatusButton: View {
     @ObservedObject var model: AppModel
-    let item: MediaItem
+    private let item: MediaItem
+    private let reloadID: String
+    private let loadItems: () async throws -> [MediaItem]
+    private let onUpdateFinished: (() async -> Void)?
 
-    @State private var episodes: [MediaItem] = []
+    @State private var targets: [MediaItem] = []
     @State private var displayItem: MediaItem
     @State private var isLoading = false
     @State private var isUpdating = false
     @State private var errorMessage: String?
 
-    init(model: AppModel, item: MediaItem) {
+    init(
+        model: AppModel,
+        item: MediaItem,
+        onUpdateFinished: (() async -> Void)? = nil
+    ) {
+        self.init(
+            model: model,
+            item: item,
+            reloadID: item.id,
+            loadItems: {
+                try await Self.watchStatusTargets(for: item, model: model)
+            },
+            onUpdateFinished: onUpdateFinished
+        )
+    }
+
+    init(
+        model: AppModel,
+        item: MediaItem,
+        reloadID: String,
+        loadItems: @escaping () async throws -> [MediaItem],
+        onUpdateFinished: (() async -> Void)? = nil
+    ) {
         self.model = model
         self.item = item
+        self.reloadID = reloadID
+        self.loadItems = loadItems
+        self.onUpdateFinished = onUpdateFinished
         _displayItem = State(initialValue: item)
     }
 
@@ -82,22 +110,22 @@ struct MediaCollectionWatchStatusButton: View {
             }
         )
         .disabled(isLoading || isUpdating)
-        .task(id: item.id) {
-            await loadEpisodes()
+        .task(id: reloadID) {
+            await loadTargets()
         }
     }
 
-    private func loadEpisodes() async {
+    private func loadTargets() async {
         guard !isLoading else { return }
         isLoading = true
         defer { isLoading = false }
 
         do {
-            let loadedEpisodes = try await episodeDescendants(for: item)
-            episodes = loadedEpisodes
+            let loadedTargets = try await loadItems()
+            targets = loadedTargets
             errorMessage = nil
         } catch {
-            if episodes.isEmpty {
+            if targets.isEmpty {
                 displayItem = item
             }
             errorMessage = "Couldn't update watch status."
@@ -105,21 +133,21 @@ struct MediaCollectionWatchStatusButton: View {
     }
 
     private func setEpisodeWatchStatus(_ isWatched: Bool) async {
-        let loadedEpisodes: [MediaItem]
+        let loadedTargets: [MediaItem]
 
-        if episodes.isEmpty {
+        if targets.isEmpty {
             do {
-                loadedEpisodes = try await episodeDescendants(for: item)
-                episodes = loadedEpisodes
+                loadedTargets = try await loadItems()
+                targets = loadedTargets
             } catch {
                 errorMessage = "Couldn't update watch status."
                 return
             }
         } else {
-            loadedEpisodes = episodes
+            loadedTargets = targets
         }
 
-        let targets = loadedEpisodes.filter {
+        let updateTargets = loadedTargets.filter {
             if isWatched {
                 return !$0.isWatched
             }
@@ -127,9 +155,9 @@ struct MediaCollectionWatchStatusButton: View {
             return $0.isWatched || ($0.progress ?? 0) > 0 || ($0.resumeOffsetMilliseconds ?? 0) > 0
         }
 
-        let previousEpisodes = loadedEpisodes
+        let previousTargets = loadedTargets
         let previousDisplayItem = displayItem
-        episodes = loadedEpisodes.map { $0.settingWatchStatus(isWatched) }
+        targets = loadedTargets.map { $0.settingWatchStatus(isWatched) }
         displayItem = item.settingWatchStatus(isWatched)
         errorMessage = nil
 
@@ -137,33 +165,39 @@ struct MediaCollectionWatchStatusButton: View {
         defer { isUpdating = false }
 
         do {
-            for episode in targets {
-                guard let playbackID = episode.playbackID else { continue }
+            for target in updateTargets {
+                guard let playbackID = target.playbackID else { continue }
                 try await model.setWatchStatus(for: playbackID, isWatched: isWatched)
             }
+            await onUpdateFinished?()
         } catch {
-            episodes = previousEpisodes
+            targets = previousTargets
             displayItem = previousDisplayItem
             errorMessage = "Couldn't update watch status."
         }
     }
 
-    private func episodeDescendants(for item: MediaItem) async throws -> [MediaItem] {
-        let children = try await model.loadChildren(for: item)
-        var descendants: [MediaItem] = []
+    private static func watchStatusTargets(for item: MediaItem, model: AppModel) async throws -> [MediaItem] {
+        if item.playbackID != nil {
+            return [item]
+        }
 
-        for child in children {
-            switch child.kind {
-            case .episode:
-                descendants.append(child)
-            case .series, .season:
-                descendants += try await episodeDescendants(for: child)
-            case .movie, .other:
-                continue
+        let children = try await model.loadChildren(for: item)
+        return try await watchStatusTargets(in: children, model: model)
+    }
+
+    private static func watchStatusTargets(in items: [MediaItem], model: AppModel) async throws -> [MediaItem] {
+        var targets: [MediaItem] = []
+
+        for item in items {
+            if item.playbackID != nil {
+                targets.append(item)
+            } else {
+                targets += try await watchStatusTargets(for: item, model: model)
             }
         }
 
-        return descendants
+        return targets
     }
 }
 
@@ -186,6 +220,7 @@ private struct MediaWatchStatusMenu: View {
                 Label(title, systemImage: MediaWatchStatusDisplay.iconName)
             }
             .buttonStyle(MediaGlassButtonStyle(tint: MediaWatchStatusDisplay.buttonColor(progress: progress, isWatched: isWatched)))
+            .fixedSize(horizontal: true, vertical: false)
             .disabled(isUpdating)
 
             if let errorMessage {
