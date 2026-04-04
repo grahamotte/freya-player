@@ -31,15 +31,17 @@ struct MediaWatchStatusButton: View {
 
     private func setWatchStatus(_ isWatched: Bool) async {
         guard let playbackID = item.playbackID else { return }
+        let previousItem = item
+        item = item.settingWatchStatus(isWatched)
+        errorMessage = nil
 
         isUpdating = true
         defer { isUpdating = false }
 
         do {
             try await model.setWatchStatus(for: playbackID, isWatched: isWatched)
-            item = item.settingWatchStatus(isWatched)
-            errorMessage = nil
         } catch {
+            item = previousItem
             errorMessage = "Couldn't update watch status."
         }
     }
@@ -125,6 +127,12 @@ struct MediaCollectionWatchStatusButton: View {
             return $0.isWatched || ($0.progress ?? 0) > 0 || ($0.resumeOffsetMilliseconds ?? 0) > 0
         }
 
+        let previousEpisodes = loadedEpisodes
+        let previousDisplayItem = displayItem
+        episodes = loadedEpisodes.map { $0.settingWatchStatus(isWatched) }
+        displayItem = item.settingWatchStatus(isWatched)
+        errorMessage = nil
+
         isUpdating = true
         defer { isUpdating = false }
 
@@ -133,11 +141,9 @@ struct MediaCollectionWatchStatusButton: View {
                 guard let playbackID = episode.playbackID else { continue }
                 try await model.setWatchStatus(for: playbackID, isWatched: isWatched)
             }
-
-            episodes = loadedEpisodes.map { $0.settingWatchStatus(isWatched) }
-            displayItem = item.settingWatchStatus(isWatched)
-            errorMessage = nil
         } catch {
+            episodes = previousEpisodes
+            displayItem = previousDisplayItem
             errorMessage = "Couldn't update watch status."
         }
     }

@@ -8,6 +8,7 @@ struct LibrariesView: View {
 
     var body: some View {
         LibrariesCollectionView(
+            model: model,
             server: server,
             onSelectRoute: { path.append($0) },
             onManageServer: { path.append(server.providerID.settingsRoute) }
@@ -23,12 +24,14 @@ struct LibrariesView: View {
 }
 
 private struct LibrariesCollectionView: UIViewControllerRepresentable {
+    let model: AppModel
     let server: ConnectedServer
     let onSelectRoute: (AppRoute) -> Void
     let onManageServer: () -> Void
 
     func makeUIViewController(context: Context) -> LibrariesCollectionViewController {
         LibrariesCollectionViewController(
+            model: model,
             server: server,
             onSelectRoute: onSelectRoute,
             onManageServer: onManageServer
@@ -43,6 +46,7 @@ private struct LibrariesCollectionView: UIViewControllerRepresentable {
 private final class LibrariesCollectionViewController: UIViewController, UICollectionViewDataSource, UICollectionViewDelegate {
     private static let serverHeaderKind = "LibrariesServerHeader"
 
+    private let model: AppModel
     private let onSelectRoute: (AppRoute) -> Void
     private let onManageServer: () -> Void
 
@@ -50,6 +54,21 @@ private final class LibrariesCollectionViewController: UIViewController, UIColle
     private var sections: [LibrariesSection] = []
     private var selectedTitles: [String: String] = [:]
     private var focusedSectionID: String?
+    private var optimisticWatchStates: [String: Bool] = [:]
+    private lazy var quickActionHandler = MediaItemQuickActionHandler(
+        presenter: self,
+        model: model,
+        focusedItem: { [weak self] in self?.focusedQuickActionItem() },
+        setOptimisticWatchStatus: { [weak self] itemID, isWatched in
+            self?.setOptimisticWatchStatus(for: itemID, isWatched: isWatched)
+        },
+        clearOptimisticWatchStatus: { [weak self] itemID in
+            self?.clearOptimisticWatchStatus(for: itemID)
+        },
+        refresh: { [weak self] in
+            await self?.refreshServerAfterQuickAction()
+        }
+    )
 
     private lazy var collectionView = UICollectionView(
         frame: .zero,
@@ -57,10 +76,12 @@ private final class LibrariesCollectionViewController: UIViewController, UIColle
     )
 
     init(
+        model: AppModel,
         server: ConnectedServer,
         onSelectRoute: @escaping (AppRoute) -> Void,
         onManageServer: @escaping () -> Void
     ) {
+        self.model = model
         self.server = server
         self.onSelectRoute = onSelectRoute
         self.onManageServer = onManageServer
@@ -122,6 +143,7 @@ private final class LibrariesCollectionViewController: UIViewController, UIColle
     func update(server: ConnectedServer) {
         let shouldPreserveScrollPosition = self.server.id == server.id
         self.server = server
+        reconcileOptimisticWatchStates(with: server)
         sections = makeSections(from: server)
         selectedTitles = makeSelectedTitles(from: sections)
 
@@ -197,14 +219,25 @@ private final class LibrariesCollectionViewController: UIViewController, UIColle
 
     func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {
         let item = sections[indexPath.section].items[indexPath.item]
+        handlePrimaryAction(for: item)
+    }
 
-        switch item.kind {
-        case .manageServer:
-            onManageServer()
-        case .openLibrary, .media:
-            guard let route = item.route else { return }
-            onSelectRoute(route)
+    override func pressesBegan(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
+        quickActionHandler.pressesBegan(presses)
+        super.pressesBegan(presses, with: event)
+    }
+
+    override func pressesEnded(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
+        if quickActionHandler.pressesEnded(presses) {
+            return
         }
+
+        super.pressesEnded(presses, with: event)
+    }
+
+    override func pressesCancelled(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
+        quickActionHandler.pressesCancelled(presses)
+        super.pressesCancelled(presses, with: event)
     }
 
     override func didUpdateFocus(in context: UIFocusUpdateContext, with coordinator: UIFocusAnimationCoordinator) {
@@ -304,8 +337,9 @@ private final class LibrariesCollectionViewController: UIViewController, UIColle
     private func makeSections(from server: ConnectedServer) -> [LibrariesSection] {
         let librarySections = server.libraries.map { library in
             let style = library.reference.artworkStyle == .poster ? LibrariesShelfStyle.poster : .wide
+            let items = library.items.map(applyingOptimisticWatchStatus)
             let previewItems = Array(
-                library.items
+                items
                     .filter { !$0.isWatched }
                     .sorted { ($0.addedAt ?? .min) > ($1.addedAt ?? .min) }
                     .prefix(20)
@@ -316,6 +350,7 @@ private final class LibrariesCollectionViewController: UIViewController, UIColle
                 artworkURL: nil,
                 progress: nil,
                 isWatched: false,
+                mediaItem: nil,
                 route: library.reference.route,
                 style: style,
                 kind: .openLibrary,
@@ -329,6 +364,7 @@ private final class LibrariesCollectionViewController: UIViewController, UIColle
                     artworkURL: item.artwork.url(for: style.mediaArtworkStyle),
                     progress: item.progress,
                     isWatched: item.isWatched,
+                    mediaItem: item,
                     route: item.route,
                     style: style,
                     kind: .media,
@@ -357,6 +393,7 @@ private final class LibrariesCollectionViewController: UIViewController, UIColle
                     artworkURL: nil,
                     progress: nil,
                     isWatched: false,
+                    mediaItem: nil,
                     route: nil,
                     style: .wide,
                     kind: .manageServer,
@@ -433,6 +470,68 @@ private final class LibrariesCollectionViewController: UIViewController, UIColle
 
         return nil
     }
+
+    private func handlePrimaryAction(for item: LibrariesItem) {
+        switch item.kind {
+        case .manageServer:
+            onManageServer()
+        case .openLibrary, .media:
+            guard let route = item.route else { return }
+            onSelectRoute(route)
+        }
+    }
+
+    private func focusedQuickActionItem() -> MediaItem? {
+        guard let cell = collectionView.visibleCells.first(where: \.isFocused),
+              let indexPath = collectionView.indexPath(for: cell)
+        else {
+            return nil
+        }
+
+        let item = sections[indexPath.section].items[indexPath.item]
+        guard case .media = item.kind else { return nil }
+        return item.mediaItem
+    }
+
+    private func applyingOptimisticWatchStatus(to item: MediaItem) -> MediaItem {
+        guard let isWatched = optimisticWatchStates[item.id] else { return item }
+        return item.settingWatchStatus(isWatched)
+    }
+
+    private func setOptimisticWatchStatus(for itemID: String, isWatched: Bool) {
+        optimisticWatchStates[itemID] = isWatched
+        rebuildSectionsPreservingScrollPosition()
+    }
+
+    private func clearOptimisticWatchStatus(for itemID: String) {
+        optimisticWatchStates.removeValue(forKey: itemID)
+        rebuildSectionsPreservingScrollPosition()
+    }
+
+    private func reconcileOptimisticWatchStates(with server: ConnectedServer) {
+        optimisticWatchStates = optimisticWatchStates.filter { itemID, isWatched in
+            guard let actualWatchState = server.libraries
+                .flatMap(\.items)
+                .first(where: { $0.id == itemID })?
+                .isWatched else {
+                return false
+            }
+
+            return actualWatchState != isWatched
+        }
+    }
+
+    private func rebuildSectionsPreservingScrollPosition() {
+        sections = makeSections(from: server)
+        selectedTitles = makeSelectedTitles(from: sections)
+
+        guard isViewLoaded else { return }
+        reloadDataPreservingScrollPosition(true)
+    }
+
+    private func refreshServerAfterQuickAction() async {
+        await model.refreshConnection()
+    }
 }
 
 private struct LibrariesSection: Hashable {
@@ -455,6 +554,7 @@ private struct LibrariesItem: Hashable {
     let artworkURL: URL?
     let progress: Double?
     let isWatched: Bool
+    let mediaItem: MediaItem?
     let route: AppRoute?
     let style: LibrariesShelfStyle
     let kind: LibrariesItemKind

@@ -29,6 +29,7 @@ struct LibraryPageView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 LibraryPageCollectionView(
+                    model: model,
                     library: library,
                     items: items,
                     onSelectRoute: { path.append($0) }
@@ -62,12 +63,14 @@ struct LibraryPageView: View {
 }
 
 private struct LibraryPageCollectionView: UIViewControllerRepresentable {
+    let model: AppModel
     let library: LibraryReference
     let items: [MediaItem]
     let onSelectRoute: (AppRoute) -> Void
 
     func makeUIViewController(context: Context) -> LibraryPageCollectionViewController {
         LibraryPageCollectionViewController(
+            model: model,
             library: library,
             items: items,
             onSelectRoute: onSelectRoute
@@ -82,14 +85,30 @@ private struct LibraryPageCollectionView: UIViewControllerRepresentable {
 private final class LibraryPageCollectionViewController: UIViewController, UICollectionViewDataSource, UICollectionViewDelegate {
     private static let headerKind = "LibraryPageHeader"
 
+    private let model: AppModel
     private let onSelectRoute: (AppRoute) -> Void
     private let store = MediaSessionStore()
 
     private var library: LibraryReference
     private var items: [MediaItem]
+    private var optimisticWatchStates: [String: Bool] = [:]
     private var filter: WatchFilter
     private var sort: LibrarySort
     private var sortOrder: LibrarySortOrder
+    private lazy var quickActionHandler = MediaItemQuickActionHandler(
+        presenter: self,
+        model: model,
+        focusedItem: { [weak self] in self?.focusedQuickActionItem() },
+        setOptimisticWatchStatus: { [weak self] itemID, isWatched in
+            self?.setOptimisticWatchStatus(for: itemID, isWatched: isWatched)
+        },
+        clearOptimisticWatchStatus: { [weak self] itemID in
+            self?.clearOptimisticWatchStatus(for: itemID)
+        },
+        refresh: { [weak self] in
+            await self?.refreshItemsAfterQuickAction()
+        }
+    )
 
     private lazy var collectionView = UICollectionView(
         frame: .zero,
@@ -101,10 +120,12 @@ private final class LibraryPageCollectionViewController: UIViewController, UICol
     private var headerFocusGuideHeightConstraint: NSLayoutConstraint?
 
     init(
+        model: AppModel,
         library: LibraryReference,
         items: [MediaItem],
         onSelectRoute: @escaping (AppRoute) -> Void
     ) {
+        self.model = model
         self.library = library
         self.items = items
         self.filter = Self.savedFilter(store: store, library: library)
@@ -179,6 +200,7 @@ private final class LibraryPageCollectionViewController: UIViewController, UICol
         let didChangeLibrary = self.library != library
         self.library = library
         self.items = items
+        reconcileOptimisticWatchStates(with: items)
 
         if didChangeLibrary {
             filter = Self.savedFilter(store: store, library: library)
@@ -244,12 +266,30 @@ private final class LibraryPageCollectionViewController: UIViewController, UICol
         onSelectRoute(displayedItems[indexPath.item].route)
     }
 
+    override func pressesBegan(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
+        quickActionHandler.pressesBegan(presses)
+        super.pressesBegan(presses, with: event)
+    }
+
+    override func pressesEnded(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
+        if quickActionHandler.pressesEnded(presses) {
+            return
+        }
+
+        super.pressesEnded(presses, with: event)
+    }
+
+    override func pressesCancelled(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
+        quickActionHandler.pressesCancelled(presses)
+        super.pressesCancelled(presses, with: event)
+    }
+
     func scrollViewDidScroll(_ scrollView: UIScrollView) {
         updateHeaderFocusGuide()
     }
 
     private var displayedItems: [MediaItem] {
-        sort.items(from: items.filter { filter.matches($0) }, order: sortOrder)
+        sort.items(from: items.map(applyingOptimisticWatchStatus).filter { filter.matches($0) }, order: sortOrder)
     }
 
     private var tileStyle: LibraryTileStyle {
@@ -332,6 +372,16 @@ private final class LibraryPageCollectionViewController: UIViewController, UICol
         emptyLabel.text = displayedItems.isEmpty ? filter.emptyStateText(for: library.itemTitle) : nil
     }
 
+    private func focusedQuickActionItem() -> MediaItem? {
+        guard let cell = collectionView.visibleCells.first(where: \.isFocused),
+              let indexPath = collectionView.indexPath(for: cell)
+        else {
+            return nil
+        }
+
+        return displayedItems[indexPath.item]
+    }
+
     private func refreshHeader() {
         let headerIndexPath = IndexPath(item: 0, section: 0)
         let header = collectionView.supplementaryView(
@@ -398,6 +448,47 @@ private final class LibraryPageCollectionViewController: UIViewController, UICol
         )
 
         collectionView.setContentOffset(restoredOffset, animated: false)
+    }
+
+    private func applyingOptimisticWatchStatus(to item: MediaItem) -> MediaItem {
+        guard let isWatched = optimisticWatchStates[item.id] else { return item }
+        return item.settingWatchStatus(isWatched)
+    }
+
+    private func setOptimisticWatchStatus(for itemID: String, isWatched: Bool) {
+        optimisticWatchStates[itemID] = isWatched
+        rebuildVisibleStatePreservingScroll()
+    }
+
+    private func clearOptimisticWatchStatus(for itemID: String) {
+        optimisticWatchStates.removeValue(forKey: itemID)
+        rebuildVisibleStatePreservingScroll()
+    }
+
+    private func reconcileOptimisticWatchStates(with items: [MediaItem]) {
+        optimisticWatchStates = optimisticWatchStates.filter { itemID, isWatched in
+            guard let actualWatchState = items.first(where: { $0.id == itemID })?.isWatched else {
+                return false
+            }
+
+            return actualWatchState != isWatched
+        }
+    }
+
+    private func rebuildVisibleStatePreservingScroll() {
+        guard isViewLoaded else { return }
+        reloadDataPreservingScrollPosition(true)
+        updateEmptyState()
+        refreshHeader()
+    }
+
+    private func refreshItemsAfterQuickAction() async {
+        do {
+            let refreshedItems = try await model.loadLibraryItems(for: library)
+            items = refreshedItems
+            reconcileOptimisticWatchStates(with: refreshedItems)
+            rebuildVisibleStatePreservingScroll()
+        } catch {}
     }
 
     private func makeLayout() -> UICollectionViewLayout {
