@@ -222,7 +222,8 @@ extension JellyfinLibrary {
                     accessToken: accessToken,
                     fallbackKind: reference.defaultItemKind
                 )
-            }
+            },
+            isHidden: false
         )
     }
 

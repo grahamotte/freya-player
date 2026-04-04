@@ -113,7 +113,7 @@ private final class LibrariesCollectionViewController: UIViewController, UIColle
         collectionView.layoutMargins = .zero
 
         collectionView.register(LibraryTileCell.self, forCellWithReuseIdentifier: LibraryTileCell.reuseIdentifier)
-        collectionView.register(ManageServerCell.self, forCellWithReuseIdentifier: ManageServerCell.reuseIdentifier)
+        collectionView.register(LibrariesActionCell.self, forCellWithReuseIdentifier: LibrariesActionCell.reuseIdentifier)
         collectionView.register(
             LibrariesSectionHeaderView.self,
             forSupplementaryViewOfKind: UICollectionView.elementKindSectionHeader,
@@ -165,9 +165,10 @@ private final class LibrariesCollectionViewController: UIViewController, UIColle
         switch item.kind {
         case .manageServer:
             let cell = collectionView.dequeueReusableCell(
-                withReuseIdentifier: ManageServerCell.reuseIdentifier,
+                withReuseIdentifier: LibrariesActionCell.reuseIdentifier,
                 for: indexPath
-            ) as! ManageServerCell
+            ) as! LibrariesActionCell
+            cell.configure(title: item.title)
             return cell
 
         case .openLibrary, .media:
@@ -335,7 +336,7 @@ private final class LibrariesCollectionViewController: UIViewController, UIColle
     }
 
     private func makeSections(from server: ConnectedServer) -> [LibrariesSection] {
-        let librarySections = server.libraries.map { library in
+        let librarySections = server.libraries.filter { !$0.isHidden }.map { library in
             let style = library.reference.artworkStyle == .poster ? LibrariesShelfStyle.poster : .wide
             let items = library.items.map(applyingOptimisticWatchStatus)
             let previewItems = Array(
@@ -389,7 +390,7 @@ private final class LibrariesCollectionViewController: UIViewController, UIColle
             items: [
                 LibrariesItem(
                     id: "manage-server",
-                    title: "Manage Server",
+                    title: "Manage",
                     artworkURL: nil,
                     progress: nil,
                     isWatched: false,
@@ -683,8 +684,9 @@ private final class LibraryTileCell: UICollectionViewCell {
     }
 }
 
-private final class ManageServerCell: UICollectionViewListCell {
-    static let reuseIdentifier = "ManageServerCell"
+private final class LibrariesActionCell: UICollectionViewListCell {
+    static let reuseIdentifier = "LibrariesActionCell"
+    private var title = ""
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -697,11 +699,16 @@ private final class ManageServerCell: UICollectionViewListCell {
         fatalError("init(coder:) has not been implemented")
     }
 
+    func configure(title: String) {
+        self.title = title
+        setNeedsUpdateConfiguration()
+    }
+
     override func updateConfiguration(using state: UICellConfigurationState) {
         super.updateConfiguration(using: state)
 
         var content = UIListContentConfiguration.cell().updated(for: state)
-        content.text = "Manage Server"
+        content.text = title
         content.textProperties.font = .preferredFont(forTextStyle: .headline)
         content.textProperties.alignment = .center
         content.textProperties.numberOfLines = 1

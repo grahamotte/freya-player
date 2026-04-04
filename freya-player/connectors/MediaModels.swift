@@ -15,6 +15,16 @@ struct ConnectedServer: Equatable, Identifiable {
     var id: String {
         "\(providerID.rawValue):\(serverID)"
     }
+
+    func settingLibraries(_ libraries: [LibraryShelf]) -> ConnectedServer {
+        ConnectedServer(
+            providerID: providerID,
+            serverID: serverID,
+            serverName: serverName,
+            accountName: accountName,
+            libraries: libraries
+        )
+    }
 }
 
 struct LibraryShelf: Hashable, Identifiable {
@@ -22,6 +32,17 @@ struct LibraryShelf: Hashable, Identifiable {
     let title: String
     let reference: LibraryReference
     let items: [MediaItem]
+    let isHidden: Bool
+
+    func settingHidden(_ isHidden: Bool) -> LibraryShelf {
+        LibraryShelf(
+            id: id,
+            title: title,
+            reference: reference,
+            items: items,
+            isHidden: isHidden
+        )
+    }
 }
 
 struct LibraryReference: Hashable, Identifiable {

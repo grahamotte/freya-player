@@ -20,6 +20,9 @@ final class AppModel: ObservableObject {
     private var restoreTask: Task<Void, Never>?
     private var pollTask: Task<Void, Never>?
     private var hasRestored = false
+    private var activeLibraryOrderServerID: String?
+    private var activeLibraryOrder: [String] = []
+    private var activeHiddenLibraryIDs: Set<String> = []
 
     var connectedServer: ConnectedServer? {
         if case .connected(let server) = connectionState {
@@ -36,7 +39,7 @@ final class AppModel: ObservableObject {
             if let server = try await plexConnector.restoreConnection() {
                 activeConnector = plexConnector
                 plexLinkCode = nil
-                connectionState = .connected(server)
+                setConnectedServer(server)
                 return
             }
         } catch {}
@@ -45,7 +48,7 @@ final class AppModel: ObservableObject {
             if let server = try await jellyfinConnector.restoreConnection() {
                 activeConnector = jellyfinConnector
                 plexLinkCode = nil
-                connectionState = .connected(server)
+                setConnectedServer(server)
                 return
             }
         } catch {}
@@ -75,7 +78,7 @@ final class AppModel: ObservableObject {
                     password: password
                 )
                 await MainActor.run {
-                    self.connectionState = .connected(server)
+                    self.setConnectedServer(server)
                 }
             } catch {
                 await MainActor.run {
@@ -92,7 +95,7 @@ final class AppModel: ObservableObject {
         do {
             let server = try await activeConnector.refreshConnection()
             plexLinkCode = nil
-            connectionState = .connected(server)
+            setConnectedServer(server)
         } catch {
             if existingServer == nil {
                 connectionState = .failed(message: "Couldn't connect to the current server.")
@@ -138,8 +141,41 @@ final class AppModel: ObservableObject {
         pollTask?.cancel()
         activeConnector?.disconnect()
         activeConnector = nil
+        clearActiveLibraryOrder()
         plexLinkCode = nil
         connectionState = .signedOut(message: "Choose a server to connect.")
+    }
+
+    func moveLibrary(at index: Int, by offset: Int) {
+        guard case .connected(let server) = connectionState else { return }
+
+        let destination = index + offset
+        guard
+            server.libraries.indices.contains(index),
+            server.libraries.indices.contains(destination)
+        else {
+            return
+        }
+
+        var libraries = server.libraries
+        let library = libraries.remove(at: index)
+        libraries.insert(library, at: destination)
+        rememberLibraryOrder(libraries.map(\.id), for: server.id)
+        connectionState = .connected(server.settingLibraries(libraries))
+    }
+
+    func setLibraryHidden(_ isHidden: Bool, at index: Int) {
+        guard case .connected(let server) = connectionState,
+              server.libraries.indices.contains(index) else { return }
+
+        var libraries = server.libraries
+        let library = libraries[index]
+        libraries[index] = library.settingHidden(isHidden)
+        rememberHiddenLibraries(
+            Set(libraries.filter(\.isHidden).map(\.id)),
+            for: server.id
+        )
+        connectionState = .connected(server.settingLibraries(libraries))
     }
 
     func loadLibraryItems(for library: LibraryReference) async throws -> [MediaItem] {
@@ -206,7 +242,7 @@ final class AppModel: ObservableObject {
             do {
                 let server = try await plexConnector.refreshConnection()
                 await MainActor.run {
-                    self.connectionState = .connected(server)
+                    self.setConnectedServer(server)
                 }
             } catch {
                 await MainActor.run {
@@ -234,7 +270,7 @@ final class AppModel: ObservableObject {
             do {
                 let server = try await jellyfinConnector.refreshConnection()
                 await MainActor.run {
-                    self.connectionState = .connected(server)
+                    self.setConnectedServer(server)
                 }
             } catch {
                 await MainActor.run {
@@ -255,7 +291,7 @@ final class AppModel: ObservableObject {
                         await MainActor.run {
                             self.activeConnector = self.plexConnector
                             self.plexLinkCode = nil
-                            self.connectionState = .connected(server)
+                            self.setConnectedServer(server)
                         }
                         return
                     }
@@ -288,5 +324,60 @@ final class AppModel: ObservableObject {
         case .jellyfin:
             return jellyfinConnector
         }
+    }
+
+    private func setConnectedServer(_ server: ConnectedServer) {
+        if activeLibraryOrderServerID != server.id {
+            clearActiveLibraryOrder()
+        }
+
+        connectionState = .connected(applyActiveLibraryOrder(to: server))
+    }
+
+    private func rememberLibraryOrder(_ libraryIDs: [String], for serverID: String) {
+        activeLibraryOrderServerID = serverID
+        activeLibraryOrder = libraryIDs
+    }
+
+    private func rememberHiddenLibraries(_ libraryIDs: Set<String>, for serverID: String) {
+        activeLibraryOrderServerID = serverID
+        activeHiddenLibraryIDs = libraryIDs
+    }
+
+    private func clearActiveLibraryOrder() {
+        activeLibraryOrderServerID = nil
+        activeLibraryOrder = []
+        activeHiddenLibraryIDs = []
+    }
+
+    private func applyActiveLibraryOrder(to server: ConnectedServer) -> ConnectedServer {
+        guard
+            activeLibraryOrderServerID == server.id,
+            !activeLibraryOrder.isEmpty || !activeHiddenLibraryIDs.isEmpty
+        else {
+            return server
+        }
+
+        let rankByLibraryID = Dictionary(
+            uniqueKeysWithValues: activeLibraryOrder.enumerated().map { ($1, $0) }
+        )
+        let fallbackRank = activeLibraryOrder.count
+        let libraries = server.libraries.enumerated()
+            .sorted { lhs, rhs in
+                let leftRank = rankByLibraryID[lhs.element.id] ?? (fallbackRank + lhs.offset)
+                let rightRank = rankByLibraryID[rhs.element.id] ?? (fallbackRank + rhs.offset)
+                return leftRank < rightRank
+            }
+            .map(\.element)
+            .map { library in
+                library.settingHidden(activeHiddenLibraryIDs.contains(library.id))
+            }
+
+        rememberLibraryOrder(libraries.map(\.id), for: server.id)
+        rememberHiddenLibraries(
+            Set(libraries.filter(\.isHidden).map(\.id)),
+            for: server.id
+        )
+        return server.settingLibraries(libraries)
     }
 }

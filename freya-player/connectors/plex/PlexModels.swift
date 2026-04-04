@@ -292,7 +292,8 @@ extension PlexLibrarySection {
                     serverToken: serverToken,
                     fallbackKind: context.defaultItemKind
                 )
-            }
+            },
+            isHidden: false
         )
     }
 }

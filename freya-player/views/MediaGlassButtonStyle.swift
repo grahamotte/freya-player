@@ -2,26 +2,37 @@ import SwiftUI
 
 struct MediaGlassButtonStyle: ButtonStyle {
     var tint: Color? = nil
+    var horizontalPadding: CGFloat = 28
+    var verticalPadding: CGFloat = 16
 
     func makeBody(configuration: Configuration) -> some View {
-        MediaGlassButtonBody(configuration: configuration, tint: tint)
+        MediaGlassButtonBody(
+            configuration: configuration,
+            tint: tint,
+            horizontalPadding: horizontalPadding,
+            verticalPadding: verticalPadding
+        )
     }
 }
 
 private struct MediaGlassButtonBody: View {
     let configuration: ButtonStyle.Configuration
     let tint: Color?
+    let horizontalPadding: CGFloat
+    let verticalPadding: CGFloat
     @Environment(\.isFocused) private var isFocused
+    @Environment(\.isEnabled) private var isEnabled
 
     var body: some View {
         configuration.label
             .font(.headline)
             .foregroundStyle(isFocused ? .black : .white)
-            .padding(.horizontal, 28)
-            .padding(.vertical, 16)
+            .padding(.horizontal, horizontalPadding)
+            .padding(.vertical, verticalPadding)
             .background(background)
             .clipShape(RoundedRectangle(cornerRadius: 36, style: .continuous))
             .scaleEffect(configuration.isPressed ? 0.98 : 1)
+            .opacity(isEnabled ? 1 : 0.45)
     }
 
     private var background: some View {
