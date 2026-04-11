@@ -143,12 +143,14 @@ final class MediaItemQuickActionHandler {
     }
 
     private func setWatchStatus(for item: MediaItem, isWatched: Bool) async {
-        guard let playbackID = item.playbackID else { return }
-
         setOptimisticWatchStatus(item.id, isWatched)
 
         do {
-            try await model.setWatchStatus(for: playbackID, isWatched: isWatched)
+            if isWatched {
+                try await model.markWatched(item)
+            } else {
+                try await model.markUnwatched(item)
+            }
             await refresh()
         } catch {
             clearOptimisticWatchStatus(item.id)

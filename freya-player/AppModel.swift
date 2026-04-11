@@ -224,8 +224,54 @@ final class AppModel: ObservableObject {
         try? await connector(for: id.providerID).markPlaybackCompleted(for: id)
     }
 
+    func markWatched(_ item: MediaItem) async throws {
+        try await setWatchStatus(for: item, isWatched: true)
+    }
+
+    func markUnwatched(_ item: MediaItem) async throws {
+        try await setWatchStatus(for: item, isWatched: false)
+    }
+
+    func watchStatusTargets(for item: MediaItem) async throws -> [MediaItem] {
+        if item.playbackID != nil {
+            return [item]
+        }
+
+        let children = try await loadChildren(for: item)
+        return try await watchStatusTargets(in: children)
+    }
+
     func setWatchStatus(for id: MediaPlaybackID, isWatched: Bool) async throws {
         try await connector(for: id.providerID).setWatchStatus(for: id, isWatched: isWatched)
+    }
+
+    private func setWatchStatus(for item: MediaItem, isWatched: Bool) async throws {
+        let targets = try await watchStatusTargets(for: item).filter {
+            if isWatched {
+                return !$0.isWatched
+            }
+
+            return $0.isWatched || ($0.progress ?? 0) > 0 || ($0.resumeOffsetMilliseconds ?? 0) > 0
+        }
+
+        for target in targets {
+            guard let playbackID = target.playbackID else { continue }
+            try await setWatchStatus(for: playbackID, isWatched: isWatched)
+        }
+    }
+
+    private func watchStatusTargets(in items: [MediaItem]) async throws -> [MediaItem] {
+        var targets: [MediaItem] = []
+
+        for item in items {
+            if item.playbackID != nil {
+                targets.append(item)
+            } else {
+                targets += try await watchStatusTargets(for: item)
+            }
+        }
+
+        return targets
     }
 
     private var plexConnectorIsReady: Bool {

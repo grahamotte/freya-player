@@ -30,7 +30,7 @@ struct MediaWatchStatusButton: View {
     }
 
     private func setWatchStatus(_ isWatched: Bool) async {
-        guard let playbackID = item.playbackID else { return }
+        guard item.playbackID != nil else { return }
         let previousItem = item
         item = item.settingWatchStatus(isWatched)
         errorMessage = nil
@@ -39,7 +39,11 @@ struct MediaWatchStatusButton: View {
         defer { isUpdating = false }
 
         do {
-            try await model.setWatchStatus(for: playbackID, isWatched: isWatched)
+            if isWatched {
+                try await model.markWatched(item)
+            } else {
+                try await model.markUnwatched(item)
+            }
         } catch {
             item = previousItem
             errorMessage = "Couldn't update watch status."
@@ -70,7 +74,7 @@ struct MediaCollectionWatchStatusButton: View {
             item: item,
             reloadID: item.id,
             loadItems: {
-                try await Self.watchStatusTargets(for: item, model: model)
+                try await model.watchStatusTargets(for: item)
             },
             onUpdateFinished: onUpdateFinished
         )
@@ -161,13 +165,19 @@ struct MediaCollectionWatchStatusButton: View {
         displayItem = item.settingWatchStatus(isWatched)
         errorMessage = nil
 
+        guard !updateTargets.isEmpty else {
+            await onUpdateFinished?()
+            return
+        }
+
         isUpdating = true
         defer { isUpdating = false }
 
         do {
-            for target in updateTargets {
-                guard let playbackID = target.playbackID else { continue }
-                try await model.setWatchStatus(for: playbackID, isWatched: isWatched)
+            if isWatched {
+                try await model.markWatched(item)
+            } else {
+                try await model.markUnwatched(item)
             }
             await onUpdateFinished?()
         } catch {
@@ -175,29 +185,6 @@ struct MediaCollectionWatchStatusButton: View {
             displayItem = previousDisplayItem
             errorMessage = "Couldn't update watch status."
         }
-    }
-
-    private static func watchStatusTargets(for item: MediaItem, model: AppModel) async throws -> [MediaItem] {
-        if item.playbackID != nil {
-            return [item]
-        }
-
-        let children = try await model.loadChildren(for: item)
-        return try await watchStatusTargets(in: children, model: model)
-    }
-
-    private static func watchStatusTargets(in items: [MediaItem], model: AppModel) async throws -> [MediaItem] {
-        var targets: [MediaItem] = []
-
-        for item in items {
-            if item.playbackID != nil {
-                targets.append(item)
-            } else {
-                targets += try await watchStatusTargets(for: item, model: model)
-            }
-        }
-
-        return targets
     }
 }
 
