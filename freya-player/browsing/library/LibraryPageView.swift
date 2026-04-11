@@ -594,7 +594,7 @@ private final class LibraryPageCollectionViewController: UIViewController, UICol
                 widthDimension: .absolute(groupWidth),
                 heightDimension: .absolute(style.cellHeight(for: cellWidth))
             )
-            let group = NSCollectionLayoutGroup.horizontal(layoutSize: groupSize, subitem: item, count: columns)
+            let group = NSCollectionLayoutGroup.horizontal(layoutSize: groupSize, repeatingSubitem: item, count: columns)
             group.interItemSpacing = .fixed(interItemSpacing)
 
             let section = NSCollectionLayoutSection(group: group)
