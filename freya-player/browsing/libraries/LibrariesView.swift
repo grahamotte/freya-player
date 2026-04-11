@@ -106,6 +106,7 @@ private final class LibrariesCollectionViewController: UIViewController, UIColle
         collectionView.clipsToBounds = false
         collectionView.delegate = self
         collectionView.dataSource = self
+        collectionView.remembersLastFocusedIndexPath = true
         collectionView.translatesAutoresizingMaskIntoConstraints = false
         collectionView.contentInsetAdjustmentBehavior = .never
         collectionView.contentInset = .init(top: 12, left: 0, bottom: 64, right: 0)
