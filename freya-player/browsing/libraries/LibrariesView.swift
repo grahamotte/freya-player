@@ -55,6 +55,7 @@ private final class LibrariesCollectionViewController: UIViewController, UIColle
     private var selectedTitles: [String: String] = [:]
     private var focusedSectionID: String?
     private var optimisticWatchStates: [String: Bool] = [:]
+    private var preferredFocusItemID: String?
     private lazy var quickActionHandler = MediaItemQuickActionHandler(
         presenter: self,
         model: model,
@@ -150,6 +151,7 @@ private final class LibrariesCollectionViewController: UIViewController, UIColle
 
         guard isViewLoaded else { return }
         reloadDataPreservingScrollPosition(shouldPreserveScrollPosition)
+        requestPreferredFocusUpdateIfNeeded()
     }
 
     func numberOfSections(in collectionView: UICollectionView) -> Int {
@@ -224,6 +226,19 @@ private final class LibrariesCollectionViewController: UIViewController, UIColle
         handlePrimaryAction(for: item)
     }
 
+    func indexPathForPreferredFocusedView(in collectionView: UICollectionView) -> IndexPath? {
+        guard let targetItemID = preferredFocusItemID else { return nil }
+
+        for (sectionIndex, section) in sections.enumerated() {
+            if let itemIndex = section.items.firstIndex(where: { $0.id == targetItemID }) {
+                return IndexPath(item: itemIndex, section: sectionIndex)
+            }
+        }
+
+        preferredFocusItemID = nil
+        return nil
+    }
+
     override func pressesBegan(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
         quickActionHandler.pressesBegan(presses)
         super.pressesBegan(presses, with: event)
@@ -250,6 +265,7 @@ private final class LibrariesCollectionViewController: UIViewController, UIColle
             sections.indices.contains(indexPath.section)
         {
             let section = sections[indexPath.section]
+            preferredFocusItemID = nil
             if case .library = section.kind {
                 focusedSectionID = section.id
 
@@ -501,8 +517,15 @@ private final class LibrariesCollectionViewController: UIViewController, UIColle
     }
 
     private func setOptimisticWatchStatus(for itemID: String, isWatched: Bool) {
+        let previousSections = sections
+        let preferredFocusItemID = preferredFocusItemID(
+            from: previousSections,
+            removingItemID: itemID
+        )
         optimisticWatchStates[itemID] = isWatched
-        rebuildSectionsPreservingScrollPosition()
+        rebuildSectionsPreservingScrollPosition(
+            preferredFocusItemID: preferredFocusItemID
+        )
     }
 
     private func clearOptimisticWatchStatus(for itemID: String) {
@@ -523,16 +546,51 @@ private final class LibrariesCollectionViewController: UIViewController, UIColle
         }
     }
 
-    private func rebuildSectionsPreservingScrollPosition() {
+    private func rebuildSectionsPreservingScrollPosition(preferredFocusItemID: String? = nil) {
+        self.preferredFocusItemID = preferredFocusItemID
         sections = makeSections(from: server)
         selectedTitles = makeSelectedTitles(from: sections)
 
         guard isViewLoaded else { return }
         reloadDataPreservingScrollPosition(true)
+        requestPreferredFocusUpdateIfNeeded()
     }
 
     private func refreshServerAfterQuickAction() async {
         await model.refreshConnection()
+    }
+
+    private func preferredFocusItemID(
+        from previousSections: [LibrariesSection],
+        removingItemID itemID: String
+    ) -> String? {
+        guard
+            let focusedIndexPath = indexPath(for: itemID, in: previousSections),
+            previousSections.indices.contains(focusedIndexPath.section)
+        else {
+            return nil
+        }
+
+        let section = makeSections(from: server).first { $0.id == previousSections[focusedIndexPath.section].id }
+        guard let section else { return nil }
+        let itemIndex = min(focusedIndexPath.item, section.items.count - 1)
+        return section.items[itemIndex].id
+    }
+
+    private func indexPath(for itemID: String, in sections: [LibrariesSection]) -> IndexPath? {
+        for (sectionIndex, section) in sections.enumerated() {
+            if let itemIndex = section.items.firstIndex(where: { $0.id == itemID }) {
+                return IndexPath(item: itemIndex, section: sectionIndex)
+            }
+        }
+
+        return nil
+    }
+
+    private func requestPreferredFocusUpdateIfNeeded() {
+        guard preferredFocusItemID != nil else { return }
+        collectionView.setNeedsFocusUpdate()
+        collectionView.updateFocusIfNeeded()
     }
 }
 
