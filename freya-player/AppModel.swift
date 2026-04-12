@@ -224,14 +224,6 @@ final class AppModel: ObservableObject {
         try? await connector(for: id.providerID).markPlaybackCompleted(for: id)
     }
 
-    func markWatched(_ item: MediaItem) async throws {
-        try await setWatchStatus(for: item, isWatched: true)
-    }
-
-    func markUnwatched(_ item: MediaItem) async throws {
-        try await setWatchStatus(for: item, isWatched: false)
-    }
-
     func watchStatusTargets(for item: MediaItem) async throws -> [MediaItem] {
         if item.playbackID != nil {
             return [item]
@@ -245,7 +237,7 @@ final class AppModel: ObservableObject {
         try await connector(for: id.providerID).setWatchStatus(for: id, isWatched: isWatched)
     }
 
-    private func setWatchStatus(for item: MediaItem, isWatched: Bool) async throws {
+    func setWatchStatus(for item: MediaItem, isWatched: Bool) async throws {
         let targets = try await watchStatusTargets(for: item).filter {
             if isWatched {
                 return !$0.isWatched
@@ -258,6 +250,14 @@ final class AppModel: ObservableObject {
             guard let playbackID = target.playbackID else { continue }
             try await setWatchStatus(for: playbackID, isWatched: isWatched)
         }
+    }
+
+    func markWatched(_ item: MediaItem) async throws {
+        try await setWatchStatus(for: item, isWatched: true)
+    }
+
+    func markUnwatched(_ item: MediaItem) async throws {
+        try await setWatchStatus(for: item, isWatched: false)
     }
 
     private func watchStatusTargets(in items: [MediaItem]) async throws -> [MediaItem] {

@@ -146,11 +146,7 @@ final class MediaItemQuickActionHandler {
         setOptimisticWatchStatus(item.id, isWatched)
 
         do {
-            if isWatched {
-                try await model.markWatched(item)
-            } else {
-                try await model.markUnwatched(item)
-            }
+            try await model.setWatchStatus(for: item, isWatched: isWatched)
             await refresh()
         } catch {
             clearOptimisticWatchStatus(item.id)

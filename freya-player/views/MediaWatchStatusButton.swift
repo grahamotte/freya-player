@@ -39,11 +39,7 @@ struct MediaWatchStatusButton: View {
         defer { isUpdating = false }
 
         do {
-            if isWatched {
-                try await model.markWatched(item)
-            } else {
-                try await model.markUnwatched(item)
-            }
+            try await model.setWatchStatus(for: previousItem, isWatched: isWatched)
         } catch {
             item = previousItem
             errorMessage = "Couldn't update watch status."
@@ -174,11 +170,7 @@ struct MediaCollectionWatchStatusButton: View {
         defer { isUpdating = false }
 
         do {
-            if isWatched {
-                try await model.markWatched(item)
-            } else {
-                try await model.markUnwatched(item)
-            }
+            try await model.setWatchStatus(for: item, isWatched: isWatched)
             await onUpdateFinished?()
         } catch {
             targets = previousTargets
