@@ -21,7 +21,7 @@
 - `mise start` should be the fastest loop: stop the running simulator app, rebuild, install, launch.
 - `mise build` should produce a simulator build.
 - `mise dist` should produce a release device build artifact without adding extra release machinery yet.
-- After finishing a change, run `mise start` so a fresh build is running for verification.
+- After finishing a change, run `mise test` then `mise start` so a fresh build is running for verification.
 - Documentation should stay short and practical.
 
 ## Feature Layout

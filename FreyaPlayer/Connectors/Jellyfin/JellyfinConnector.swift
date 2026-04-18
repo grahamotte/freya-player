@@ -1,6 +1,12 @@
 import Foundation
 
-final class JellyfinConnector: MediaConnector {
+protocol JellyfinConnecting: MediaConnector {
+    var hasSavedConnection: Bool { get }
+
+    func connect(serverURL: String, username: String, password: String) async throws -> ConnectedServer
+}
+
+final class JellyfinConnector: JellyfinConnecting {
     let providerID: MediaProviderID = .jellyfin
     private let client: JellyfinClient
     private let store: JellyfinSessionStore

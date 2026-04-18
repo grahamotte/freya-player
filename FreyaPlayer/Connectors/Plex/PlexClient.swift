@@ -9,12 +9,20 @@ final class PlexClient {
     }
 
     private let session: URLSession
+    private let defaults: any DefaultsStore
+    private let bundle: Bundle
     private let clientIdentifier: String
     private let hlsSubtitleProfileExtra = "add-transcode-target(type=subtitleProfile&context=all&protocol=hls&container=webvtt&subtitleCodec=webvtt)"
 
-    init(session: URLSession = .shared) {
+    init(
+        session: URLSession = .shared,
+        defaults: any DefaultsStore = UserDefaults.standard,
+        bundle: Bundle = .main
+    ) {
         self.session = session
-        self.clientIdentifier = Self.loadClientIdentifier()
+        self.defaults = defaults
+        self.bundle = bundle
+        self.clientIdentifier = Self.loadClientIdentifier(defaults: defaults)
     }
 
     func createPin() async throws -> PlexPin {
@@ -603,11 +611,10 @@ final class PlexClient {
     }
 
     private var clientVersion: String {
-        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0"
+        bundle.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0"
     }
 
-    private static func loadClientIdentifier() -> String {
-        let defaults = UserDefaults.standard
+    private static func loadClientIdentifier(defaults: any DefaultsStore) -> String {
         let key = "plex.client.identifier"
 
         if let existing = defaults.string(forKey: key) {

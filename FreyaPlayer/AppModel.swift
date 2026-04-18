@@ -3,9 +3,9 @@ import Foundation
 
 @MainActor
 final class AppModel: ObservableObject {
-    private let mediaSessionStore = MediaSessionStore()
+    private let mediaSessionStore: MediaSessionStore
 
-    enum ConnectionState {
+    enum ConnectionState: Equatable {
         case checking
         case signedOut(message: String)
         case connecting(message: String)
@@ -16,8 +16,8 @@ final class AppModel: ObservableObject {
     @Published var connectionState: ConnectionState = .checking
     @Published var plexLinkCode: String?
 
-    private let plexConnector = PlexConnector()
-    private let jellyfinConnector = JellyfinConnector()
+    private let plexConnector: any PlexConnecting
+    private let jellyfinConnector: any JellyfinConnecting
     private var activeConnector: (any MediaConnector)?
     private var restoreTask: Task<Void, Never>?
     private var pollTask: Task<Void, Never>?
@@ -25,6 +25,24 @@ final class AppModel: ObservableObject {
     private var activeLibraryOrderServerID: String?
     private var activeLibraryOrder: [String] = []
     private var activeHiddenLibraryIDs: Set<String> = []
+
+    convenience init() {
+        self.init(
+            mediaSessionStore: MediaSessionStore(),
+            plexConnector: PlexConnector(),
+            jellyfinConnector: JellyfinConnector()
+        )
+    }
+
+    init(
+        mediaSessionStore: MediaSessionStore,
+        plexConnector: any PlexConnecting,
+        jellyfinConnector: any JellyfinConnecting
+    ) {
+        self.mediaSessionStore = mediaSessionStore
+        self.plexConnector = plexConnector
+        self.jellyfinConnector = jellyfinConnector
+    }
 
     var connectedServer: ConnectedServer? {
         if case .connected(let server) = connectionState {
@@ -275,7 +293,7 @@ final class AppModel: ObservableObject {
     }
 
     private var plexConnectorIsReady: Bool {
-        activeConnector?.providerID == .plex || PlexSessionStore().userToken != nil
+        activeConnector?.providerID == .plex || plexConnector.hasSavedConnection
     }
 
     private func refreshPlexConnection() {

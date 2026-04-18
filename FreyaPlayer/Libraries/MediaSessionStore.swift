@@ -1,12 +1,26 @@
 import Foundation
 
+protocol DefaultsStore {
+    func object(forKey defaultName: String) -> Any?
+    func string(forKey defaultName: String) -> String?
+    func stringArray(forKey defaultName: String) -> [String]?
+    func set(_ value: Any?, forKey defaultName: String)
+    func removeObject(forKey defaultName: String)
+}
+
+extension UserDefaults: DefaultsStore {}
+
 final class MediaSessionStore {
-    private let defaults = UserDefaults.standard
+    private let defaults: any DefaultsStore
     private let libraryFilterKeyPrefix = "media.library.filter"
     private let librarySortKeyPrefix = "media.library.sort"
     private let librarySortOrderKeyPrefix = "media.library.sort.order"
     private let libraryOrderKeyPrefix = "media.server.library.order"
     private let hiddenLibrariesKeyPrefix = "media.server.library.hidden"
+
+    init(defaults: any DefaultsStore = UserDefaults.standard) {
+        self.defaults = defaults
+    }
 
     func libraryFilterRawValue(for library: LibraryReference) -> Int? {
         defaults.object(forKey: key(prefix: libraryFilterKeyPrefix, library: library)) as? Int

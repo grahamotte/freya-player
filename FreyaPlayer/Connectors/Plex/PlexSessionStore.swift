@@ -1,20 +1,44 @@
 import Foundation
 
 final class PlexSessionStore {
-    private let defaults = UserDefaults.standard
+    private let defaults: any DefaultsStore
     private let tokenKey = "plex.user.token"
     private let serverKey = "plex.server.identifier"
     private let libraryFilterKeyPrefix = "plex.library.filter"
     private let librarySortKeyPrefix = "plex.library.sort"
     private let librarySortOrderKeyPrefix = "plex.library.sort.order"
+    private let loadSecureValue: @MainActor (String) -> String?
+    private let saveSecureValue: @MainActor (String, String) -> Void
+    private let removeSecureValue: @MainActor (String) -> Void
+
+    convenience init() {
+        self.init(
+            defaults: UserDefaults.standard,
+            loadSecureValue: { KeychainStore.value(for: $0) },
+            saveSecureValue: { KeychainStore.setValue($0, for: $1) },
+            removeSecureValue: { KeychainStore.removeValue(for: $0) }
+        )
+    }
+
+    init(
+        defaults: any DefaultsStore,
+        loadSecureValue: @escaping @MainActor (String) -> String?,
+        saveSecureValue: @escaping @MainActor (String, String) -> Void,
+        removeSecureValue: @escaping @MainActor (String) -> Void
+    ) {
+        self.defaults = defaults
+        self.loadSecureValue = loadSecureValue
+        self.saveSecureValue = saveSecureValue
+        self.removeSecureValue = removeSecureValue
+    }
 
     var userToken: String? {
-        get { KeychainStore.value(for: tokenKey) }
+        get { loadSecureValue(tokenKey) }
         set {
             if let newValue {
-                KeychainStore.setValue(newValue, for: tokenKey)
+                saveSecureValue(newValue, tokenKey)
             } else {
-                KeychainStore.removeValue(for: tokenKey)
+                removeSecureValue(tokenKey)
             }
         }
     }

@@ -6,7 +6,14 @@ struct PlexLoginSession {
     let expiresAt: Date
 }
 
-final class PlexConnector: MediaConnector {
+protocol PlexConnecting: MediaConnector {
+    var hasSavedConnection: Bool { get }
+
+    func beginLogin() async throws -> PlexLoginSession
+    func completeLoginIfAuthorized(session: PlexLoginSession) async throws -> ConnectedServer?
+}
+
+final class PlexConnector: PlexConnecting {
     let providerID: MediaProviderID = .plex
 
     private let client: PlexClient
@@ -19,6 +26,10 @@ final class PlexConnector: MediaConnector {
     ) {
         self.client = client
         self.store = store
+    }
+
+    var hasSavedConnection: Bool {
+        store.userToken != nil
     }
 
     func restoreConnection() async throws -> ConnectedServer? {

@@ -6,6 +6,10 @@ run = "./scripts/build-tvos.sh"
 description = "Rebuild, install, and launch Freya Player in the Apple TV and iPad simulators"
 run = "./scripts/start.sh"
 
+[tasks.test]
+description = "Run Freya Player's iPad and tvOS test suites"
+run = "./scripts/test.sh"
+
 [tasks.dist]
 description = "Build an unsigned Release app for tvOS devices"
 run = "./scripts/build-distribution.sh"

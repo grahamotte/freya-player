@@ -1,8 +1,18 @@
 import SwiftUI
 
 struct AppView: View {
-    @StateObject private var model = AppModel()
+    @StateObject private var model: AppModel
     @State private var path: [AppRoute] = []
+
+    @MainActor
+    init(model: AppModel) {
+        _model = StateObject(wrappedValue: model)
+    }
+
+    @MainActor
+    init() {
+        _model = StateObject(wrappedValue: AppModel())
+    }
 
     var body: some View {
         NavigationStack(path: $path) {

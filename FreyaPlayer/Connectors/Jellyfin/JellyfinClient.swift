@@ -2,11 +2,19 @@ import Foundation
 
 final class JellyfinClient {
     private let session: URLSession
+    private let defaults: any DefaultsStore
+    private let bundle: Bundle
     private let deviceID: String
 
-    init(session: URLSession = .shared) {
+    init(
+        session: URLSession = .shared,
+        defaults: any DefaultsStore = UserDefaults.standard,
+        bundle: Bundle = .main
+    ) {
         self.session = session
-        self.deviceID = Self.loadDeviceID()
+        self.defaults = defaults
+        self.bundle = bundle
+        self.deviceID = Self.loadDeviceID(defaults: defaults)
     }
 
     func authenticate(serverURL: String, username: String, password: String) async throws -> JellyfinAuthenticationResult {
@@ -557,11 +565,10 @@ final class JellyfinClient {
     }
 
     private var clientVersion: String {
-        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0"
+        bundle.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0"
     }
 
-    private static func loadDeviceID() -> String {
-        let defaults = UserDefaults.standard
+    private static func loadDeviceID(defaults: any DefaultsStore) -> String {
         let key = "jellyfin.client.identifier"
 
         if let existing = defaults.string(forKey: key) {

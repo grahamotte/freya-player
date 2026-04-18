@@ -4,7 +4,12 @@ import UIKit
 final class ArtworkImageCache {
     static let shared = ArtworkImageCache()
 
+    private let session: URLSession
     private let cache = NSCache<NSURL, UIImage>()
+
+    init(session: URLSession = .shared) {
+        self.session = session
+    }
 
     func image(for url: URL) -> UIImage? {
         cache.object(forKey: url as NSURL)
@@ -16,7 +21,7 @@ final class ArtworkImageCache {
         }
 
         do {
-            let (data, _) = try await URLSession.shared.data(from: url)
+            let (data, _) = try await session.data(from: url)
             guard let image = UIImage(data: data) else { return nil }
             cache.setObject(image, forKey: url as NSURL)
             return image
