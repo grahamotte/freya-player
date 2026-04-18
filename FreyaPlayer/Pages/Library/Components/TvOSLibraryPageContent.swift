@@ -19,7 +19,7 @@ struct TvOSLibraryPageContent: View {
             } else if let errorMessage, items.isEmpty {
                 VStack(spacing: 24) {
                     Text(errorMessage)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(AppTheme.secondaryText)
 
                     Button("Try Again") {
                         Task {
@@ -166,7 +166,7 @@ private final class LibraryPageCollectionViewController: UIViewController, UICol
         )
 
         emptyLabel.font = .preferredFont(forTextStyle: .title3)
-        emptyLabel.textColor = .secondaryLabel
+        emptyLabel.textColor = AppTheme.uiSecondaryText
         emptyLabel.textAlignment = .center
         emptyLabel.numberOfLines = 0
         collectionView.backgroundView = emptyLabel
@@ -671,7 +671,7 @@ private enum LibraryTileStyle: Equatable {
 private final class LibraryGridCell: UICollectionViewCell {
     static let reuseIdentifier = "LibraryGridCell"
     private static let placeholderImage = UIGraphicsImageRenderer(size: CGSize(width: 8, height: 8)).image { context in
-        UIColor.white.withAlphaComponent(0.08).setFill()
+        AppTheme.uiSurfaceFill.setFill()
         context.fill(CGRect(origin: .zero, size: CGSize(width: 8, height: 8)))
     }
 
@@ -701,7 +701,7 @@ private final class LibraryGridCell: UICollectionViewCell {
         imageView.adjustsImageWhenAncestorFocused = true
         imageView.overlayContentView.clipsToBounds = false
 
-        iconView.tintColor = .secondaryLabel
+        iconView.tintColor = AppTheme.uiSecondaryText
         iconView.preferredSymbolConfiguration = UIImage.SymbolConfiguration(pointSize: 44, weight: .semibold)
 
         placeholderStack.axis = .vertical
@@ -722,7 +722,7 @@ private final class LibraryGridCell: UICollectionViewCell {
 
         subtitleLabel.translatesAutoresizingMaskIntoConstraints = false
         subtitleLabel.font = .preferredFont(forTextStyle: .footnote)
-        subtitleLabel.textColor = .secondaryLabel
+        subtitleLabel.textColor = AppTheme.uiSecondaryText
         subtitleLabel.numberOfLines = 1
         subtitleLabel.setContentHuggingPriority(.required, for: .vertical)
         subtitleLabel.setContentCompressionResistancePriority(.required, for: .vertical)
@@ -834,10 +834,11 @@ private final class LibraryPageHeaderView: UICollectionReusableView {
         super.init(frame: frame)
 
         titleLabel.font = .preferredFont(forTextStyle: .title1).withTraits(.traitBold)
+        titleLabel.textColor = AppTheme.uiPrimaryText
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
 
         countLabel.font = .preferredFont(forTextStyle: .title3).withTraits(.traitBold)
-        countLabel.textColor = .secondaryLabel
+        countLabel.textColor = AppTheme.uiSecondaryText
         countLabel.translatesAutoresizingMaskIntoConstraints = false
 
         filterButton.translatesAutoresizingMaskIntoConstraints = false
@@ -995,12 +996,12 @@ private final class GlassMenuButton: UIButton {
             configuration.imagePlacement = .leading
             configuration.imagePadding = 12
             configuration.preferredSymbolConfigurationForImage = UIImage.SymbolConfiguration(pointSize: 18, weight: .semibold)
-            configuration.baseForegroundColor = button.isFocused ? .black : .white
+            configuration.baseForegroundColor = button.isFocused ? AppTheme.uiInverseText : AppTheme.uiPrimaryText
             configuration.contentInsets = .init(top: 16, leading: 28, bottom: 16, trailing: 28)
             button.configuration = configuration
 
-            button.backgroundColor = button.isFocused ? .white : UIColor.white.withAlphaComponent(0.12)
-            button.layer.borderColor = (button.isFocused ? UIColor.clear : UIColor.white.withAlphaComponent(0.28)).cgColor
+            button.backgroundColor = button.isFocused ? AppTheme.uiPrimaryText : AppTheme.uiSurfaceBorder
+            button.layer.borderColor = (button.isFocused ? UIColor.clear : AppTheme.uiPrimaryText.withAlphaComponent(0.28)).cgColor
             button.layer.borderWidth = button.isFocused ? 0 : 1
         }
     }

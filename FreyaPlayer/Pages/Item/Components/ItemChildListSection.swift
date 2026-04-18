@@ -41,10 +41,10 @@ struct ItemChildListSection: View {
                 ProgressView()
             } else if let errorMessage {
                 Text(errorMessage)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(AppTheme.secondaryText)
             } else if children.isEmpty {
                 Text(emptyMessage)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(AppTheme.secondaryText)
             } else {
                 VStack(alignment: .leading, spacing: 16) {
                     ForEach(Array(children.enumerated()), id: \.element.id) { position, child in
@@ -61,7 +61,7 @@ struct ItemChildListSection: View {
                                 }
 
                                 Image(systemName: "chevron.right")
-                                    .foregroundStyle(.secondary)
+                                    .foregroundStyle(AppTheme.secondaryText)
                             }
                             .frame(maxWidth: .infinity, alignment: .leading)
                         }
@@ -132,7 +132,7 @@ private struct ItemWatchedBadge: View {
             .overlay {
                 Image(systemName: "checkmark")
                     .font(.system(size: 13, weight: .bold))
-                    .foregroundStyle(.black)
+                    .foregroundStyle(AppTheme.inverseText)
             }
     }
 }

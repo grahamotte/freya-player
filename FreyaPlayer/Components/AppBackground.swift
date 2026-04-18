@@ -3,10 +3,7 @@ import SwiftUI
 struct AppBackground: View {
     var body: some View {
         LinearGradient(
-            colors: [
-                Color(red: 0.08, green: 0.09, blue: 0.12),
-                Color(red: 0.04, green: 0.05, blue: 0.07)
-            ],
+            colors: [AppTheme.backgroundTop, AppTheme.backgroundBottom],
             startPoint: .top,
             endPoint: .bottom
         )
@@ -17,10 +14,10 @@ struct AppBackground: View {
 struct PanelBackground: View {
     var body: some View {
         RoundedRectangle(cornerRadius: 34, style: .continuous)
-            .fill(Color.white.opacity(0.08))
+            .fill(AppTheme.surfaceFill)
             .overlay {
                 RoundedRectangle(cornerRadius: 34, style: .continuous)
-                    .strokeBorder(Color.white.opacity(0.12), lineWidth: 1)
+                    .strokeBorder(AppTheme.surfaceBorder, lineWidth: 1)
             }
     }
 }

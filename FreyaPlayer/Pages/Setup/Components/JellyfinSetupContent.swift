@@ -29,7 +29,7 @@ struct JellyfinSetupContent: View {
 
                 if case .failed(let message) = model.connectionState {
                     Text(message)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(AppTheme.secondaryText)
                 } else if case .connecting(let message) = model.connectionState {
                     ProgressView(message)
                 }
@@ -66,12 +66,12 @@ struct JellyfinSetupContent: View {
         VStack(alignment: .leading, spacing: 8) {
             Text(title)
                 .font(.footnote.weight(.semibold))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(AppTheme.secondaryText)
 
             content()
                 .padding(.horizontal, 18)
                 .padding(.vertical, 14)
-                .background(.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .background(AppTheme.surfaceFill, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
         }
     }
 }

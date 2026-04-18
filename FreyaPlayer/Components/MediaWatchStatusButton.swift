@@ -204,7 +204,7 @@ private struct MediaWatchStatusMenu: View {
 
             if let errorMessage {
                 Text(errorMessage)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(AppTheme.secondaryText)
             }
         }
     }

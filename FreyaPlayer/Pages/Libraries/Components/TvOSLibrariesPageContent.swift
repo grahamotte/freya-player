@@ -631,7 +631,7 @@ private enum LibrariesItemKind: Hashable {
 private final class LibraryTileCell: UICollectionViewCell {
     static let reuseIdentifier = "LibraryTileCell"
     private static let placeholderImage = UIGraphicsImageRenderer(size: CGSize(width: 8, height: 8)).image { context in
-        UIColor.white.withAlphaComponent(0.08).setFill()
+        AppTheme.uiSurfaceFill.setFill()
         context.fill(CGRect(origin: .zero, size: CGSize(width: 8, height: 8)))
     }
 
@@ -657,11 +657,11 @@ private final class LibraryTileCell: UICollectionViewCell {
         imageView.adjustsImageWhenAncestorFocused = true
         imageView.overlayContentView.clipsToBounds = false
 
-        iconView.tintColor = .secondaryLabel
+        iconView.tintColor = AppTheme.uiSecondaryText
         iconView.preferredSymbolConfiguration = UIImage.SymbolConfiguration(pointSize: 44, weight: .semibold)
 
         titleLabel.font = .preferredFont(forTextStyle: .headline)
-        titleLabel.textColor = .secondaryLabel
+        titleLabel.textColor = AppTheme.uiSecondaryText
         titleLabel.numberOfLines = 2
         titleLabel.textAlignment = .center
 
@@ -772,14 +772,14 @@ private final class LibrariesActionCell: UICollectionViewListCell {
         content.textProperties.font = .preferredFont(forTextStyle: .headline)
         content.textProperties.alignment = .center
         content.textProperties.numberOfLines = 1
-        content.textProperties.color = state.isFocused ? .black : .white
+        content.textProperties.color = state.isFocused ? AppTheme.uiInverseText : AppTheme.uiPrimaryText
         content.directionalLayoutMargins = .init(top: 0, leading: 28, bottom: 0, trailing: 28)
         contentConfiguration = content
 
         var background = UIBackgroundConfiguration.clear().updated(for: state)
         background.cornerRadius = 36
-        background.backgroundColor = state.isFocused ? .white : UIColor.white.withAlphaComponent(0.12)
-        background.strokeColor = state.isFocused ? .clear : UIColor.white.withAlphaComponent(0.28)
+        background.backgroundColor = state.isFocused ? AppTheme.uiPrimaryText : AppTheme.uiSurfaceBorder
+        background.strokeColor = state.isFocused ? .clear : AppTheme.uiPrimaryText.withAlphaComponent(0.28)
         background.strokeWidth = state.isFocused ? 0 : 1
         backgroundConfiguration = background
     }
@@ -802,7 +802,7 @@ private final class LibrariesSectionFooterView: UICollectionReusableView {
         super.init(frame: frame)
 
         label.font = .preferredFont(forTextStyle: .body)
-        label.textColor = .secondaryLabel
+        label.textColor = AppTheme.uiSecondaryText
         label.numberOfLines = 1
         label.lineBreakMode = .byClipping
         label.setContentCompressionResistancePriority(.required, for: .horizontal)
@@ -844,6 +844,7 @@ private final class LibrariesServerHeaderView: UICollectionReusableView {
         super.init(frame: frame)
 
         label.font = .preferredFont(forTextStyle: .title1).withTraits(.traitBold)
+        label.textColor = AppTheme.uiPrimaryText
         label.translatesAutoresizingMaskIntoConstraints = false
 
         addSubview(label)
@@ -875,6 +876,7 @@ private final class LibrariesSectionHeaderView: UICollectionReusableView {
         super.init(frame: frame)
 
         label.font = .preferredFont(forTextStyle: .title3).withTraits(.traitBold)
+        label.textColor = AppTheme.uiPrimaryText
         label.translatesAutoresizingMaskIntoConstraints = false
 
         addSubview(label)

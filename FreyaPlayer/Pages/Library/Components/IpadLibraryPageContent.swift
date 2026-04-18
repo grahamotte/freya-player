@@ -21,7 +21,7 @@ struct IpadLibraryPageContent: View {
             } else if let errorMessage, items.isEmpty {
                 VStack(spacing: 16) {
                     Text(errorMessage)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(AppTheme.secondaryText)
 
                     Button("Try Again") {
                         Task {
@@ -118,7 +118,7 @@ struct IpadLibraryPageContent: View {
                 Spacer(minLength: 0)
 
                 Text(countText)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(AppTheme.secondaryText)
             }
 
             ScrollView(.horizontal) {

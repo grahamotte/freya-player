@@ -26,7 +26,7 @@ private struct MediaGlassButtonBody: View {
     var body: some View {
         configuration.label
             .font(.headline)
-            .foregroundStyle(isFocused ? .black : .white)
+            .foregroundStyle(isFocused ? AppTheme.inverseText : AppTheme.primaryText)
             .padding(.horizontal, horizontalPadding)
             .padding(.vertical, verticalPadding)
             .background(background)
@@ -37,7 +37,7 @@ private struct MediaGlassButtonBody: View {
 
     private var background: some View {
         RoundedRectangle(cornerRadius: 36, style: .continuous)
-            .fill(isFocused ? Color.white : baseColor.opacity(tint == nil ? 0.12 : 0.18))
+            .fill(isFocused ? AppTheme.primaryText : baseColor.opacity(tint == nil ? 0.12 : 0.18))
             .overlay {
                 if !isFocused {
                     RoundedRectangle(cornerRadius: 36, style: .continuous)
@@ -47,6 +47,6 @@ private struct MediaGlassButtonBody: View {
     }
 
     private var baseColor: Color {
-        tint ?? .white
+        tint ?? AppTheme.primaryText
     }
 }

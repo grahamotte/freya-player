@@ -30,7 +30,7 @@ enum MediaWatchStatusDisplay {
 
     private static func blendedUIColor(progress: Double?, isWatched: Bool) -> UIColor {
         let amount = CGFloat(clampedProgress(progress, isWatched: isWatched))
-        let start = UIColor.white.rgbaComponents
+        let start = AppTheme.uiPrimaryText.rgbaComponents
         let end = uiColor.rgbaComponents
 
         return UIColor(

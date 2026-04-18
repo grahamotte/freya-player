@@ -50,6 +50,7 @@ struct AppView: View {
                     }
                 }
         }
+        .appChrome()
     }
 
     @ViewBuilder

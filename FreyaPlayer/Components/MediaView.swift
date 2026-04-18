@@ -88,7 +88,7 @@ struct MediaView<Content: View>: View {
                             VStack(alignment: .leading, spacing: 8) {
                                 Text(entry.label)
                                     .font(.footnote.weight(.semibold))
-                                    .foregroundStyle(.secondary)
+                                    .foregroundStyle(AppTheme.secondaryText)
 
                                 Text(entry.value)
                                     .font(.headline.weight(.medium))
@@ -99,7 +99,7 @@ struct MediaView<Content: View>: View {
 
                 Text(data.synopsis)
                     .font(.body)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(AppTheme.secondaryText)
                     .lineLimit(6)
                     .frame(maxWidth: synopsisWidth, maxHeight: 220, alignment: .topLeading)
 
@@ -212,7 +212,7 @@ private struct MediaArtworkView: View {
 
     var body: some View {
         shape
-            .fill(Color.white.opacity(0.08))
+            .fill(AppTheme.surfaceFill)
             .overlay {
                 AsyncImage(url: url) { phase in
                     switch phase {
@@ -223,7 +223,7 @@ private struct MediaArtworkView: View {
                     default:
                         Image(systemName: "film.fill")
                             .font(.system(size: 48, weight: .semibold))
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(AppTheme.secondaryText)
                     }
                 }
                 .padding(1)

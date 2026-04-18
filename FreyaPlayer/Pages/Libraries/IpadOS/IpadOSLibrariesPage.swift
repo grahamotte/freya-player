@@ -18,7 +18,7 @@ struct LibrariesPage: View {
                         .font(.largeTitle.weight(.bold))
 
                     Text(server.accountName)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(AppTheme.secondaryText)
                 }
 
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 220), spacing: 16)], spacing: 16) {
@@ -31,7 +31,7 @@ struct LibrariesPage: View {
 
                                 Text("\(shelf.items.count) recent")
                                     .font(.subheadline)
-                                    .foregroundStyle(.secondary)
+                                    .foregroundStyle(AppTheme.secondaryText)
                             }
                             .frame(maxWidth: .infinity, minHeight: 84, alignment: .leading)
                             .padding(20)

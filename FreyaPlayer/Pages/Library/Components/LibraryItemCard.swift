@@ -15,7 +15,7 @@ struct LibraryItemCard: View {
             if let subtitle = item.subtitle {
                 Text(subtitle)
                     .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(AppTheme.secondaryText)
                     .lineLimit(1)
             }
         }
@@ -25,7 +25,7 @@ struct LibraryItemCard: View {
     private var artwork: some View {
         ZStack(alignment: .bottomLeading) {
             RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(Color.white.opacity(0.08))
+                .fill(AppTheme.surfaceFill)
                 .overlay {
                     AsyncImage(url: item.artwork.url(for: artworkStyle)) { phase in
                         switch phase {
@@ -36,7 +36,7 @@ struct LibraryItemCard: View {
                         default:
                             Image(systemName: artworkStyle == .poster ? "film.stack.fill" : "tv.fill")
                                 .font(.title2.weight(.semibold))
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(AppTheme.secondaryText)
                         }
                     }
                 }
@@ -45,7 +45,7 @@ struct LibraryItemCard: View {
             if let progress = item.progress, !item.isWatched {
                 GeometryReader { proxy in
                     Capsule()
-                        .fill(Color.white.opacity(0.15))
+                        .fill(AppTheme.emphasizedSurfaceFill)
                         .overlay(alignment: .leading) {
                             Capsule()
                                 .fill(MediaWatchStatusDisplay.color)

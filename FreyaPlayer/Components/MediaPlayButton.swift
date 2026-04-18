@@ -84,7 +84,7 @@ struct MediaPlayButton: View {
 
             if let playbackError {
                 Text(playbackError)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(AppTheme.secondaryText)
             }
         }
         .task(id: id) {

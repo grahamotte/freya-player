@@ -18,7 +18,7 @@ struct FeatureStubView: View {
                     .font(.title2.weight(.semibold))
 
                 Text(message)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(AppTheme.secondaryText)
             }
             .frame(maxWidth: 720, alignment: .leading)
             .padding(28)

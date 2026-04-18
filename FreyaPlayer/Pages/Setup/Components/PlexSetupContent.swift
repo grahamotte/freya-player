@@ -18,7 +18,7 @@ struct PlexSetupContent: View {
 
                 case .signedOut(let message):
                     Text(message)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(AppTheme.secondaryText)
 
                     Button("Connect With Plex") {
                         model.startPlexLogin()
@@ -27,13 +27,13 @@ struct PlexSetupContent: View {
                 case .connecting(let message):
                     if let code = model.plexLinkCode {
                         Text("Visit this link in your browser")
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(AppTheme.secondaryText)
 
                         Text("plex.tv/link")
                             .font(.headline)
 
                         Text("and enter this code")
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(AppTheme.secondaryText)
 
                         Text(code)
                             .font(.system(size: 42, weight: .bold, design: .rounded))
@@ -41,11 +41,11 @@ struct PlexSetupContent: View {
                     }
 
                     Text(message)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(AppTheme.secondaryText)
 
                 case .failed(let message):
                     Text(message)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(AppTheme.secondaryText)
 
                     Button("Try Again") {
                         model.startPlexLogin()

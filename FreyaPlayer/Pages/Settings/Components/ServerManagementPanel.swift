@@ -17,7 +17,7 @@ struct ServerManagementPanel: View {
                     .font(.title2.weight(.semibold))
 
                 Text(model.connectedServer?.accountName ?? providerName)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(AppTheme.secondaryText)
 
                 if let server = model.connectedServer {
                     VStack(alignment: .leading, spacing: 16) {
@@ -104,7 +104,7 @@ private struct LibraryOrderRow: View {
             Text(title)
                 .font(.title3.weight(.medium))
                 .lineLimit(1)
-                .foregroundStyle(isHidden ? .secondary : .primary)
+                .foregroundStyle(isHidden ? AppTheme.secondaryText : AppTheme.primaryText)
 
             Spacer(minLength: 0)
         }
@@ -115,10 +115,10 @@ private struct LibraryOrderRow: View {
 
     private var rowBackground: some View {
         RoundedRectangle(cornerRadius: 28, style: .continuous)
-            .fill(Color.white.opacity(0.05))
+            .fill(AppTheme.subtleSurfaceFill)
             .overlay {
                 RoundedRectangle(cornerRadius: 28, style: .continuous)
-                    .stroke(Color.white.opacity(0.1), lineWidth: 1)
+                    .stroke(AppTheme.surfaceBorder, lineWidth: 1)
             }
     }
 }
