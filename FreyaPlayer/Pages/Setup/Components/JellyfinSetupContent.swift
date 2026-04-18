@@ -15,8 +15,8 @@ struct JellyfinSetupContent: View {
                 Label("Jellyfin", systemImage: "square.stack.3d.up.fill")
                     .font(.title3.weight(.semibold))
 
-                setupField("Server URL") {
-                    TextField("Server URL", text: $serverURL)
+                setupField("Server URL or Host") {
+                    TextField("64.23.154.109 or http://server:8096", text: $serverURL)
                 }
 
                 setupField("Username") {

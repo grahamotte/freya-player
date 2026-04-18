@@ -537,7 +537,27 @@ final class JellyfinClient {
     }
 
     private func normalize(serverURL: String) -> String {
-        serverURL.trimmingCharacters(in: .whitespacesAndNewlines).trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        let trimmed = serverURL
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        guard !trimmed.isEmpty else { return trimmed }
+
+        let rawURL = trimmed.contains("://") ? trimmed : "http://\(trimmed)"
+        guard var components = URLComponents(string: rawURL) else {
+            return rawURL
+        }
+
+        if components.scheme?.lowercased() == "http",
+           components.port == nil,
+           components.path.isEmpty || components.path == "/" {
+            components.port = 8096
+        }
+
+        if components.path == "/" {
+            components.path = ""
+        }
+
+        return components.url?.absoluteString ?? rawURL
     }
 
     private func url(serverURL: String, path: String) throws -> URL {
