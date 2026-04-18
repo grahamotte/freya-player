@@ -3,7 +3,7 @@ description = "Build Freya Player for the tvOS simulator"
 run = "./scripts/build-tvos.sh"
 
 [tasks.start]
-description = "Rebuild, install, and launch Freya Player in the Apple TV simulator"
+description = "Rebuild, install, and launch Freya Player in the Apple TV and iPad simulators"
 run = "./scripts/start.sh"
 
 [tasks.dist]
@@ -12,4 +12,4 @@ run = "./scripts/build-distribution.sh"
 
 [tasks.xcode]
 description = "Open Freya Player in Xcode"
-run = "open freya-player.xcodeproj"
+run = "open FreyaPlayer.xcodeproj"

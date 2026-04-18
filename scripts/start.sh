@@ -2,48 +2,87 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-ROOT_APP_PATH="$ROOT_DIR/freya-player.app"
+TV_APP_PATH="$ROOT_DIR/freya-player.app"
+IPAD_APP_PATH="$ROOT_DIR/freya-player-ipad.app"
 
-booted_apple_tv_udid() {
-  xcrun simctl list devices booted 2>/dev/null | awk '/Apple TV/ { if (match($0, /[0-9A-F-]{36}/)) { print substr($0, RSTART, RLENGTH); exit } }'
+device_udid() {
+  local state="$1"
+  local pattern="$2"
+
+  xcrun simctl list devices "$state" 2>/dev/null | awk -v pattern="$pattern" '$0 ~ pattern { if (match($0, /[0-9A-F-]{36}/)) { print substr($0, RSTART, RLENGTH); exit } }'
 }
 
-available_apple_tv_udid() {
-  xcrun simctl list devices available 2>/dev/null | awk '/Apple TV/ && $0 !~ /unavailable/ { if (match($0, /[0-9A-F-]{36}/)) { print substr($0, RSTART, RLENGTH); exit } }'
+find_simulator_id() {
+  local pattern="$1"
+  local label="$2"
+  local simulator_id
+
+  simulator_id="$(device_udid booted "$pattern")"
+  if [[ -z "$simulator_id" ]]; then
+    simulator_id="$(device_udid available "$pattern")"
+  fi
+
+  if [[ -z "$simulator_id" ]]; then
+    echo "Could not find an available $label simulator."
+    exit 1
+  fi
+
+  printf '%s\n' "$simulator_id"
+}
+
+open_simulator() {
+  local simulator_id="$1"
+  local open_flag="${2:-}"
+
+  if [[ -n "$open_flag" ]]; then
+    open "$open_flag" -a Simulator --args -CurrentDeviceUDID "$simulator_id"
+  else
+    open -a Simulator --args -CurrentDeviceUDID "$simulator_id"
+  fi
+}
+
+launch_on_simulator() {
+  local label="$1"
+  local simulator_id="$2"
+  local app_path="$3"
+  local open_flag="${4:-}"
+  local bundle_id
+
+  bundle_id="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$app_path/Info.plist")"
+
+  echo "Opening $label simulator..."
+  open_simulator "$simulator_id" "$open_flag"
+
+  echo "Booting $label simulator..."
+  xcrun simctl boot "$simulator_id" >/dev/null 2>&1 || true
+  xcrun simctl bootstatus "$simulator_id" -b
+
+  echo "Stopping running $label app instance (if any)..."
+  xcrun simctl terminate "$simulator_id" "$bundle_id" >/dev/null 2>&1 || true
+
+  echo "Installing $label app..."
+  xcrun simctl install "$simulator_id" "$app_path"
+
+  echo "Launching $label app..."
+  xcrun simctl launch "$simulator_id" "$bundle_id"
 }
 
 echo "Building fresh app..."
 "$ROOT_DIR/scripts/build-tvos.sh"
+"$ROOT_DIR/scripts/build-ipad.sh"
 
-if [[ ! -d "$ROOT_APP_PATH" ]]; then
-  echo "Missing built app at: $ROOT_APP_PATH"
+if [[ ! -d "$TV_APP_PATH" ]]; then
+  echo "Missing built app at: $TV_APP_PATH"
   exit 1
 fi
 
-BUNDLE_ID="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$ROOT_APP_PATH/Info.plist")"
-SIMULATOR_ID="$(booted_apple_tv_udid)"
-
-if [[ -z "$SIMULATOR_ID" ]]; then
-  SIMULATOR_ID="$(available_apple_tv_udid)"
-fi
-
-if [[ -z "$SIMULATOR_ID" ]]; then
-  echo "Could not find an available Apple TV simulator."
+if [[ ! -d "$IPAD_APP_PATH" ]]; then
+  echo "Missing built app at: $IPAD_APP_PATH"
   exit 1
 fi
 
-echo "Opening simulator..."
-open -a Simulator --args -CurrentDeviceUDID "$SIMULATOR_ID"
+APPLE_TV_ID="$(find_simulator_id "Apple TV" "Apple TV")"
+IPAD_ID="$(find_simulator_id "iPad" "iPad")"
 
-echo "Booting simulator..."
-xcrun simctl boot "$SIMULATOR_ID" >/dev/null 2>&1 || true
-xcrun simctl bootstatus "$SIMULATOR_ID" -b
-
-echo "Stopping running app instance (if any)..."
-xcrun simctl terminate "$SIMULATOR_ID" "$BUNDLE_ID" >/dev/null 2>&1 || true
-
-echo "Installing app..."
-xcrun simctl install "$SIMULATOR_ID" "$ROOT_APP_PATH"
-
-echo "Launching app..."
-xcrun simctl launch "$SIMULATOR_ID" "$BUNDLE_ID"
+launch_on_simulator "Apple TV" "$APPLE_TV_ID" "$TV_APP_PATH"
+launch_on_simulator "iPad" "$IPAD_ID" "$IPAD_APP_PATH" "-n"

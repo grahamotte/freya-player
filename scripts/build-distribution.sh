@@ -3,7 +3,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DERIVED_DATA_PATH="$ROOT_DIR/.build/xcode-dist"
-PROJECT_PATH="$ROOT_DIR/freya-player.xcodeproj"
+PROJECT_PATH="$ROOT_DIR/FreyaPlayer.xcodeproj"
 SCHEME="freya-player"
 APP_NAME="freya-player.app"
 DIST_DIR="$ROOT_DIR/dist"
