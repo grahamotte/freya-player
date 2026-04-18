@@ -51,7 +51,7 @@ struct LibrariesPage: View {
 
                         ScrollView(.horizontal) {
                             HStack(alignment: .top, spacing: 16) {
-                                ForEach(shelf.items) { item in
+                                ForEach(Array(shelf.items.prefix(20))) { item in
                                     NavigationLink(value: item.route) {
                                         LibraryItemCard(item: item, artworkStyle: shelf.reference.artworkStyle)
                                             .frame(width: shelf.reference.artworkStyle == .poster ? 180 : 280)
