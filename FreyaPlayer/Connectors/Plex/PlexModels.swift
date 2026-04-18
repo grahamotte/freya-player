@@ -108,8 +108,7 @@ struct PlexMediaItem: Decodable, Identifiable, Hashable {
     }
 
     var synopsis: String {
-        let trimmed = summary?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        return trimmed.isEmpty ? "No description available." : trimmed
+        summary.appSynopsis
     }
 
     var runtimeText: String? {

@@ -311,8 +311,7 @@ extension JellyfinItem {
     }
 
     private var synopsis: String {
-        let trimmed = overview?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        return trimmed.isEmpty ? "No description available." : trimmed
+        overview.appSynopsis
     }
 
     private var addedAtTimestamp: Int? {

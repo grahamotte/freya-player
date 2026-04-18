@@ -278,7 +278,7 @@ final class AppModel: ObservableObject {
         try await setWatchStatus(for: item, isWatched: false)
     }
 
-    private func watchStatusTargets(in items: [MediaItem]) async throws -> [MediaItem] {
+    func watchStatusTargets(in items: [MediaItem]) async throws -> [MediaItem] {
         var targets: [MediaItem] = []
 
         for item in items {

@@ -24,13 +24,14 @@ struct LibrariesPage: View {
 
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 220), spacing: 16)], spacing: 16) {
                     ForEach(visibleLibraries) { shelf in
+                        let previewItems = shelf.recentUnwatchedItems
                         NavigationLink(value: shelf.reference.route) {
                             VStack(alignment: .leading, spacing: 8) {
                                 Text(shelf.title)
                                     .font(.title3.weight(.semibold))
                                     .lineLimit(2)
 
-                                Text("\(shelf.items.count) recent")
+                                Text("\(previewItems.count) recent")
                                     .font(.subheadline)
                                     .foregroundStyle(AppTheme.secondaryText)
                             }
@@ -44,6 +45,7 @@ struct LibrariesPage: View {
                 .padding(.horizontal, 32)
 
                 ForEach(visibleLibraries) { shelf in
+                    let previewItems = shelf.recentUnwatchedItems
                     VStack(alignment: .leading, spacing: 16) {
                         Text(shelf.title)
                             .font(.title2.weight(.semibold))
@@ -51,7 +53,7 @@ struct LibrariesPage: View {
 
                         ScrollView(.horizontal) {
                             HStack(alignment: .top, spacing: 16) {
-                                ForEach(Array(shelf.items.prefix(20))) { item in
+                                ForEach(previewItems) { item in
                                     NavigationLink(value: item.route) {
                                         LibraryItemCard(item: item, artworkStyle: shelf.reference.artworkStyle)
                                             .frame(width: shelf.reference.artworkStyle == .poster ? 180 : 280)

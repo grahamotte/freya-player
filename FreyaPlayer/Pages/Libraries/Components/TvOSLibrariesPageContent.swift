@@ -357,12 +357,7 @@ private final class LibrariesCollectionViewController: UIViewController, UIColle
         let librarySections = server.libraries.filter { !$0.isHidden }.map { library in
             let style = library.reference.artworkStyle == .poster ? LibrariesShelfStyle.poster : .wide
             let items = library.items.map(applyingOptimisticWatchStatus)
-            let previewItems = Array(
-                items
-                    .filter { !$0.isWatched }
-                    .sorted { ($0.addedAt ?? .min) > ($1.addedAt ?? .min) }
-                    .prefix(20)
-            )
+            let previewItems = library.recentUnwatchedItems(from: items)
             let openItem = LibrariesItem(
                 id: "\(library.id)-open",
                 title: library.title,

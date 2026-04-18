@@ -129,9 +129,9 @@ private final class LibraryPageCollectionViewController: UIViewController, UICol
         self.model = model
         self.library = library
         self.items = items
-        self.filter = Self.savedFilter(store: store, library: library)
-        self.sort = Self.savedSort(store: store, library: library)
-        self.sortOrder = Self.savedSortOrder(store: store, library: library, sort: self.sort)
+        self.filter = store.libraryFilter(for: library)
+        self.sort = store.librarySort(for: library)
+        self.sortOrder = store.librarySortOrder(for: library, sort: self.sort)
         self.onSelectRoute = onSelectRoute
         super.init(nibName: nil, bundle: nil)
     }
@@ -204,9 +204,9 @@ private final class LibraryPageCollectionViewController: UIViewController, UICol
         reconcileOptimisticWatchStates(with: items)
 
         if didChangeLibrary {
-            filter = Self.savedFilter(store: store, library: library)
-            sort = Self.savedSort(store: store, library: library)
-            sortOrder = Self.savedSortOrder(store: store, library: library, sort: sort)
+            filter = store.libraryFilter(for: library)
+            sort = store.librarySort(for: library)
+            sortOrder = store.librarySortOrder(for: library, sort: sort)
         }
 
         guard isViewLoaded else { return }
@@ -291,7 +291,11 @@ private final class LibraryPageCollectionViewController: UIViewController, UICol
     }
 
     private var displayedItems: [MediaItem] {
-        sort.items(from: items.map(applyingOptimisticWatchStatus).filter { filter.matches($0) }, order: sortOrder)
+        sort.items(from: statusItems.filter { filter.matches($0) }, order: sortOrder)
+    }
+
+    private var statusItems: [MediaItem] {
+        items.map(applyingOptimisticWatchStatus)
     }
 
     private var tileStyle: LibraryTileStyle {
@@ -305,36 +309,11 @@ private final class LibraryPageCollectionViewController: UIViewController, UICol
     }
 
     private var libraryWatchStatusItem: MediaItem? {
-        let statusItems = items.map(applyingOptimisticWatchStatus)
-        guard !statusItems.isEmpty else { return nil }
-
-        let progress = statusItems.reduce(0.0) { partial, item in
-            partial + (item.isWatched ? 1 : min(max(item.progress ?? 0, 0), 1))
-        } / Double(statusItems.count)
-        let isWatched = statusItems.allSatisfy(\.isWatched)
-
-        return MediaItem(
-            providerID: library.providerID,
-            serverID: library.serverID,
-            id: "library:\(library.id)",
-            title: library.title,
-            kind: library.defaultItemKind,
-            synopsis: "",
-            addedAt: nil,
-            year: nil,
-            durationMilliseconds: nil,
-            contentRating: nil,
-            isWatched: isWatched,
-            progress: isWatched ? 1 : (progress > 0 ? progress : nil),
-            resumeOffsetMilliseconds: nil,
-            artwork: .init(posterURL: nil, landscapeURL: nil, backdropURL: nil)
-        )
+        library.watchStatusItem(from: statusItems)
     }
 
     private var libraryWatchStatusReloadID: String {
-        items.map {
-            "\($0.id):\($0.isWatched):\($0.progress ?? 0):\($0.resumeOffsetMilliseconds ?? 0)"
-        }.joined(separator: ",")
+        library.watchStatusReloadID(from: statusItems)
     }
 
     private func artworkURL(for item: MediaItem) -> URL? {
@@ -363,7 +342,7 @@ private final class LibraryPageCollectionViewController: UIViewController, UICol
     private func setFilter(_ filter: LibraryPageFilter) {
         guard self.filter != filter else { return }
         self.filter = filter
-        store.setLibraryFilterRawValue(filter.rawValue, for: library)
+        store.setLibraryFilter(filter, for: library)
         collectionView.reloadData()
         updateEmptyState()
         refreshHeader()
@@ -372,7 +351,10 @@ private final class LibraryPageCollectionViewController: UIViewController, UICol
     private func setSort(_ sort: LibraryPageSort) {
         guard self.sort != sort else { return }
         self.sort = sort
-        store.setLibrarySortRawValue(sort.rawValue, for: library)
+        if !store.hasSavedLibrarySortOrder(for: library) {
+            sortOrder = sort.defaultOrder
+        }
+        store.setLibrarySort(sort, for: library)
         collectionView.reloadData()
         refreshHeader()
     }
@@ -380,46 +362,9 @@ private final class LibraryPageCollectionViewController: UIViewController, UICol
     private func setSortOrder(_ order: LibraryPageSortOrder) {
         guard sortOrder != order else { return }
         sortOrder = order
-        store.setLibrarySortOrderRawValue(order.rawValue, for: library)
+        store.setLibrarySortOrder(order, for: library)
         collectionView.reloadData()
         refreshHeader()
-    }
-
-    private static func savedFilter(store: MediaSessionStore, library: LibraryReference) -> LibraryPageFilter {
-        guard
-            let rawValue = store.libraryFilterRawValue(for: library),
-            let filter = LibraryPageFilter(rawValue: rawValue)
-        else {
-            return .all
-        }
-
-        return filter
-    }
-
-    private static func savedSort(store: MediaSessionStore, library: LibraryReference) -> LibraryPageSort {
-        guard
-            let rawValue = store.librarySortRawValue(for: library),
-            let sort = LibraryPageSort(rawValue: rawValue)
-        else {
-            return .title
-        }
-
-        return sort
-    }
-
-    private static func savedSortOrder(
-        store: MediaSessionStore,
-        library: LibraryReference,
-        sort: LibraryPageSort
-    ) -> LibraryPageSortOrder {
-        guard
-            let rawValue = store.librarySortOrderRawValue(for: library),
-            let order = LibraryPageSortOrder(rawValue: rawValue)
-        else {
-            return sort.defaultOrder
-        }
-
-        return order
     }
 
     private func updateEmptyState() {
@@ -547,22 +492,7 @@ private final class LibraryPageCollectionViewController: UIViewController, UICol
     }
 
     private func loadLibraryWatchTargets() async throws -> [MediaItem] {
-        try await loadWatchTargets(in: items)
-    }
-
-    private func loadWatchTargets(in items: [MediaItem]) async throws -> [MediaItem] {
-        var targets: [MediaItem] = []
-
-        for item in items {
-            if item.playbackID != nil {
-                targets.append(item)
-            } else {
-                let children = try await model.loadChildren(for: item)
-                targets += try await loadWatchTargets(in: children)
-            }
-        }
-
-        return targets
+        try await model.watchStatusTargets(in: items)
     }
 
     private func makeLayout() -> UICollectionViewLayout {

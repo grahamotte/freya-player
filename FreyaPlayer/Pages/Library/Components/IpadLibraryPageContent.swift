@@ -77,35 +77,11 @@ struct IpadLibraryPageContent: View {
     }
 
     private var libraryWatchStatusItem: MediaItem? {
-        guard !items.isEmpty else { return nil }
-
-        let progress = items.reduce(0.0) { partial, item in
-            partial + (item.isWatched ? 1 : min(max(item.progress ?? 0, 0), 1))
-        } / Double(items.count)
-        let isWatched = items.allSatisfy(\.isWatched)
-
-        return MediaItem(
-            providerID: library.providerID,
-            serverID: library.serverID,
-            id: "library:\(library.id)",
-            title: library.title,
-            kind: library.defaultItemKind,
-            synopsis: "",
-            addedAt: nil,
-            year: nil,
-            durationMilliseconds: nil,
-            contentRating: nil,
-            isWatched: isWatched,
-            progress: isWatched ? 1 : (progress > 0 ? progress : nil),
-            resumeOffsetMilliseconds: nil,
-            artwork: .init(posterURL: nil, landscapeURL: nil, backdropURL: nil)
-        )
+        library.watchStatusItem(from: items)
     }
 
     private var libraryWatchStatusReloadID: String {
-        items.map {
-            "\($0.id):\($0.isWatched):\($0.progress ?? 0):\($0.resumeOffsetMilliseconds ?? 0)"
-        }.joined(separator: ",")
+        library.watchStatusReloadID(from: items)
     }
 
     private var header: some View {
@@ -163,7 +139,7 @@ struct IpadLibraryPageContent: View {
                         item: item,
                         reloadID: libraryWatchStatusReloadID,
                         loadItems: {
-                            try await loadWatchTargets(in: items)
+                            try await model.watchStatusTargets(in: items)
                         },
                         onUpdateFinished: {
                             await loadItems(showSpinner: false)
@@ -175,40 +151,27 @@ struct IpadLibraryPageContent: View {
     }
 
     private func loadSavedControls() {
-        if let rawValue = store.libraryFilterRawValue(for: library),
-           let savedFilter = LibraryPageFilter(rawValue: rawValue) {
-            filter = savedFilter
-        }
-
-        if let rawValue = store.librarySortRawValue(for: library),
-           let savedSort = LibraryPageSort(rawValue: rawValue) {
-            sort = savedSort
-        }
-
-        if let rawValue = store.librarySortOrderRawValue(for: library),
-           let savedSortOrder = LibraryPageSortOrder(rawValue: rawValue) {
-            sortOrder = savedSortOrder
-        } else {
-            sortOrder = sort.defaultOrder
-        }
+        filter = store.libraryFilter(for: library)
+        sort = store.librarySort(for: library)
+        sortOrder = store.librarySortOrder(for: library, sort: sort)
     }
 
     private func setFilter(_ filter: LibraryPageFilter) {
         self.filter = filter
-        store.setLibraryFilterRawValue(filter.rawValue, for: library)
+        store.setLibraryFilter(filter, for: library)
     }
 
     private func setSort(_ sort: LibraryPageSort) {
         self.sort = sort
-        if store.librarySortOrderRawValue(for: library) == nil {
+        if !store.hasSavedLibrarySortOrder(for: library) {
             sortOrder = sort.defaultOrder
         }
-        store.setLibrarySortRawValue(sort.rawValue, for: library)
+        store.setLibrarySort(sort, for: library)
     }
 
     private func setSortOrder(_ order: LibraryPageSortOrder) {
         sortOrder = order
-        store.setLibrarySortOrderRawValue(order.rawValue, for: library)
+        store.setLibrarySortOrder(order, for: library)
     }
 
     private func loadItems(showSpinner: Bool) async {
@@ -226,20 +189,5 @@ struct IpadLibraryPageContent: View {
                 isLoading = false
             }
         }
-    }
-
-    private func loadWatchTargets(in items: [MediaItem]) async throws -> [MediaItem] {
-        var targets: [MediaItem] = []
-
-        for item in items {
-            if item.playbackID != nil {
-                targets.append(item)
-            } else {
-                let children = try await model.loadChildren(for: item)
-                targets += try await loadWatchTargets(in: children)
-            }
-        }
-
-        return targets
     }
 }

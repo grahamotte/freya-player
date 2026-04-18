@@ -116,3 +116,54 @@ enum LibraryPageSortOrder: Int, CaseIterable {
         }
     }
 }
+
+extension MediaSessionStore {
+    func libraryFilter(for library: LibraryReference) -> LibraryPageFilter {
+        guard
+            let rawValue = libraryFilterRawValue(for: library),
+            let filter = LibraryPageFilter(rawValue: rawValue)
+        else {
+            return .all
+        }
+
+        return filter
+    }
+
+    func setLibraryFilter(_ filter: LibraryPageFilter, for library: LibraryReference) {
+        setLibraryFilterRawValue(filter.rawValue, for: library)
+    }
+
+    func librarySort(for library: LibraryReference) -> LibraryPageSort {
+        guard
+            let rawValue = librarySortRawValue(for: library),
+            let sort = LibraryPageSort(rawValue: rawValue)
+        else {
+            return .title
+        }
+
+        return sort
+    }
+
+    func setLibrarySort(_ sort: LibraryPageSort, for library: LibraryReference) {
+        setLibrarySortRawValue(sort.rawValue, for: library)
+    }
+
+    func librarySortOrder(for library: LibraryReference, sort: LibraryPageSort) -> LibraryPageSortOrder {
+        guard
+            let rawValue = librarySortOrderRawValue(for: library),
+            let order = LibraryPageSortOrder(rawValue: rawValue)
+        else {
+            return sort.defaultOrder
+        }
+
+        return order
+    }
+
+    func setLibrarySortOrder(_ order: LibraryPageSortOrder, for library: LibraryReference) {
+        setLibrarySortOrderRawValue(order.rawValue, for: library)
+    }
+
+    func hasSavedLibrarySortOrder(for library: LibraryReference) -> Bool {
+        librarySortOrderRawValue(for: library) != nil
+    }
+}
