@@ -6,29 +6,7 @@
 	objectVersion = 77;
 	objects = {
 
-/* Begin PBXBuildFile section */
-/* End PBXBuildFile section */
-
-/* Begin PBXContainerItemProxy section */
-		D379264B479F87F273B243C7 /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = BFDE05A92F7A447F00E3784C /* Project object */;
-			proxyType = 1;
-			remoteGlobalIDString = BFDE06052F7A447F00E3784C;
-			remoteInfo = "freya-player-ipad";
-		};
-		EAA7088213F96EF485F6A8CE /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = BFDE05A92F7A447F00E3784C /* Project object */;
-			proxyType = 1;
-			remoteGlobalIDString = BFDE05B02F7A447F00E3784C;
-			remoteInfo = "freya-player";
-		};
-/* End PBXContainerItemProxy section */
-
 /* Begin PBXFileReference section */
-		3A9A6DF93E329952FD31C531 /* freya-player-ipadTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "freya-player-ipadTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
-		A7946743C81DBA24C5F07EAB /* freya-player-tvTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "freya-player-tvTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		BFDE05B12F7A447F00E3784C /* freya-player.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "freya-player.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		BFDE06012F7A447F00E3784C /* freya-player-ipad.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "freya-player-ipad.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -36,28 +14,17 @@
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		1ACB0CD164BDFDC91B07B06C /* tests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (
-			);
 			path = tests;
 			sourceTree = "<group>";
 		};
 		BFDE05B32F7A447F00E3784C /* FreyaPlayer */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (
-			);
 			path = FreyaPlayer;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
-		B3DF0FFFEA9E0F499D4B13B0 /* Frameworks */ = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 		BFDE05AE2F7A447F00E3784C /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -66,13 +33,6 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		BFDE06022F7A447F00E3784C /* Frameworks */ = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		E3C0AE6584F3D46285B255EC /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -96,8 +56,6 @@
 			children = (
 				BFDE05B12F7A447F00E3784C /* freya-player.app */,
 				BFDE06012F7A447F00E3784C /* freya-player-ipad.app */,
-				3A9A6DF93E329952FD31C531 /* freya-player-ipadTests.xctest */,
-				A7946743C81DBA24C5F07EAB /* freya-player-tvTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -105,48 +63,6 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		33B1BB0605E8F6B06283FBE4 /* freya-player-tvTests */ = {
-			isa = PBXNativeTarget;
-			buildConfigurationList = 48D757D2B1C957810A01F0BE /* Build configuration list for PBXNativeTarget "freya-player-tvTests" */;
-			buildPhases = (
-				A798607DBB5D3473BDAF63C6 /* Sources */,
-				E3C0AE6584F3D46285B255EC /* Frameworks */,
-				77191F2D0EA7294747F0847A /* Resources */,
-			);
-			buildRules = (
-			);
-			dependencies = (
-				BDCB1E90F09499A89936787F /* PBXTargetDependency */,
-			);
-			fileSystemSynchronizedGroups = (
-				1ACB0CD164BDFDC91B07B06C /* tests */,
-			);
-			name = "freya-player-tvTests";
-			productName = "freya-player-tvTests";
-			productReference = A7946743C81DBA24C5F07EAB /* freya-player-tvTests.xctest */;
-			productType = "com.apple.product-type.bundle.unit-test";
-		};
-		B810417539B4EEB0B15DA579 /* freya-player-ipadTests */ = {
-			isa = PBXNativeTarget;
-			buildConfigurationList = 1F5FEF2845971274D39CE2FA /* Build configuration list for PBXNativeTarget "freya-player-ipadTests" */;
-			buildPhases = (
-				E71001DE6BD57F1E38AA43D0 /* Sources */,
-				B3DF0FFFEA9E0F499D4B13B0 /* Frameworks */,
-				D69A48E9FA930B7B8C1EA7C2 /* Resources */,
-			);
-			buildRules = (
-			);
-			dependencies = (
-				A24E92E6155A7DE8D30D0520 /* PBXTargetDependency */,
-			);
-			fileSystemSynchronizedGroups = (
-				1ACB0CD164BDFDC91B07B06C /* tests */,
-			);
-			name = "freya-player-ipadTests";
-			productName = "freya-player-ipadTests";
-			productReference = 3A9A6DF93E329952FD31C531 /* freya-player-ipadTests.xctest */;
-			productType = "com.apple.product-type.bundle.unit-test";
-		};
 		BFDE05B02F7A447F00E3784C /* freya-player */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = BFDE05BC2F7A448000E3784C /* Build configuration list for PBXNativeTarget "freya-player" */;
@@ -221,20 +137,11 @@
 			targets = (
 				BFDE05B02F7A447F00E3784C /* freya-player */,
 				BFDE06052F7A447F00E3784C /* freya-player-ipad */,
-				B810417539B4EEB0B15DA579 /* freya-player-ipadTests */,
-				33B1BB0605E8F6B06283FBE4 /* freya-player-tvTests */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
-		77191F2D0EA7294747F0847A /* Resources */ = {
-			isa = PBXResourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 		BFDE05AF2F7A447F00E3784C /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -249,23 +156,9 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		D69A48E9FA930B7B8C1EA7C2 /* Resources */ = {
-			isa = PBXResourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
-		A798607DBB5D3473BDAF63C6 /* Sources */ = {
-			isa = PBXSourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 		BFDE05AD2F7A447F00E3784C /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -280,99 +173,9 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		E71001DE6BD57F1E38AA43D0 /* Sources */ = {
-			isa = PBXSourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 /* End PBXSourcesBuildPhase section */
 
-/* Begin PBXTargetDependency section */
-		A24E92E6155A7DE8D30D0520 /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			name = "freya-player-ipad";
-			target = BFDE06052F7A447F00E3784C /* freya-player-ipad */;
-			targetProxy = D379264B479F87F273B243C7 /* PBXContainerItemProxy */;
-		};
-		BDCB1E90F09499A89936787F /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			name = "freya-player";
-			target = BFDE05B02F7A447F00E3784C /* freya-player */;
-			targetProxy = EAA7088213F96EF485F6A8CE /* PBXContainerItemProxy */;
-		};
-/* End PBXTargetDependency section */
-
 /* Begin XCBuildConfiguration section */
-		2D8853E8F5C5F5581EC9D0C9 /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				BUNDLE_LOADER = "$(TEST_HOST)";
-				CLANG_ENABLE_OBJC_WEAK = NO;
-				CODE_SIGN_STYLE = Automatic;
-				GENERATE_INFOPLIST_FILE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 26.2;
-				PRODUCT_BUNDLE_IDENTIFIER = com.grahamotte.freyaplayer.ipadTests;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SDKROOT = iphoneos;
-				SWIFT_VERSION = 5.0;
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/freya-player-ipad.app/freya-player-ipad";
-				TEST_TARGET_NAME = "freya-player-ipad";
-			};
-			name = Debug;
-		};
-		89B12E3F3B8471F532F2F781 /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				BUNDLE_LOADER = "$(TEST_HOST)";
-				CLANG_ENABLE_OBJC_WEAK = NO;
-				CODE_SIGN_STYLE = Automatic;
-				GENERATE_INFOPLIST_FILE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 26.2;
-				PRODUCT_BUNDLE_IDENTIFIER = com.grahamotte.freyaplayer.ipadTests;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SDKROOT = iphoneos;
-				SWIFT_VERSION = 5.0;
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/freya-player-ipad.app/freya-player-ipad";
-				TEST_TARGET_NAME = "freya-player-ipad";
-				VALIDATE_PRODUCT = YES;
-			};
-			name = Release;
-		};
-		A7143B08AE0C194320B3BB17 /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				BUNDLE_LOADER = "$(TEST_HOST)";
-				CODE_SIGN_STYLE = Automatic;
-				GENERATE_INFOPLIST_FILE = YES;
-				PRODUCT_BUNDLE_IDENTIFIER = com.grahamotte.freyaplayer.tvTests;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SDKROOT = appletvos;
-				SWIFT_VERSION = 5.0;
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/freya-player.app/freya-player";
-				TEST_TARGET_NAME = "freya-player";
-				TVOS_DEPLOYMENT_TARGET = 26.2;
-				VALIDATE_PRODUCT = YES;
-			};
-			name = Release;
-		};
-		BA3341B3BBA8FE945945A1D8 /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				BUNDLE_LOADER = "$(TEST_HOST)";
-				CODE_SIGN_STYLE = Automatic;
-				GENERATE_INFOPLIST_FILE = YES;
-				PRODUCT_BUNDLE_IDENTIFIER = com.grahamotte.freyaplayer.tvTests;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SDKROOT = appletvos;
-				SWIFT_VERSION = 5.0;
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/freya-player.app/freya-player";
-				TEST_TARGET_NAME = "freya-player";
-				TVOS_DEPLOYMENT_TARGET = 26.2;
-			};
-			name = Debug;
-		};
 		BFDE05BA2F7A448000E3784C /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -500,7 +303,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = "App Icon & Top Shelf Image";
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1.0.2;
+				CURRENT_PROJECT_VERSION = 1.1.0;
 				DEVELOPMENT_TEAM = 3QCHM255VF;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -513,7 +316,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0.2;
+				MARKETING_VERSION = 1.1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.grahamotte.freyaplayer;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -531,7 +334,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = "App Icon & Top Shelf Image";
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1.0.2;
+				CURRENT_PROJECT_VERSION = 1.1.0;
 				DEVELOPMENT_TEAM = 3QCHM255VF;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -544,7 +347,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0.2;
+				MARKETING_VERSION = 1.1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.grahamotte.freyaplayer;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -562,7 +365,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = "AppIcon-iPad";
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1.0.2;
+				CURRENT_PROJECT_VERSION = 1.1.0;
 				DEVELOPMENT_TEAM = 3QCHM255VF;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -576,7 +379,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0.2;
+				MARKETING_VERSION = 1.1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.grahamotte.freyaplayer.ipad;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
@@ -596,7 +399,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = "AppIcon-iPad";
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1.0.2;
+				CURRENT_PROJECT_VERSION = 1.1.0;
 				DEVELOPMENT_TEAM = 3QCHM255VF;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -610,7 +413,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0.2;
+				MARKETING_VERSION = 1.1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.grahamotte.freyaplayer.ipad;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
@@ -627,24 +430,6 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		1F5FEF2845971274D39CE2FA /* Build configuration list for PBXNativeTarget "freya-player-ipadTests" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				89B12E3F3B8471F532F2F781 /* Release */,
-				2D8853E8F5C5F5581EC9D0C9 /* Debug */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-		};
-		48D757D2B1C957810A01F0BE /* Build configuration list for PBXNativeTarget "freya-player-tvTests" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				A7143B08AE0C194320B3BB17 /* Release */,
-				BA3341B3BBA8FE945945A1D8 /* Debug */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-		};
 		BFDE05AC2F7A447F00E3784C /* Build configuration list for PBXProject "FreyaPlayer" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
