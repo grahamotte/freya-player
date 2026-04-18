@@ -27,7 +27,7 @@ struct LibrariesPage: View {
                         NavigationLink(value: shelf.reference.route) {
                             VStack(alignment: .leading, spacing: 8) {
                                 Text(shelf.title)
-                                    .font(.headline)
+                                    .font(.title3.weight(.semibold))
                                     .lineLimit(2)
 
                                 Text("\(shelf.items.count) recent")
