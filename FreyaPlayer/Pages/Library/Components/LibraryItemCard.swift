@@ -10,7 +10,7 @@ struct LibraryItemCard: View {
 
             Text(item.title)
                 .font(.headline)
-                .lineLimit(2)
+                .lineLimit(1)
 
             if let subtitle = item.subtitle {
                 Text(subtitle)
