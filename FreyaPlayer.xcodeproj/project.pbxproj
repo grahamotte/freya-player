@@ -7,7 +7,7 @@
 	objects = {
 
 /* Begin PBXFileReference section */
-		BFDE05B12F7A447F00E3784C /* freya-player.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "freya-player.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		BFDE05B12F7A447F00E3784C /* freya-player-tvos.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "freya-player-tvos.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		BFDE06012F7A447F00E3784C /* freya-player-ipad.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "freya-player-ipad.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -54,7 +54,7 @@
 		BFDE05B22F7A447F00E3784C /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				BFDE05B12F7A447F00E3784C /* freya-player.app */,
+				BFDE05B12F7A447F00E3784C /* freya-player-tvos.app */,
 				BFDE06012F7A447F00E3784C /* freya-player-ipad.app */,
 			);
 			name = Products;
@@ -63,9 +63,9 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		BFDE05B02F7A447F00E3784C /* freya-player */ = {
+		BFDE05B02F7A447F00E3784C /* freya-player-tvos */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = BFDE05BC2F7A448000E3784C /* Build configuration list for PBXNativeTarget "freya-player" */;
+			buildConfigurationList = BFDE05BC2F7A448000E3784C /* Build configuration list for PBXNativeTarget "freya-player-tvos" */;
 			buildPhases = (
 				BFDE05AD2F7A447F00E3784C /* Sources */,
 				BFDE05AE2F7A447F00E3784C /* Frameworks */,
@@ -78,9 +78,9 @@
 			fileSystemSynchronizedGroups = (
 				BFDE05B32F7A447F00E3784C /* FreyaPlayer */,
 			);
-			name = "freya-player";
-			productName = "freya-player";
-			productReference = BFDE05B12F7A447F00E3784C /* freya-player.app */;
+			name = "freya-player-tvos";
+			productName = "freya-player-tvos";
+			productReference = BFDE05B12F7A447F00E3784C /* freya-player-tvos.app */;
 			productType = "com.apple.product-type.application";
 		};
 		BFDE06052F7A447F00E3784C /* freya-player-ipad */ = {
@@ -135,7 +135,7 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				BFDE05B02F7A447F00E3784C /* freya-player */,
+				BFDE05B02F7A447F00E3784C /* freya-player-tvos */,
 				BFDE06052F7A447F00E3784C /* freya-player-ipad */,
 			);
 		};
@@ -317,7 +317,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.grahamotte.freyaplayer;
+				PRODUCT_BUNDLE_IDENTIFIER = com.grahamotte.freyaplayer.tvos;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -348,7 +348,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.grahamotte.freyaplayer;
+				PRODUCT_BUNDLE_IDENTIFIER = com.grahamotte.freyaplayer.tvos;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -439,7 +439,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		BFDE05BC2F7A448000E3784C /* Build configuration list for PBXNativeTarget "freya-player" */ = {
+		BFDE05BC2F7A448000E3784C /* Build configuration list for PBXNativeTarget "freya-player-tvos" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				BFDE05BD2F7A448000E3784C /* Debug */,

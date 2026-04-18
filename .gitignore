@@ -3,6 +3,7 @@
 dist/
 FreyaPlayer.app
 freya-player.app
+freya-player-tvos.app
 freya-player-ipad.app
 
 xcuserdata/

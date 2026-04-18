@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-TV_APP_PATH="$ROOT_DIR/freya-player.app"
+TV_APP_PATH="$ROOT_DIR/freya-player-tvos.app"
 IPAD_APP_PATH="$ROOT_DIR/freya-player-ipad.app"
 
 device_udid() {
