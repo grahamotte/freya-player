@@ -68,7 +68,6 @@ struct PlexSetupContent: View {
         .padding(48)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(AppBackground())
-        .navigationTitle("Plex")
         .task {
             model.preparePlexSetup()
         }

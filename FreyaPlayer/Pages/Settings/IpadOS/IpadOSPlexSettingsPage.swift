@@ -7,7 +7,6 @@ struct PlexSettingsPage: View {
 
     var body: some View {
         ServerManagementPanel(model: model, path: $path, providerName: "Plex")
-            .navigationTitle("Manage Plex")
     }
 }
 #endif

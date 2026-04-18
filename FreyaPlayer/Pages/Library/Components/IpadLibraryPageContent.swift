@@ -49,7 +49,6 @@ struct IpadLibraryPageContent: View {
             }
         }
         .background(AppBackground())
-        .navigationTitle(library.title)
         .task(id: library.id) {
             loadSavedControls()
             await PollingLoop.run {

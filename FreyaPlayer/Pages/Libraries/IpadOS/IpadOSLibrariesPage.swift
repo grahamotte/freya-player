@@ -69,7 +69,6 @@ struct LibrariesPage: View {
         }
         .scrollIndicators(.hidden)
         .background(LibrariesAmbientBackground())
-        .navigationTitle("Libraries")
         .toolbar {
             Button("Settings") {
                 path.append(server.providerID.settingsRoute)

@@ -56,7 +56,6 @@ struct JellyfinSetupContent: View {
         .padding(48)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(AppBackground())
-        .navigationTitle("Jellyfin")
         .task {
             model.prepareJellyfinSetup()
         }

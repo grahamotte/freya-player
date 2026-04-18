@@ -7,7 +7,6 @@ struct JellyfinSettingsPage: View {
 
     var body: some View {
         ServerManagementPanel(model: model, path: $path, providerName: "Jellyfin")
-            .navigationTitle("Manage Jellyfin")
     }
 }
 #endif
