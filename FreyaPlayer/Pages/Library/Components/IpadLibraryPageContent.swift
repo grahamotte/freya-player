@@ -120,52 +120,57 @@ struct IpadLibraryPageContent: View {
                     .foregroundStyle(AppTheme.secondaryText)
             }
 
-            ScrollView(.horizontal) {
-                HStack(spacing: 12) {
-                    Menu(filter.title) {
-                        ForEach(LibraryPageFilter.allCases, id: \.rawValue) { candidate in
+            HStack(alignment: .top, spacing: 12) {
+                Menu {
+                    ForEach(LibraryPageFilter.allCases, id: \.rawValue) { candidate in
+                        Button(candidate.title) {
+                            setFilter(candidate)
+                        }
+                    }
+                } label: {
+                    Label(filter.title, systemImage: "line.3.horizontal.decrease")
+                }
+                .buttonStyle(MediaGlassButtonStyle())
+                .fixedSize(horizontal: true, vertical: false)
+
+                Menu {
+                    Section("Field") {
+                        ForEach(LibraryPageSort.allCases, id: \.rawValue) { candidate in
                             Button(candidate.title) {
-                                setFilter(candidate)
+                                setSort(candidate)
                             }
                         }
                     }
-                    .buttonStyle(.bordered)
 
-                    Menu("\(sort.title) \(sortOrder.shortTitle)") {
-                        Section("Field") {
-                            ForEach(LibraryPageSort.allCases, id: \.rawValue) { candidate in
-                                Button(candidate.title) {
-                                    setSort(candidate)
-                                }
-                            }
-                        }
-
-                        Section("Order") {
-                            ForEach(LibraryPageSortOrder.allCases, id: \.rawValue) { candidate in
-                                Button(candidate.title) {
-                                    setSortOrder(candidate)
-                                }
+                    Section("Order") {
+                        ForEach(LibraryPageSortOrder.allCases, id: \.rawValue) { candidate in
+                            Button(candidate.title) {
+                                setSortOrder(candidate)
                             }
                         }
                     }
-                    .buttonStyle(.bordered)
+                } label: {
+                    Label("\(sort.title) \(sortOrder.shortTitle)", systemImage: "arrow.up.arrow.down")
+                }
+                .buttonStyle(MediaGlassButtonStyle())
+                .fixedSize(horizontal: true, vertical: false)
 
-                    if let item = libraryWatchStatusItem {
-                        MediaCollectionWatchStatusButton(
-                            model: model,
-                            item: item,
-                            reloadID: libraryWatchStatusReloadID,
-                            loadItems: {
-                                try await loadWatchTargets(in: items)
-                            },
-                            onUpdateFinished: {
-                                await loadItems(showSpinner: false)
-                            }
-                        )
-                    }
+                Spacer(minLength: 0)
+
+                if let item = libraryWatchStatusItem {
+                    MediaCollectionWatchStatusButton(
+                        model: model,
+                        item: item,
+                        reloadID: libraryWatchStatusReloadID,
+                        loadItems: {
+                            try await loadWatchTargets(in: items)
+                        },
+                        onUpdateFinished: {
+                            await loadItems(showSpinner: false)
+                        }
+                    )
                 }
             }
-            .scrollIndicators(.hidden)
         }
     }
 
