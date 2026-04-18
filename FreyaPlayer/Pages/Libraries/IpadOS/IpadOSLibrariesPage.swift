@@ -20,6 +20,7 @@ struct LibrariesPage: View {
                     Text(server.accountName)
                         .foregroundStyle(AppTheme.secondaryText)
                 }
+                .padding(.horizontal, 32)
 
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 220), spacing: 16)], spacing: 16) {
                     ForEach(visibleLibraries) { shelf in
@@ -40,17 +41,13 @@ struct LibrariesPage: View {
                         .buttonStyle(.plain)
                     }
                 }
+                .padding(.horizontal, 32)
 
                 ForEach(visibleLibraries) { shelf in
                     VStack(alignment: .leading, spacing: 16) {
-                        HStack {
-                            Text(shelf.title)
-                                .font(.title2.weight(.semibold))
-
-                            Spacer(minLength: 0)
-
-                            NavigationLink("Open", value: shelf.reference.route)
-                        }
+                        Text(shelf.title)
+                            .font(.title2.weight(.semibold))
+                            .padding(.horizontal, 32)
 
                         ScrollView(.horizontal) {
                             HStack(alignment: .top, spacing: 16) {
@@ -62,14 +59,15 @@ struct LibrariesPage: View {
                                     .buttonStyle(.plain)
                                 }
                             }
+                            .padding(.leading, 32)
                             .padding(.vertical, 4)
                         }
                         .scrollIndicators(.hidden)
                     }
                 }
             }
-            .padding(32)
         }
+        .scrollIndicators(.hidden)
         .background(LibrariesAmbientBackground())
         .navigationTitle("Libraries")
         .toolbar {
