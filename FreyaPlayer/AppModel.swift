@@ -149,11 +149,22 @@ final class AppModel: ObservableObject {
                 }
                 await self.pollForPlexLogin(session: session)
             } catch {
+                guard !Task.isCancelled else { return }
                 await MainActor.run {
                     self.connectionState = .failed(message: "Couldn't start Plex sign-in. Please try again.")
                 }
             }
         }
+    }
+
+    func cancelPlexSetup() {
+        restoreTask?.cancel()
+        pollTask?.cancel()
+        plexLinkCode = nil
+
+        guard connectedServer == nil else { return }
+        activeConnector = nil
+        connectionState = .signedOut(message: "Choose a server to connect.")
     }
 
     func disconnectCurrentServer() {
@@ -315,6 +326,7 @@ final class AppModel: ObservableObject {
                     self.setConnectedServer(server)
                 }
             } catch {
+                guard !Task.isCancelled else { return }
                 await MainActor.run {
                     self.connectionState = .failed(
                         message: "We signed into Plex, but couldn't connect to a Plex Media Server for this account."
@@ -366,6 +378,7 @@ final class AppModel: ObservableObject {
                         return
                     }
                 } catch {
+                    guard !Task.isCancelled else { return }
                     await MainActor.run {
                         self.plexLinkCode = nil
                         self.connectionState = .failed(message: "Plex sign-in stopped responding. Please try again.")

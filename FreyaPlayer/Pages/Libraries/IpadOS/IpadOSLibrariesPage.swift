@@ -13,13 +13,8 @@ struct LibrariesPage: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 32) {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(server.serverName)
-                        .font(.largeTitle.weight(.bold))
-
-                    Text(server.accountName)
-                        .foregroundStyle(AppTheme.secondaryText)
-                }
+                Text(server.serverName)
+                    .font(.largeTitle.weight(.bold))
                 .padding(.horizontal, 32)
 
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 220), spacing: 16)], spacing: 16) {

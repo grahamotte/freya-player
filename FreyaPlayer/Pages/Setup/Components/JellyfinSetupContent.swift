@@ -16,15 +16,21 @@ struct JellyfinSetupContent: View {
                     .font(.title3.weight(.semibold))
 
                 setupField("Server URL or Host") {
-                    TextField("64.23.154.109 or http://server:8096", text: $serverURL)
+                    TextField("64.23.154.109 or server:8096", text: $serverURL)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
                 }
 
                 setupField("Username") {
                     TextField("Username", text: $username)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
                 }
 
                 setupField("Password") {
                     SecureField("Password", text: $password)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
                 }
 
                 if case .failed(let message) = model.connectionState {
@@ -41,6 +47,7 @@ struct JellyfinSetupContent: View {
                         password: password
                     )
                 }
+                .buttonStyle(MediaGlassButtonStyle())
                 .disabled(serverURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || username.isEmpty || password.isEmpty)
             }
             .frame(maxWidth: 720, alignment: .leading)
@@ -50,6 +57,7 @@ struct JellyfinSetupContent: View {
             Button("Cancel") {
                 dismiss()
             }
+            .buttonStyle(MediaGlassButtonStyle())
 
             Spacer()
         }

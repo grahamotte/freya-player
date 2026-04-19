@@ -4,15 +4,15 @@ struct ProviderPickerView: View {
     var body: some View {
         VStack {
             HStack(spacing: 72) {
-                NavigationLink(value: AppRoute.plexSetup) {
-                    serviceButton(title: "Plex", systemImage: "play.rectangle.fill")
+                NavigationLink(value: AppRoute.jellyfinSetup) {
+                    serviceButton(title: "Jellyfin", systemImage: "square.stack.3d.up.fill")
                 }
                 .buttonStyle(.bordered)
                 .buttonBorderShape(.roundedRectangle(radius: 28))
                 .controlSize(.large)
 
-                NavigationLink(value: AppRoute.jellyfinSetup) {
-                    serviceButton(title: "Jellyfin", systemImage: "square.stack.3d.up.fill")
+                NavigationLink(value: AppRoute.plexSetup) {
+                    serviceButton(title: "Plex", systemImage: "play.rectangle.fill")
                 }
                 .buttonStyle(.bordered)
                 .buttonBorderShape(.roundedRectangle(radius: 28))

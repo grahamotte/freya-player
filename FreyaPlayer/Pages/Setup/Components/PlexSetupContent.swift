@@ -12,6 +12,10 @@ struct PlexSetupContent: View {
                 Label("Plex", systemImage: "play.rectangle.fill")
                     .font(.title3.weight(.semibold))
 
+                Label("Plex services have been degrading over time. Jellyfin is recommended if you can switch.", systemImage: "exclamationmark.triangle.fill")
+                    .font(.footnote)
+                    .foregroundStyle(.orange)
+
                 switch model.connectionState {
                 case .checking:
                     ProgressView("Checking saved Plex connection...")
@@ -23,6 +27,7 @@ struct PlexSetupContent: View {
                     Button("Connect With Plex") {
                         model.startPlexLogin()
                     }
+                    .buttonStyle(MediaGlassButtonStyle())
 
                 case .connecting(let message):
                     if let code = model.plexLinkCode {
@@ -50,6 +55,7 @@ struct PlexSetupContent: View {
                     Button("Try Again") {
                         model.startPlexLogin()
                     }
+                    .buttonStyle(MediaGlassButtonStyle())
 
                 case .connected:
                     ProgressView("Loading your server...")
@@ -62,6 +68,7 @@ struct PlexSetupContent: View {
             Button("Cancel") {
                 dismiss()
             }
+            .buttonStyle(MediaGlassButtonStyle())
 
             Spacer()
         }
@@ -70,6 +77,9 @@ struct PlexSetupContent: View {
         .background(AppBackground())
         .task {
             model.preparePlexSetup()
+        }
+        .onDisappear {
+            model.cancelPlexSetup()
         }
     }
 }
