@@ -3,7 +3,6 @@ import SwiftUI
 struct ServerManagementPanel: View {
     @ObservedObject var model: AppModel
     @Binding var path: [AppRoute]
-    @Environment(\.dismiss) private var dismiss
 
     let providerName: String
 
@@ -42,18 +41,11 @@ struct ServerManagementPanel: View {
                     }
                 }
 
-                HStack(spacing: 18) {
-                    Button("Deactivate Server") {
-                        model.disconnectCurrentServer()
-                        path.removeAll()
-                    }
-                    .buttonStyle(MediaGlassButtonStyle(tint: .red))
-
-                    Button("Back") {
-                        dismiss()
-                    }
-                    .buttonStyle(MediaGlassButtonStyle())
+                Button("Deactivate Server") {
+                    model.disconnectCurrentServer()
+                    path.removeAll()
                 }
+                .buttonStyle(MediaGlassButtonStyle(tint: .red))
                 .padding(.top, 8)
             }
             .frame(maxWidth: 860, alignment: .leading)
