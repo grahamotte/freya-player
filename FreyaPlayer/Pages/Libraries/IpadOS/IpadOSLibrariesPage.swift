@@ -17,30 +17,10 @@ struct LibrariesPage: View {
                     .font(.largeTitle.weight(.bold))
                 .padding(.horizontal, 32)
 
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 220), spacing: 16)], spacing: 16) {
-                    ForEach(visibleLibraries) { shelf in
-                        let previewItems = shelf.recentUnwatchedItems
-                        NavigationLink(value: shelf.reference.route) {
-                            VStack(alignment: .leading, spacing: 8) {
-                                Text(shelf.title)
-                                    .font(.title3.weight(.semibold))
-                                    .lineLimit(2)
-
-                                Text("\(previewItems.count) recent")
-                                    .font(.subheadline)
-                                    .foregroundStyle(AppTheme.secondaryText)
-                            }
-                            .frame(maxWidth: .infinity, minHeight: 84, alignment: .leading)
-                            .padding(20)
-                            .background(PanelBackground())
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-                .padding(.horizontal, 32)
-
                 ForEach(visibleLibraries) { shelf in
                     let previewItems = shelf.recentUnwatchedItems
+                    let artworkStyle = shelf.reference.artworkStyle
+                    let cardWidth: CGFloat = artworkStyle == .poster ? 180 : 280
                     VStack(alignment: .leading, spacing: 16) {
                         Text(shelf.title)
                             .font(.title2.weight(.semibold))
@@ -48,10 +28,16 @@ struct LibrariesPage: View {
 
                         ScrollView(.horizontal) {
                             HStack(alignment: .top, spacing: 16) {
+                                NavigationLink(value: shelf.reference.route) {
+                                    OpenLibraryCard(title: shelf.title, artworkStyle: artworkStyle)
+                                        .frame(width: cardWidth)
+                                }
+                                .buttonStyle(.plain)
+
                                 ForEach(previewItems) { item in
                                     NavigationLink(value: item.route) {
-                                        LibraryItemCard(item: item, artworkStyle: shelf.reference.artworkStyle)
-                                            .frame(width: shelf.reference.artworkStyle == .poster ? 180 : 280)
+                                        LibraryItemCard(item: item, artworkStyle: artworkStyle)
+                                            .frame(width: cardWidth)
                                     }
                                     .buttonStyle(.plain)
                                 }
@@ -76,6 +62,35 @@ struct LibrariesPage: View {
                 await model.refreshConnection()
             }
         }
+    }
+}
+
+private struct OpenLibraryCard: View {
+    let title: String
+    let artworkStyle: MediaArtworkStyle
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(AppTheme.surfaceFill)
+                .overlay(alignment: .bottomLeading) {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Image(systemName: "arrow.right")
+                            .font(.title2.weight(.semibold))
+
+                        Text("Open Library")
+                            .font(.subheadline.weight(.semibold))
+                    }
+                    .foregroundStyle(AppTheme.secondaryText)
+                    .padding(18)
+                }
+                .aspectRatio(artworkStyle.aspectRatio, contentMode: .fit)
+
+            Text(title)
+                .font(.headline)
+                .lineLimit(2)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 #endif
