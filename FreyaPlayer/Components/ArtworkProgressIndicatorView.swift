@@ -1,4 +1,5 @@
 import UIKit
+import SwiftUI
 
 final class ArtworkProgressIndicatorView: UIView {
     static let height: CGFloat = 8
@@ -63,5 +64,18 @@ final class ArtworkProgressIndicatorView: UIView {
         trackView.isHidden = value <= 0 || isWatched
         badgeView.isHidden = !isWatched
         setNeedsLayout()
+    }
+}
+
+struct ArtworkProgressIndicator: UIViewRepresentable {
+    let progress: Double?
+    let isWatched: Bool
+
+    func makeUIView(context: Context) -> ArtworkProgressIndicatorView {
+        ArtworkProgressIndicatorView()
+    }
+
+    func updateUIView(_ uiView: ArtworkProgressIndicatorView, context: Context) {
+        uiView.setProgress(progress, isWatched: isWatched)
     }
 }

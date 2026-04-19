@@ -41,20 +41,9 @@ struct LibraryItemCard: View {
                     }
                 }
                 .clipped()
-
-            if let progress = item.progress, !item.isWatched {
-                GeometryReader { proxy in
-                    Capsule()
-                        .fill(AppTheme.emphasizedSurfaceFill)
-                        .overlay(alignment: .leading) {
-                            Capsule()
-                                .fill(MediaWatchStatusDisplay.color)
-                                .frame(width: proxy.size.width * min(max(progress, 0), 1))
-                        }
-                        .frame(height: 6)
-                        .padding(10)
+                .overlay {
+                    ArtworkProgressIndicator(progress: item.progress, isWatched: item.isWatched)
                 }
-            }
         }
         .aspectRatio(artworkStyle.aspectRatio, contentMode: .fit)
         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
