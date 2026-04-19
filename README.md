@@ -3,7 +3,7 @@
 Freya Player is a native tvOS app for watching video from Plex or Jellyfin with as much stock Apple feel as possible.
 
 <p align="center">
-  <img src="assets/screenshots/tvos%201.png" alt="Freya Player screenshot">
+  <img src="assets/screenshots/simulator.png" alt="Freya Player screenshot">
 </p>
 
 ## Commands
