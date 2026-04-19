@@ -37,7 +37,7 @@ struct MediaView<Content: View>: View {
         GeometryReader { proxy in
             let metrics = MediaViewMetrics.current
             let panelWidth = (proxy.size.width - (metrics.horizontalPadding * 2) - metrics.artworkSpacing) / 2
-            let synopsisWidth = min(panelWidth - metrics.panelInnerPadding, 980)
+            let synopsisWidth = min(panelWidth - metrics.panelHorizontalPadding, 980)
             let artworkBounds = CGSize(width: panelWidth, height: proxy.size.height - (metrics.verticalPadding * 2))
             let artworkSize = data.artworkStyle.fittedSize(in: artworkBounds)
 
@@ -108,7 +108,8 @@ struct MediaView<Content: View>: View {
                 Spacer(minLength: 0)
             }
         }
-        .padding(.horizontal, metrics.panelInnerPadding / 2)
+        .padding(.leading, metrics.panelLeadingPadding)
+        .padding(.trailing, metrics.panelTrailingPadding)
         .padding(.vertical, metrics.panelVerticalPadding)
         .frame(width: width, alignment: .leading)
         .frame(minHeight: minHeight, alignment: .topLeading)
@@ -129,11 +130,16 @@ private struct MediaViewMetrics {
     let horizontalPadding: CGFloat
     let verticalPadding: CGFloat
     let artworkSpacing: CGFloat
-    let panelInnerPadding: CGFloat
+    let panelLeadingPadding: CGFloat
+    let panelTrailingPadding: CGFloat
     let panelVerticalPadding: CGFloat
     let contentSpacing: CGFloat
     let metadataSpacing: CGFloat
     let titleFontSize: CGFloat
+
+    var panelHorizontalPadding: CGFloat {
+        panelLeadingPadding + panelTrailingPadding
+    }
 
     static let current: MediaViewMetrics = {
         #if os(tvOS)
@@ -141,7 +147,8 @@ private struct MediaViewMetrics {
             horizontalPadding: 72,
             verticalPadding: 48,
             artworkSpacing: 72,
-            panelInnerPadding: 72,
+            panelLeadingPadding: 36,
+            panelTrailingPadding: 36,
             panelVerticalPadding: 24,
             contentSpacing: 32,
             metadataSpacing: 44,
@@ -152,7 +159,8 @@ private struct MediaViewMetrics {
             horizontalPadding: 32,
             verticalPadding: 32,
             artworkSpacing: 32,
-            panelInnerPadding: 40,
+            panelLeadingPadding: 0,
+            panelTrailingPadding: 40,
             panelVerticalPadding: 16,
             contentSpacing: 24,
             metadataSpacing: 28,
