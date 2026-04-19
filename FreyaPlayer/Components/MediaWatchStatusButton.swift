@@ -170,12 +170,19 @@ struct MediaCollectionWatchStatusButton: View {
         defer { isUpdating = false }
 
         do {
-            try await model.setWatchStatus(for: item, isWatched: isWatched)
+            try await setWatchStatus(for: updateTargets, isWatched: isWatched)
             await onUpdateFinished?()
         } catch {
             targets = previousTargets
             displayItem = previousDisplayItem
             errorMessage = "Couldn't update watch status."
+        }
+    }
+
+    private func setWatchStatus(for items: [MediaItem], isWatched: Bool) async throws {
+        for item in items {
+            guard let playbackID = item.playbackID else { continue }
+            try await model.setWatchStatus(for: playbackID, isWatched: isWatched)
         }
     }
 }
