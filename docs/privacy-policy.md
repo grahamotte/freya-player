@@ -1,47 +1,88 @@
-**Privacy Policy**
+# Privacy Policy
 
-This privacy policy applies to the Freya Player app (hereby referred to as "Application") for mobile devices that was created by Graham Otte (hereby referred to as "Service Provider") as a Free service. This service is intended for use "AS IS".
+Effective date: 2026-04-01
 
-**What information does the Application obtain and how is it used?**
+Freya Player is an app for tvOS that connects to Plex and Jellyfin servers chosen by the user. This app is developed by Graham Otte.
 
-The Application does not obtain any information when you download and use it. Registration is not required to use the Application.
+Freya Player is only a client. It does not include, host, provide, or unlock any content or streaming catalog of its own. To use it, you must connect your own **personal** Plex or Jellyfin server.
 
-**Does the Application collect precise real time location information of the device?**
+## Summary
 
-This Application does not collect precise information about the location of your mobile device.
+Freya Player does not run its own developer backend, does not include advertising, and does not use third-party analytics or crash reporting SDKs. The app stores some connection and preference data on your device and communicates directly with the Plex and Jellyfin services you choose to use.
 
-**Do third parties see and/or have access to information obtained by the Application?**
+The developer of Freya Player does not host your media, does not log your media library, and does not have access to the content stored on your server. Any browsing or playback happens directly between the app on your device and the server you choose to connect.
 
-Since the Application does not collect any information, no data is shared with third parties.
+## Information Freya Player processes
 
-**What are my opt-out rights?**
+### Information stored on your device
 
-You can stop all collection of information by the Application easily by uninstalling it. You may use the standard uninstall processes as may be available as part of your mobile device or via the mobile application marketplace or network.
+To keep you signed in and preserve app settings, Freya Player may store the following on your device:
 
-**Children**
+- Plex or Jellyfin access tokens
+- selected server details, such as a server identifier or server URL
+- Jellyfin user ID and display name
+- locally generated client or device identifiers used when talking to provider APIs
+- library order, hidden libraries, filters, sort options, and similar app preferences
 
-The Application is not used to knowingly solicit data from or market to children under the age of 13.
+Access tokens are stored in the system Keychain when available. Other settings are stored in standard on-device app storage.
 
-The Service Provider does not knowingly collect personally identifiable information from children. The Service Provider encourages all children to never submit any personally identifiable information through the Application and/or Services. The Service Provider encourage parents and legal guardians to monitor their children's Internet usage and to help enforce this Policy by instructing their children never to provide personally identifiable information through the Application and/or Services without their permission. If you have reason to believe that a child has provided personally identifiable information to the Service Provider through the Application and/or Services, please contact the Service Provider (graham.otte@gmail.com) so that they will be able to take the necessary actions. You must also be at least 16 years of age to consent to the processing of your personally identifiable information in your country (in some countries we may allow your parent or guardian to do so on your behalf).
+### Information sent to Plex or Jellyfin
 
-**Security**
+When you connect a service, Freya Player sends data directly to the provider you chose:
 
-The Service Provider is concerned about safeguarding the confidentiality of your information. However, since the Application does not collect any information, there is no risk of your data being accessed by unauthorized individuals.
+- For Plex, Freya Player communicates with `plex.tv` for sign-in and server discovery, and with your Plex Media Server for browsing and playback.
+- For Jellyfin, Freya Player communicates with the Jellyfin server URL you enter.
 
-**Changes**
+Depending on the feature you use, these requests may include:
 
-This Privacy Policy may be updated from time to time for any reason. The Service Provider will notify you of any changes to their Privacy Policy by updating this page with the new Privacy Policy. You are advised to consult this Privacy Policy regularly for any changes, as continued use is deemed approval of all changes.
+- your sign-in credentials or provider-issued access tokens
+- your chosen server address
+- client or device identifiers and app version information
+- media browsing requests
+- playback state and progress, including resume position and watched or unwatched status
+- stream selection information such as audio and subtitle choices
 
-This privacy policy is effective as of 2026-04-01
+Freya Player uses this information only to provide browsing, playback, resume, and watch-status features. The developer does not receive this data on separate developer-operated servers.
 
-**Your Consent**
+## No developer access to your content
 
-By using the Application, you are consenting to the processing of your information as set forth in this Privacy Policy now and as amended by the Service Provider.
+Freya Player has no built-in content service and no connection to any content by itself. You must provide your own **personal** Plex or Jellyfin server.
 
-**Contact Us**
+The app may request media metadata and stream URLs from the server you configure so it can browse and play content on your device. However, the developer of Freya Player does not receive, store, review, control, monitor, or otherwise have access to your media files or library contents through an operated service, because Freya Player does not operate one.
 
-If you have any questions regarding privacy while using the Application, or have questions about the practices, please contact the Service Provider via email at graham.otte@gmail.com.
+You are solely responsible for the content made available through the server you connect to Freya Player, including whether you have the right to access, stream, or view that content. The developer of Freya Player does not accept responsibility for the content you choose to view with the app.
 
----
+## What Freya Player does not do
 
-This privacy policy page was generated by [App Privacy Policy Generator](https://app-privacy-policy-generator.nisrulz.com/)
+Freya Player does not:
+
+- sell your personal information
+- use advertising SDKs
+- track you across apps or websites
+- collect precise location information
+- request access to contacts, photos, camera, or microphone
+
+## Third-party services
+
+If you use Plex or Jellyfin, your use of those services is also governed by their own privacy practices and terms. Freya Player cannot control how Plex, Jellyfin, or the operator of a Jellyfin server handles your data.
+
+## Data retention and deletion
+
+Data stored locally by Freya Player remains on your device until you remove it. You can deactivate a connected server in the app to remove stored connection details and tokens for that server. Some local preferences or identifiers may remain on the device until the app or its data is removed by the platform.
+
+Because Freya Player does not maintain developer-run user accounts or backend storage, the developer generally cannot independently access, export, or delete data held by Plex, Jellyfin, or your own media server. To revoke access or delete provider-side data, use the relevant Plex or Jellyfin account or server controls.
+
+## Children's privacy
+
+Freya Player is not directed to children under 13 and is not designed to knowingly collect personal information from children.
+
+## Changes to this policy
+
+This Privacy Policy may be updated from time to time. When it changes, the updated version will be posted at this URL with a new effective date.
+
+## Contact
+
+If you have questions about this Privacy Policy, contact:
+
+Graham Otte
+graham.otte@gmail.com
