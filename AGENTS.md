@@ -15,6 +15,7 @@
 - Keep UI very standard tvOS: prefer stock SwiftUI/tvOS controls and focus behavior over custom card treatments.
 - Keep the folder structure shallow and obvious.
 - Build and run through `mise` and `xcodebuild`, not through Xcode UI steps.
+- You may use the credentials in creds.txt to query a real plex or jellyfin instance if needed.
 
 ## Repo Conventions
 

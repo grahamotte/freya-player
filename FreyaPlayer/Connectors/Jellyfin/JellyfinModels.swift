@@ -91,6 +91,7 @@ struct JellyfinItem: Decodable, Hashable, Identifiable {
     let parentPrimaryImageTag: String?
     let seriesId: String?
     let seriesPrimaryImageTag: String?
+    let seriesThumbImageTag: String?
 
     private enum CodingKeys: String, CodingKey {
         case id = "Id"
@@ -113,6 +114,7 @@ struct JellyfinItem: Decodable, Hashable, Identifiable {
         case parentPrimaryImageTag = "ParentPrimaryImageTag"
         case seriesId = "SeriesId"
         case seriesPrimaryImageTag = "SeriesPrimaryImageTag"
+        case seriesThumbImageTag = "SeriesThumbImageTag"
     }
 }
 
@@ -359,6 +361,26 @@ extension JellyfinItem {
         imageTags?["Primary"] != nil || parentPrimaryImageTag != nil || seriesPrimaryImageTag != nil
     }
 
+    private var thumbImageItemID: String? {
+        if imageTags?["Thumb"] != nil {
+            return id
+        }
+
+        if let parentThumbItemId, parentThumbImageTag != nil {
+            return parentThumbItemId
+        }
+
+        if let seriesId, seriesThumbImageTag != nil {
+            return seriesId
+        }
+
+        return nil
+    }
+
+    private var thumbImageTag: String? {
+        imageTags?["Thumb"] ?? parentThumbImageTag ?? seriesThumbImageTag
+    }
+
     private func posterImageURL(
         for kind: MediaItemKind,
         baseURL: String,
@@ -380,10 +402,10 @@ extension JellyfinItem {
             )
         }
 
-        if let tag = imageTags?["Thumb"] {
+        if let thumbImageItemID, let tag = thumbImageTag {
             return imageURL(
                 type: "Thumb",
-                itemID: id,
+                itemID: thumbImageItemID,
                 tag: tag,
                 baseURL: baseURL,
                 accessToken: accessToken,
@@ -446,6 +468,18 @@ extension JellyfinItem {
             if let tag = imageTags?["Thumb"] {
                 return imageURL(
                     type: "Thumb",
+                    itemID: id,
+                    tag: tag,
+                    baseURL: baseURL,
+                    accessToken: accessToken,
+                    maxWidth: 780,
+                    maxHeight: 439
+                )
+            }
+
+            if let tag = imageTags?["Primary"] {
+                return imageURL(
+                    type: "Primary",
                     itemID: id,
                     tag: tag,
                     baseURL: baseURL,
