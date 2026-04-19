@@ -121,9 +121,14 @@ struct MediaPlayButton: View {
                 try await fetchPlaybackOptions()
             }
 
-            let url = try await model.playbackURL(for: id, selection: playbackSelection)
+            let sessionID = UUID().uuidString
+            let url = try await model.playbackURL(
+                for: id,
+                selection: playbackSelection,
+                sessionID: sessionID
+            )
             playbackError = nil
-            playbackSessionID = UUID().uuidString
+            playbackSessionID = sessionID
             didCompletePlayback = false
             playbackUpdateTask = nil
             player = AVPlayer(url: url)
@@ -291,6 +296,7 @@ private struct StockPlayerView: UIViewControllerRepresentable {
         private var timeControlObservation: NSKeyValueObservation?
         private var itemStatusObservation: NSKeyValueObservation?
         private var endObserver: NSObjectProtocol?
+        private var timelineTimer: Timer?
         private var onTimelineEvent: ((MediaPlaybackTimelineState, Int, Int?) -> Void)?
         private var onPlaybackEnded: ((Int, Int?) -> Void)?
         private var lastState: MediaPlaybackTimelineState?
@@ -354,10 +360,12 @@ private struct StockPlayerView: UIViewControllerRepresentable {
                 NotificationCenter.default.removeObserver(endObserver)
             }
 
+            timelineTimer?.invalidate()
             timeObserver = nil
             timeControlObservation = nil
             itemStatusObservation = nil
             endObserver = nil
+            timelineTimer = nil
             self.player = nil
             onTimelineEvent = nil
             onPlaybackEnded = nil
@@ -376,6 +384,7 @@ private struct StockPlayerView: UIViewControllerRepresentable {
 
         private func sendState(for player: AVPlayer) {
             let state = state(for: player)
+            updateTimelineTimer(for: state)
             guard state != lastState else { return }
             lastState = state
             onTimelineEvent?(
@@ -383,6 +392,22 @@ private struct StockPlayerView: UIViewControllerRepresentable {
                 player.currentTime().milliseconds ?? 0,
                 player.currentItem?.duration.milliseconds
             )
+        }
+
+        private func updateTimelineTimer(for state: MediaPlaybackTimelineState) {
+            guard state == .paused || state == .buffering else {
+                timelineTimer?.invalidate()
+                timelineTimer = nil
+                return
+            }
+
+            guard timelineTimer == nil else { return }
+
+            let timer = Timer(timeInterval: 15, repeats: true) { [weak self] _ in
+                self?.sendCurrentTimeline()
+            }
+            RunLoop.main.add(timer, forMode: .common)
+            timelineTimer = timer
         }
 
         private func state(for player: AVPlayer) -> MediaPlaybackTimelineState {

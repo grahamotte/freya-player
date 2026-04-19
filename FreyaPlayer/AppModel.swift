@@ -229,8 +229,8 @@ final class AppModel: ObservableObject {
         try await connector(for: id.providerID).playbackOptions(for: id)
     }
 
-    func playbackURL(for id: MediaPlaybackID, selection: MediaPlaybackSelection? = nil) async throws -> URL {
-        try await connector(for: id.providerID).playbackURL(for: id, selection: selection)
+    func playbackURL(for id: MediaPlaybackID, selection: MediaPlaybackSelection? = nil, sessionID: String) async throws -> URL {
+        try await connector(for: id.providerID).playbackURL(for: id, selection: selection, sessionID: sessionID)
     }
 
     func reportPlaybackTimeline(

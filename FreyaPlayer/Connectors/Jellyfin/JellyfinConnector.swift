@@ -172,7 +172,7 @@ final class JellyfinConnector: JellyfinConnecting {
         )
     }
 
-    func playbackURL(for id: MediaPlaybackID, selection: MediaPlaybackSelection?) async throws -> URL {
+    func playbackURL(for id: MediaPlaybackID, selection: MediaPlaybackSelection?, sessionID _: String) async throws -> URL {
         guard let connection else {
             throw MediaConnectorError.unavailable
         }

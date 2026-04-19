@@ -12,7 +12,7 @@ protocol MediaConnector: AnyObject {
     func loadChildren(for item: MediaItem) async throws -> [MediaItem]
 
     func playbackOptions(for id: MediaPlaybackID) async throws -> MediaPlaybackOptions?
-    func playbackURL(for id: MediaPlaybackID, selection: MediaPlaybackSelection?) async throws -> URL
+    func playbackURL(for id: MediaPlaybackID, selection: MediaPlaybackSelection?, sessionID: String) async throws -> URL
     func reportPlaybackTimeline(
         for id: MediaPlaybackID,
         state: MediaPlaybackTimelineState,

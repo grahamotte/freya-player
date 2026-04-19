@@ -142,7 +142,7 @@ final class PlexConnector: PlexConnecting {
         return try await client.playbackOptions(for: id.itemID, connection: connection)
     }
 
-    func playbackURL(for id: MediaPlaybackID, selection: MediaPlaybackSelection?) async throws -> URL {
+    func playbackURL(for id: MediaPlaybackID, selection: MediaPlaybackSelection?, sessionID: String) async throws -> URL {
         guard let connection else {
             throw MediaConnectorError.unavailable
         }
@@ -150,7 +150,8 @@ final class PlexConnector: PlexConnecting {
         return try await client.playbackURL(
             for: id.itemID,
             connection: connection,
-            selection: selection
+            selection: selection,
+            sessionID: sessionID
         )
     }
 

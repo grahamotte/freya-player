@@ -94,9 +94,9 @@ final class MediaItemQuickActionHandler {
         guard let presenter, let playbackID = item.playbackID else { return }
 
         do {
-            let url = try await model.playbackURL(for: playbackID)
-            let player = AVPlayer(url: url)
             let sessionID = UUID().uuidString
+            let url = try await model.playbackURL(for: playbackID, sessionID: sessionID)
+            let player = AVPlayer(url: url)
             let controller = QuickPlayPlayerViewController(
                 player: player,
                 resumeOffsetMilliseconds: item.resumeOffsetMilliseconds,

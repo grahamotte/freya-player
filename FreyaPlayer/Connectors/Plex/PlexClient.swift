@@ -85,7 +85,8 @@ final class PlexClient {
     func playbackURL(
         for ratingKey: String,
         connection: PlexConnectionSummary,
-        selection: MediaPlaybackSelection? = nil
+        selection: MediaPlaybackSelection? = nil,
+        sessionID: String
     ) async throws -> URL {
         let metadata = try await fetchPlaybackMetadata(
             ratingKey: ratingKey,
@@ -100,8 +101,6 @@ final class PlexClient {
                 subtitleStreamID: selection.subtitleID,
                 connection: connection
             )
-
-            let sessionID = UUID().uuidString
 
             try await preparePlaybackSession(
                 ratingKey: ratingKey,
@@ -127,8 +126,6 @@ final class PlexClient {
         }
 
         let forceTranscode = false
-        let sessionID = UUID().uuidString
-
         try await preparePlaybackSession(
             ratingKey: ratingKey,
             connection: connection,
