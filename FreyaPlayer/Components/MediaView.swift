@@ -64,7 +64,7 @@ struct MediaView<Content: View>: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .background {
-            MediaBackdropView(url: data.backdropURL)
+            MediaBackdropView(artworkURL: data.artworkURL, backdropURL: data.backdropURL)
         }
     }
 
@@ -171,19 +171,36 @@ private struct MediaViewMetrics {
 }
 
 private struct MediaBackdropView: View {
-    let url: URL?
+    let artworkURL: URL?
+    let backdropURL: URL?
+    @State private var colors: [Color] = []
+
+    private var paletteURL: URL? {
+        artworkURL ?? backdropURL
+    }
 
     var body: some View {
         ZStack {
             AppBackground()
 
-            AsyncImage(url: url) { phase in
+            if !colors.isEmpty {
+                AmbientMeshBackground(
+                    colors: colors,
+                    hueRotationRange: 0,
+                    blurRadius: 132,
+                    saturation: 0.9,
+                    opacity: 0.66
+                )
+                .ignoresSafeArea()
+            }
+
+            AsyncImage(url: backdropURL) { phase in
                 if case .success(let image) = phase {
                     image
                         .resizable()
                         .scaledToFill()
                         .blur(radius: 56)
-                        .opacity(0.32)
+                        .opacity(0.16)
                 }
             }
             .ignoresSafeArea()
@@ -208,6 +225,15 @@ private struct MediaBackdropView: View {
                 endPoint: .leading
             )
             .ignoresSafeArea()
+        }
+        .task(id: paletteURL) {
+            colors = []
+            guard let paletteURL else { return }
+            guard let image = await ArtworkImageCache.shared.loadImage(from: paletteURL) else { return }
+
+            let palette = ArtworkPalette.colors(from: image)
+            guard !palette.isEmpty else { return }
+            colors = palette
         }
     }
 }
