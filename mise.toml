@@ -1,6 +1,6 @@
 [tasks.build]
-description = "Build Freya Player for the tvOS simulator"
-run = "./scripts/build-tvos.sh"
+description = "Build Freya Player for the tvOS and iPad simulators"
+run = ["./scripts/build-tvos.sh", "./scripts/build-ipad.sh"]
 
 [tasks.start]
 description = "Rebuild, install, and launch Freya Player in the Apple TV and iPad simulators"
@@ -9,3 +9,18 @@ run = "./scripts/start.sh"
 [tasks.xcode]
 description = "Open Freya Player in Xcode"
 run = "open FreyaPlayer.xcodeproj"
+
+[tasks.push]
+description = "Force-push master to Codeberg (origin) and GitHub (origin_backup)"
+run = '''
+set -euo pipefail
+push_to() {
+  local remote="$1"
+  local repo="$2"
+  git remote remove "$remote" 2>/dev/null || true
+  git remote add "$remote" "$repo"
+  git push -f "$remote" master
+}
+push_to origin "ssh://git@codeberg.org/grahamotte/freya-player.git"
+push_to origin_backup "git@github.com:grahamotte/freya-player.git"
+'''
