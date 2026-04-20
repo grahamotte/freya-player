@@ -109,7 +109,7 @@ struct MediaCollectionWatchStatusButton: View {
                 }
             }
         )
-        .disabled(isLoading || isUpdating)
+        .disabled(isUpdating)
         .task(id: reloadID) {
             await loadTargets()
         }
@@ -203,7 +203,14 @@ private struct MediaWatchStatusMenu: View {
 
                 Button("Mark Unwatched", action: onMarkUnwatched)
             } label: {
-                Label(title, systemImage: MediaWatchStatusDisplay.iconName)
+                HStack(spacing: 10) {
+                    if isUpdating {
+                        ProgressView()
+                            .controlSize(.small)
+                    }
+
+                    Label(title, systemImage: MediaWatchStatusDisplay.iconName)
+                }
             }
             .buttonStyle(MediaGlassButtonStyle(tint: MediaWatchStatusDisplay.buttonColor(progress: progress, isWatched: isWatched)))
             .fixedSize(horizontal: true, vertical: false)
