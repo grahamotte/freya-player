@@ -99,8 +99,10 @@ struct IpadLibraryPageContent: View {
             HStack(alignment: .top, spacing: 12) {
                 Menu {
                     ForEach(LibraryPageFilter.allCases, id: \.rawValue) { candidate in
-                        Button(candidate.title) {
+                        Button {
                             setFilter(candidate)
+                        } label: {
+                            menuItemTitle(candidate.title, isSelected: candidate == filter)
                         }
                     }
                 } label: {
@@ -112,16 +114,20 @@ struct IpadLibraryPageContent: View {
                 Menu {
                     Section("Field") {
                         ForEach(LibraryPageSort.allCases, id: \.rawValue) { candidate in
-                            Button(candidate.title) {
+                            Button {
                                 setSort(candidate)
+                            } label: {
+                                menuItemTitle(candidate.title, isSelected: candidate == sort)
                             }
                         }
                     }
 
                     Section("Order") {
                         ForEach(LibraryPageSortOrder.allCases, id: \.rawValue) { candidate in
-                            Button(candidate.title) {
+                            Button {
                                 setSortOrder(candidate)
+                            } label: {
+                                menuItemTitle(candidate.title, isSelected: candidate == sortOrder)
                             }
                         }
                     }
@@ -172,6 +178,15 @@ struct IpadLibraryPageContent: View {
     private func setSortOrder(_ order: LibraryPageSortOrder) {
         sortOrder = order
         store.setLibrarySortOrder(order, for: library)
+    }
+
+    @ViewBuilder
+    private func menuItemTitle(_ title: String, isSelected: Bool) -> some View {
+        if isSelected {
+            Label(title, systemImage: "checkmark")
+        } else {
+            Text(title)
+        }
     }
 
     private func loadItems(showSpinner: Bool) async {
