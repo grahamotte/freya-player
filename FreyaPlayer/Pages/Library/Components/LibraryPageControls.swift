@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 
 enum LibraryPageFilter: Int, CaseIterable {
     case all
@@ -117,10 +118,84 @@ enum LibraryPageSortOrder: Int, CaseIterable {
     }
 }
 
+struct LibraryPageFilterControl: View {
+    let filter: LibraryPageFilter
+    let onChange: (LibraryPageFilter) -> Void
+
+    var body: some View {
+        Menu {
+            ForEach(LibraryPageFilter.allCases, id: \.rawValue) { candidate in
+                Button {
+                    onChange(candidate)
+                } label: {
+                    LibraryPageMenuItemTitle(title: candidate.title, isSelected: candidate == filter)
+                }
+            }
+        } label: {
+            Label(filter.title, systemImage: "line.3.horizontal.decrease")
+        }
+        .buttonStyle(MediaGlassButtonStyle())
+        .fixedSize(horizontal: true, vertical: false)
+    }
+}
+
+struct LibraryPageSortControl: View {
+    let sort: LibraryPageSort
+    let order: LibraryPageSortOrder
+    let onSortChange: (LibraryPageSort) -> Void
+    let onSortOrderChange: (LibraryPageSortOrder) -> Void
+
+    var body: some View {
+        Menu {
+            Section("Field") {
+                ForEach(LibraryPageSort.allCases, id: \.rawValue) { candidate in
+                    Button {
+                        onSortChange(candidate)
+                    } label: {
+                        LibraryPageMenuItemTitle(title: candidate.title, isSelected: candidate == sort)
+                    }
+                }
+            }
+
+            Section("Order") {
+                ForEach(LibraryPageSortOrder.allCases, id: \.rawValue) { candidate in
+                    Button {
+                        onSortOrderChange(candidate)
+                    } label: {
+                        LibraryPageMenuItemTitle(title: candidate.title, isSelected: candidate == order)
+                    }
+                }
+            }
+        } label: {
+            Label("\(sort.title) \(order.shortTitle)", systemImage: "arrow.up.arrow.down")
+        }
+        .buttonStyle(MediaGlassButtonStyle())
+        .fixedSize(horizontal: true, vertical: false)
+    }
+}
+
+private struct LibraryPageMenuItemTitle: View {
+    let title: String
+    let isSelected: Bool
+
+    var body: some View {
+        if isSelected {
+            Label(title, systemImage: "checkmark")
+        } else {
+            Text(title)
+        }
+    }
+}
+
 extension MediaSessionStore {
     func libraryFilter(for library: LibraryReference) -> LibraryPageFilter {
+        if let rawValue = libraryFilterRawValue(for: library),
+           let filter = LibraryPageFilter(rawValue: rawValue) {
+            return filter
+        }
+
         guard
-            let rawValue = libraryFilterRawValue(for: library),
+            let rawValue = defaultLibraryFilterRawValue(providerID: library.providerID, serverID: library.serverID),
             let filter = LibraryPageFilter(rawValue: rawValue)
         else {
             return .all
@@ -133,9 +208,29 @@ extension MediaSessionStore {
         setLibraryFilterRawValue(filter.rawValue, for: library)
     }
 
-    func librarySort(for library: LibraryReference) -> LibraryPageSort {
+    func defaultLibraryFilter(providerID: MediaProviderID, serverID: String) -> LibraryPageFilter {
         guard
-            let rawValue = librarySortRawValue(for: library),
+            let rawValue = defaultLibraryFilterRawValue(providerID: providerID, serverID: serverID),
+            let filter = LibraryPageFilter(rawValue: rawValue)
+        else {
+            return .all
+        }
+
+        return filter
+    }
+
+    func setDefaultLibraryFilter(_ filter: LibraryPageFilter, providerID: MediaProviderID, serverID: String) {
+        setDefaultLibraryFilterRawValue(filter.rawValue, providerID: providerID, serverID: serverID)
+    }
+
+    func librarySort(for library: LibraryReference) -> LibraryPageSort {
+        if let rawValue = librarySortRawValue(for: library),
+           let sort = LibraryPageSort(rawValue: rawValue) {
+            return sort
+        }
+
+        guard
+            let rawValue = defaultLibrarySortRawValue(providerID: library.providerID, serverID: library.serverID),
             let sort = LibraryPageSort(rawValue: rawValue)
         else {
             return .title
@@ -148,9 +243,33 @@ extension MediaSessionStore {
         setLibrarySortRawValue(sort.rawValue, for: library)
     }
 
-    func librarySortOrder(for library: LibraryReference, sort: LibraryPageSort) -> LibraryPageSortOrder {
+    func defaultLibrarySort(providerID: MediaProviderID, serverID: String) -> LibraryPageSort {
         guard
-            let rawValue = librarySortOrderRawValue(for: library),
+            let rawValue = defaultLibrarySortRawValue(providerID: providerID, serverID: serverID),
+            let sort = LibraryPageSort(rawValue: rawValue)
+        else {
+            return .title
+        }
+
+        return sort
+    }
+
+    func setDefaultLibrarySort(_ sort: LibraryPageSort, providerID: MediaProviderID, serverID: String) {
+        setDefaultLibrarySortRawValue(sort.rawValue, providerID: providerID, serverID: serverID)
+    }
+
+    func librarySortOrder(for library: LibraryReference, sort: LibraryPageSort) -> LibraryPageSortOrder {
+        if let rawValue = librarySortOrderRawValue(for: library),
+           let order = LibraryPageSortOrder(rawValue: rawValue) {
+            return order
+        }
+
+        if librarySortRawValue(for: library) != nil {
+            return sort.defaultOrder
+        }
+
+        guard
+            let rawValue = defaultLibrarySortOrderRawValue(providerID: library.providerID, serverID: library.serverID),
             let order = LibraryPageSortOrder(rawValue: rawValue)
         else {
             return sort.defaultOrder
@@ -163,7 +282,53 @@ extension MediaSessionStore {
         setLibrarySortOrderRawValue(order.rawValue, for: library)
     }
 
+    func defaultLibrarySortOrder(
+        providerID: MediaProviderID,
+        serverID: String,
+        sort: LibraryPageSort
+    ) -> LibraryPageSortOrder {
+        guard
+            let rawValue = defaultLibrarySortOrderRawValue(providerID: providerID, serverID: serverID),
+            let order = LibraryPageSortOrder(rawValue: rawValue)
+        else {
+            return sort.defaultOrder
+        }
+
+        return order
+    }
+
+    func setDefaultLibrarySortOrder(
+        _ order: LibraryPageSortOrder,
+        providerID: MediaProviderID,
+        serverID: String,
+        sort: LibraryPageSort
+    ) {
+        if order == sort.defaultOrder {
+            clearDefaultLibrarySortOrderRawValue(providerID: providerID, serverID: serverID)
+            return
+        }
+
+        setDefaultLibrarySortOrderRawValue(order.rawValue, providerID: providerID, serverID: serverID)
+    }
+
     func hasSavedLibrarySortOrder(for library: LibraryReference) -> Bool {
         librarySortOrderRawValue(for: library) != nil
+    }
+
+    func hasSavedDefaultLibrarySortOrder(providerID: MediaProviderID, serverID: String) -> Bool {
+        defaultLibrarySortOrderRawValue(providerID: providerID, serverID: serverID) != nil
+    }
+
+    func clearLibraryFilterOverrides(for libraries: [LibraryReference]) {
+        for library in libraries {
+            clearLibraryFilterRawValue(for: library)
+        }
+    }
+
+    func clearLibrarySortOverrides(for libraries: [LibraryReference]) {
+        for library in libraries {
+            clearLibrarySortRawValue(for: library)
+            clearLibrarySortOrderRawValue(for: library)
+        }
     }
 }

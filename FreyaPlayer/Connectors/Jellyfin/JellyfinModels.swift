@@ -190,6 +190,7 @@ extension JellyfinConnectionSummary {
             providerID: providerID,
             serverID: serverID,
             serverName: serverName,
+            serverURL: serverURL,
             accountName: userName,
             libraries: libraries.map {
                 $0.libraryShelf(

@@ -119,6 +119,7 @@ private final class LibraryPageCollectionViewController: UIViewController, UICol
     private let headerFocusGuide = UIFocusGuide()
     private var headerFocusGuideTopConstraint: NSLayoutConstraint?
     private var headerFocusGuideHeightConstraint: NSLayoutConstraint?
+    private var defaultsDidChangeObserver: NSObjectProtocol?
 
     init(
         model: AppModel,
@@ -190,11 +191,25 @@ private final class LibraryPageCollectionViewController: UIViewController, UICol
             headerFocusGuideTopConstraint!,
             headerFocusGuideHeightConstraint!
         ])
+
+        defaultsDidChangeObserver = NotificationCenter.default.addObserver(
+            forName: UserDefaults.didChangeNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.reloadSavedControls()
+        }
     }
 
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
         updateHeaderFocusGuide()
+    }
+
+    deinit {
+        if let defaultsDidChangeObserver {
+            NotificationCenter.default.removeObserver(defaultsDidChangeObserver)
+        }
     }
 
     func update(library: LibraryReference, items: [MediaItem]) {
@@ -448,6 +463,21 @@ private final class LibraryPageCollectionViewController: UIViewController, UICol
         )
 
         collectionView.setContentOffset(restoredOffset, animated: false)
+    }
+
+    private func reloadSavedControls() {
+        let nextFilter = store.libraryFilter(for: library)
+        let nextSort = store.librarySort(for: library)
+        let nextSortOrder = store.librarySortOrder(for: library, sort: nextSort)
+
+        guard filter != nextFilter || sort != nextSort || sortOrder != nextSortOrder else { return }
+
+        filter = nextFilter
+        sort = nextSort
+        sortOrder = nextSortOrder
+        reloadDataPreservingScrollPosition(true)
+        updateEmptyState()
+        refreshHeader()
     }
 
     private func applyingOptimisticWatchStatus(to item: MediaItem) -> MediaItem {

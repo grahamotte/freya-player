@@ -6,8 +6,7 @@ struct JellyfinSettingsPage: View {
     @Binding var path: [AppRoute]
 
     var body: some View {
-        ServerManagementPanel(model: model, path: $path, providerName: "Jellyfin")
-            .navigationTitle("Manage Jellyfin")
+        ServerManagementPanel(model: model, path: $path)
     }
 }
 #endif

@@ -169,7 +169,11 @@ final class AppModel: ObservableObject {
 
     func disconnectCurrentServer() {
         if let server = connectedServer {
-            mediaSessionStore.clearLibraryManagement(providerID: server.providerID, serverID: server.serverID)
+            mediaSessionStore.clearLibraryManagement(
+                providerID: server.providerID,
+                serverID: server.serverID,
+                libraries: server.libraries.map(\.reference)
+            )
         }
 
         restoreTask?.cancel()

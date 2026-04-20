@@ -12,6 +12,7 @@ struct IpadLibraryPageContent: View {
     @State private var sortOrder = LibraryPageSortOrder.ascending
 
     private let store = MediaSessionStore()
+    private let defaultsDidChange = NotificationCenter.default.publisher(for: UserDefaults.didChangeNotification)
 
     var body: some View {
         Group {
@@ -55,6 +56,9 @@ struct IpadLibraryPageContent: View {
                 await loadItems(showSpinner: items.isEmpty)
             }
         }
+        .onReceive(defaultsDidChange) { _ in
+            loadSavedControls()
+        }
     }
 
     private var columns: [GridItem] {
@@ -97,45 +101,14 @@ struct IpadLibraryPageContent: View {
             }
 
             HStack(alignment: .top, spacing: 12) {
-                Menu {
-                    ForEach(LibraryPageFilter.allCases, id: \.rawValue) { candidate in
-                        Button {
-                            setFilter(candidate)
-                        } label: {
-                            menuItemTitle(candidate.title, isSelected: candidate == filter)
-                        }
-                    }
-                } label: {
-                    Label(filter.title, systemImage: "line.3.horizontal.decrease")
-                }
-                .buttonStyle(MediaGlassButtonStyle())
-                .fixedSize(horizontal: true, vertical: false)
+                LibraryPageFilterControl(filter: filter, onChange: setFilter)
 
-                Menu {
-                    Section("Field") {
-                        ForEach(LibraryPageSort.allCases, id: \.rawValue) { candidate in
-                            Button {
-                                setSort(candidate)
-                            } label: {
-                                menuItemTitle(candidate.title, isSelected: candidate == sort)
-                            }
-                        }
-                    }
-
-                    Section("Order") {
-                        ForEach(LibraryPageSortOrder.allCases, id: \.rawValue) { candidate in
-                            Button {
-                                setSortOrder(candidate)
-                            } label: {
-                                menuItemTitle(candidate.title, isSelected: candidate == sortOrder)
-                            }
-                        }
-                    }
-                } label: {
-                    Label("\(sort.title) \(sortOrder.shortTitle)", systemImage: "arrow.up.arrow.down")
-                }
-                .buttonStyle(MediaGlassButtonStyle())
-                .fixedSize(horizontal: true, vertical: false)
+                LibraryPageSortControl(
+                    sort: sort,
+                    order: sortOrder,
+                    onSortChange: setSort,
+                    onSortOrderChange: setSortOrder
+                )
 
                 Spacer(minLength: 0)
 
@@ -178,15 +151,6 @@ struct IpadLibraryPageContent: View {
     private func setSortOrder(_ order: LibraryPageSortOrder) {
         sortOrder = order
         store.setLibrarySortOrder(order, for: library)
-    }
-
-    @ViewBuilder
-    private func menuItemTitle(_ title: String, isSelected: Bool) -> some View {
-        if isSelected {
-            Label(title, systemImage: "checkmark")
-        } else {
-            Text(title)
-        }
     }
 
     private func loadItems(showSpinner: Bool) async {

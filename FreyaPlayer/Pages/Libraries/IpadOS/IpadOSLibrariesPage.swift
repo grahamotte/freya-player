@@ -29,7 +29,7 @@ struct LibrariesPage: View {
                         ScrollView(.horizontal) {
                             HStack(alignment: .top, spacing: 16) {
                                 NavigationLink(value: shelf.reference.route) {
-                                    OpenLibraryCard(title: shelf.title, artworkStyle: artworkStyle)
+                                    OpenLibraryCard(artworkStyle: artworkStyle)
                                         .frame(width: cardWidth)
                                 }
                                 .buttonStyle(.plain)
@@ -53,7 +53,7 @@ struct LibrariesPage: View {
         .scrollIndicators(.hidden)
         .background(LibrariesAmbientBackground())
         .toolbar {
-            Button("Settings") {
+            Button("Manage") {
                 path.append(server.providerID.settingsRoute)
             }
         }
@@ -66,7 +66,6 @@ struct LibrariesPage: View {
 }
 
 private struct OpenLibraryCard: View {
-    let title: String
     let artworkStyle: MediaArtworkStyle
 
     var body: some View {
@@ -85,10 +84,6 @@ private struct OpenLibraryCard: View {
                     .padding(18)
                 }
                 .aspectRatio(artworkStyle.aspectRatio, contentMode: .fit)
-
-            Text(title)
-                .font(.headline)
-                .lineLimit(2)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }

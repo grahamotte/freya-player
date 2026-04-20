@@ -4,113 +4,111 @@ struct ServerManagementPanel: View {
     @ObservedObject var model: AppModel
     @Binding var path: [AppRoute]
 
-    let providerName: String
+    @State private var defaultFilter = LibraryPageFilter.all
+    @State private var defaultSort = LibraryPageSort.title
+    @State private var defaultSortOrder = LibraryPageSortOrder.ascending
+    @State private var isShowingDeactivateAlert = false
+
+    private let store = MediaSessionStore()
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 28) {
-                Text("\(providerName) Server")
-                    .font(.title3.weight(.semibold))
-
-                Text(model.connectedServer?.serverName ?? "Unknown Server")
-                    .font(.title2.weight(.semibold))
-
-                Text(model.connectedServer?.accountName ?? providerName)
-                    .foregroundStyle(AppTheme.secondaryText)
-
-                if let server = model.connectedServer {
-                    VStack(alignment: .leading, spacing: 16) {
-                        Text("Libraries")
-                            .font(.headline)
-
-                        VStack(spacing: 14) {
-                            ForEach(Array(server.libraries.enumerated()), id: \.element.id) { index, library in
-                                LibraryOrderRow(
-                                    title: library.title,
-                                    isHidden: library.isHidden,
-                                    canMoveUp: index > 0,
-                                    canMoveDown: index < server.libraries.count - 1,
-                                    toggleVisibility: {
-                                        model.setLibraryHidden(!library.isHidden, at: index)
-                                    },
-                                    moveUp: { model.moveLibrary(at: index, by: -1) },
-                                    moveDown: { model.moveLibrary(at: index, by: 1) }
-                                )
-                            }
-                        }
+            if let server = model.connectedServer {
+                VStack(alignment: .leading, spacing: 24) {
+                    ServerManagementServerSection(server: server) {
+                        isShowingDeactivateAlert = true
                     }
-                }
 
-                Button("Deactivate Server") {
-                    model.disconnectCurrentServer()
-                    path.removeAll()
+                    ServerManagementSortSection(
+                        defaultFilter: defaultFilter,
+                        defaultSort: defaultSort,
+                        defaultSortOrder: defaultSortOrder,
+                        onFilterChange: { filter in
+                            setDefaultFilter(filter, for: server)
+                        },
+                        onSortChange: { sort in
+                            setDefaultSort(sort, for: server)
+                        },
+                        onSortOrderChange: { order in
+                            setDefaultSortOrder(order, for: server)
+                        }
+                    )
+
+                    ServerManagementLibrariesSection(
+                        libraries: server.libraries,
+                        onToggleVisibility: { index, isHidden in
+                            model.setLibraryHidden(isHidden, at: index)
+                        },
+                        onMoveLibrary: { index, offset in
+                            model.moveLibrary(at: index, by: offset)
+                        }
+                    )
                 }
-                .buttonStyle(MediaGlassButtonStyle(tint: .red))
-                .padding(.top, 8)
+                .frame(maxWidth: 860, alignment: .leading)
+                .padding(32)
+                .padding(48)
+                .frame(maxWidth: .infinity, alignment: .center)
             }
-            .frame(maxWidth: 860, alignment: .leading)
-            .padding(32)
-            .background(PanelBackground())
-            .padding(48)
-            .frame(maxWidth: .infinity, alignment: .center)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(AppBackground())
-    }
-}
-
-private struct LibraryOrderRow: View {
-    let title: String
-    let isHidden: Bool
-    let canMoveUp: Bool
-    let canMoveDown: Bool
-    let toggleVisibility: () -> Void
-    let moveUp: () -> Void
-    let moveDown: () -> Void
-
-    var body: some View {
-        HStack(spacing: 16) {
-            Button(action: toggleVisibility) {
-                Image(systemName: isHidden ? "eye.slash" : "eye")
-                    .font(.title3.weight(.semibold))
-                    .frame(width: 32, height: 32)
-            }
-            .buttonStyle(MediaGlassButtonStyle(horizontalPadding: 18, verticalPadding: 18))
-
-            Button(action: moveUp) {
-                Image(systemName: "arrow.up")
-                    .font(.title3.weight(.semibold))
-                    .frame(width: 32, height: 32)
-            }
-            .buttonStyle(MediaGlassButtonStyle(horizontalPadding: 18, verticalPadding: 18))
-            .disabled(!canMoveUp)
-
-            Button(action: moveDown) {
-                Image(systemName: "arrow.down")
-                    .font(.title3.weight(.semibold))
-                    .frame(width: 32, height: 32)
-            }
-            .buttonStyle(MediaGlassButtonStyle(horizontalPadding: 18, verticalPadding: 18))
-            .disabled(!canMoveDown)
-
-            Text(title)
-                .font(.title3.weight(.medium))
-                .lineLimit(1)
-                .foregroundStyle(isHidden ? AppTheme.secondaryText : AppTheme.primaryText)
-
-            Spacer(minLength: 0)
+        .task(id: model.connectedServer?.id) {
+            loadDefaults()
         }
-        .padding(.horizontal, 18)
-        .padding(.vertical, 16)
-        .background(rowBackground)
+        .alert("Deactivate Server?", isPresented: $isShowingDeactivateAlert) {
+            Button("Cancel", role: .cancel) {}
+            Button("Deactivate", role: .destructive) {
+                model.disconnectCurrentServer()
+                path.removeAll()
+            }
+        } message: {
+            Text("This removes the current server from Freya Player.")
+        }
     }
 
-    private var rowBackground: some View {
-        RoundedRectangle(cornerRadius: 28, style: .continuous)
-            .fill(AppTheme.subtleSurfaceFill)
-            .overlay {
-                RoundedRectangle(cornerRadius: 28, style: .continuous)
-                    .stroke(AppTheme.surfaceBorder, lineWidth: 1)
-            }
+    private func loadDefaults() {
+        guard let server = model.connectedServer else { return }
+        defaultFilter = store.defaultLibraryFilter(providerID: server.providerID, serverID: server.serverID)
+        defaultSort = store.defaultLibrarySort(providerID: server.providerID, serverID: server.serverID)
+        defaultSortOrder = store.defaultLibrarySortOrder(
+            providerID: server.providerID,
+            serverID: server.serverID,
+            sort: defaultSort
+        )
+    }
+
+    private func setDefaultFilter(_ filter: LibraryPageFilter, for server: ConnectedServer) {
+        defaultFilter = filter
+        store.setDefaultLibraryFilter(filter, providerID: server.providerID, serverID: server.serverID)
+        store.clearLibraryFilterOverrides(for: server.libraries.map(\.reference))
+    }
+
+    private func setDefaultSort(_ sort: LibraryPageSort, for server: ConnectedServer) {
+        defaultSort = sort
+
+        if !store.hasSavedDefaultLibrarySortOrder(providerID: server.providerID, serverID: server.serverID) {
+            defaultSortOrder = sort.defaultOrder
+        }
+
+        store.setDefaultLibrarySort(sort, providerID: server.providerID, serverID: server.serverID)
+        store.setDefaultLibrarySortOrder(
+            defaultSortOrder,
+            providerID: server.providerID,
+            serverID: server.serverID,
+            sort: sort
+        )
+        store.clearLibrarySortOverrides(for: server.libraries.map(\.reference))
+    }
+
+    private func setDefaultSortOrder(_ order: LibraryPageSortOrder, for server: ConnectedServer) {
+        defaultSortOrder = order
+        store.setDefaultLibrarySort(defaultSort, providerID: server.providerID, serverID: server.serverID)
+        store.setDefaultLibrarySortOrder(
+            order,
+            providerID: server.providerID,
+            serverID: server.serverID,
+            sort: defaultSort
+        )
+        store.clearLibrarySortOverrides(for: server.libraries.map(\.reference))
     }
 }

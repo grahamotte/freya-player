@@ -4,6 +4,7 @@ struct ConnectedServer: Equatable, Identifiable {
     let providerID: MediaProviderID
     let serverID: String
     let serverName: String
+    let serverURL: String
     let accountName: String
     let libraries: [LibraryShelf]
 
@@ -16,6 +17,7 @@ struct ConnectedServer: Equatable, Identifiable {
             providerID: providerID,
             serverID: serverID,
             serverName: serverName,
+            serverURL: serverURL,
             accountName: accountName,
             libraries: libraries
         )

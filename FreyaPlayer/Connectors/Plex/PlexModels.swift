@@ -257,6 +257,7 @@ extension PlexConnectionSummary {
             providerID: providerID,
             serverID: serverID,
             serverName: serverName,
+            serverURL: serverURL,
             accountName: accountName,
             libraries: libraries.map {
                 $0.libraryShelf(
