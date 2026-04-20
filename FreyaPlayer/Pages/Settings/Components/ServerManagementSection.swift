@@ -19,6 +19,7 @@ struct ServerManagementSection<Content: View>: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(24)
         .background(PanelBackground())
+        .serverManagementFocusSection()
     }
 }
 
@@ -41,5 +42,16 @@ struct ServerManagementControlRow<Control: View>: View {
             control
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+private extension View {
+    @ViewBuilder
+    func serverManagementFocusSection() -> some View {
+#if os(tvOS)
+        focusSection()
+#else
+        self
+#endif
     }
 }

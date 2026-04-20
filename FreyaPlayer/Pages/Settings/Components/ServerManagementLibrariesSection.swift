@@ -42,13 +42,13 @@ private struct ServerManagementLibraryRow: View {
     var body: some View {
         HStack(spacing: 16) {
             Button(action: onMoveUp) {
-                rowIcon("arrow.up")
+                rowIcon("arrow.up", iconSize: 24, frameSize: 24, textStyle: .headline)
             }
             .buttonStyle(rowButtonStyle)
             .disabled(!canMoveUp)
 
             Button(action: onMoveDown) {
-                rowIcon("arrow.down")
+                rowIcon("arrow.down", iconSize: 24, frameSize: 24, textStyle: .headline)
             }
             .buttonStyle(rowButtonStyle)
             .disabled(!canMoveDown)
@@ -56,12 +56,18 @@ private struct ServerManagementLibraryRow: View {
             Text(title)
                 .font(.title3.weight(.medium))
                 .lineLimit(1)
+                .strikethrough(isHidden, color: AppTheme.secondaryText)
                 .foregroundStyle(isHidden ? AppTheme.secondaryText : AppTheme.primaryText)
 
             Spacer(minLength: 0)
 
             Button(action: onToggleVisibility) {
-                rowIcon(isHidden ? "eye.slash" : "eye")
+                rowIcon(
+                    isHidden ? "eye.slash" : "eye",
+                    iconSize: visibilityIconSize,
+                    frameSize: 24,
+                    textStyle: .subheadline
+                )
             }
             .buttonStyle(rowButtonStyle)
         }
@@ -74,10 +80,24 @@ private struct ServerManagementLibraryRow: View {
         MediaGlassButtonStyle(horizontalPadding: 14, verticalPadding: 14)
     }
 
-    private func rowIcon(_ systemName: String) -> some View {
+    private var visibilityIconSize: CGFloat {
+#if os(tvOS)
+        16
+#else
+        18
+#endif
+    }
+
+    private func rowIcon(
+        _ systemName: String,
+        iconSize: CGFloat,
+        frameSize: CGFloat,
+        textStyle: Font.TextStyle
+    ) -> some View {
         Image(systemName: systemName)
-            .font(.headline)
-            .frame(width: 24, height: 24)
+            .font(.system(textStyle, weight: .semibold))
+            .frame(width: iconSize, height: iconSize)
+            .frame(width: frameSize, height: frameSize)
     }
 
     private var rowBackground: some View {
