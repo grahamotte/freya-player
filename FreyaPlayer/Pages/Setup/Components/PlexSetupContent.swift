@@ -12,10 +12,6 @@ struct PlexSetupContent: View {
                 Label("Plex", systemImage: "play.rectangle.fill")
                     .font(.title3.weight(.semibold))
 
-                Label("Plex services have been degrading over time. Jellyfin is recommended if you can switch.", systemImage: "exclamationmark.triangle.fill")
-                    .font(.footnote)
-                    .foregroundStyle(.orange)
-
                 switch model.connectionState {
                 case .checking:
                     ProgressView("Checking saved Plex connection...")
