@@ -1,6 +1,5 @@
 import SwiftUI
 
-#if os(tvOS)
 struct PlexSetupPage: View {
     @ObservedObject var model: AppModel
 
@@ -8,4 +7,11 @@ struct PlexSetupPage: View {
         PlexSetupContent(model: model)
     }
 }
-#endif
+
+struct JellyfinSetupPage: View {
+    @ObservedObject var model: AppModel
+
+    var body: some View {
+        JellyfinSetupContent(model: model)
+    }
+}
