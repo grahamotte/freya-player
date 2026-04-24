@@ -3,6 +3,7 @@ import SwiftUI
 struct PlexSetupContent: View {
     @ObservedObject var model: AppModel
     @Environment(\.dismiss) private var dismiss
+    @State private var showingPlexNotice = false
 
     var body: some View {
         VStack(spacing: 36) {
@@ -72,7 +73,18 @@ struct PlexSetupContent: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(AppBackground())
         .task {
-            model.preparePlexSetup()
+            showingPlexNotice = true
+        }
+        .alert("Before You Use Plex", isPresented: $showingPlexNotice) {
+            Button("I Understand, Continue") {
+                model.preparePlexSetup()
+            }
+
+            Button("Cancel", role: .cancel) {
+                dismiss()
+            }
+        } message: {
+            Text("Plex depends on plex.tv services for sign-in and server discovery, so using Plex means communicating to more than your own server.\n\nPlex may record login, connection, and watch history activity. Freya Player is committed to never tracking you, but we have no control or insight into what Plex collects while acting between this app and your server.\n\nIf Jellyfin is an option for you, we strongly recommend switching to it.")
         }
         .onDisappear {
             model.cancelPlexSetup()

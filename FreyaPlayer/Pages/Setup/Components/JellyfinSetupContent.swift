@@ -75,10 +75,14 @@ struct JellyfinSetupContent: View {
                 .font(.footnote.weight(.semibold))
                 .foregroundStyle(AppTheme.secondaryText)
 
+            #if os(tvOS)
+            content()
+            #else
             content()
                 .padding(.horizontal, 18)
                 .padding(.vertical, 14)
                 .background(AppTheme.surfaceFill, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            #endif
         }
     }
 }
