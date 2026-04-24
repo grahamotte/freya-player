@@ -6,20 +6,19 @@ struct LibrariesPage: View {
     let server: ConnectedServer
     @Binding var path: [AppRoute]
 
-    private var visibleLibraries: [LibraryShelf] {
-        server.libraries.filter { !$0.isHidden }
+    private var projection: LibrariesHomeProjection {
+        LibrariesHomeProjection(server: server)
     }
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 32) {
-                Text(server.serverName)
+                Text(projection.serverName)
                     .font(.largeTitle.weight(.bold))
                 .padding(.horizontal, 32)
 
-                ForEach(visibleLibraries) { shelf in
-                    let previewItems = shelf.recentUnwatchedItems
-                    let artworkStyle = shelf.reference.artworkStyle
+                ForEach(projection.shelves) { shelf in
+                    let artworkStyle = shelf.artworkStyle
                     let cardWidth: CGFloat = artworkStyle == .poster ? 180 : 280
                     VStack(alignment: .leading, spacing: 16) {
                         Text(shelf.title)
@@ -28,13 +27,13 @@ struct LibrariesPage: View {
 
                         ScrollView(.horizontal) {
                             HStack(alignment: .top, spacing: 16) {
-                                NavigationLink(value: shelf.reference.route) {
+                                NavigationLink(value: shelf.libraryRoute) {
                                     OpenLibraryCard(artworkStyle: artworkStyle)
                                         .frame(width: cardWidth)
                                 }
                                 .buttonStyle(.plain)
 
-                                ForEach(previewItems) { item in
+                                ForEach(shelf.previewItems) { item in
                                     NavigationLink(value: item.route) {
                                         LibraryItemCard(item: item, artworkStyle: artworkStyle)
                                             .frame(width: cardWidth)
@@ -54,7 +53,7 @@ struct LibrariesPage: View {
         .background(LibrariesAmbientBackground())
         .toolbar {
             Button("Manage") {
-                path.append(server.providerID.settingsRoute)
+                path.append(projection.manageRoute)
             }
         }
         .task(id: server.id) {

@@ -11,8 +11,7 @@ struct TvOSLibrariesPageContent: View {
         LibrariesCollectionView(
             model: model,
             server: server,
-            onSelectRoute: { path.append($0) },
-            onManageServer: { path.append(server.providerID.settingsRoute) }
+            onSelectRoute: { path.append($0) }
         )
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(LibrariesAmbientBackground())
@@ -28,14 +27,12 @@ private struct LibrariesCollectionView: UIViewControllerRepresentable {
     let model: AppModel
     let server: ConnectedServer
     let onSelectRoute: (AppRoute) -> Void
-    let onManageServer: () -> Void
 
     func makeUIViewController(context: Context) -> LibrariesCollectionViewController {
         LibrariesCollectionViewController(
             model: model,
             server: server,
-            onSelectRoute: onSelectRoute,
-            onManageServer: onManageServer
+            onSelectRoute: onSelectRoute
         )
     }
 
@@ -49,7 +46,6 @@ private final class LibrariesCollectionViewController: UIViewController, UIColle
 
     private let model: AppModel
     private let onSelectRoute: (AppRoute) -> Void
-    private let onManageServer: () -> Void
 
     private var server: ConnectedServer
     private var sections: [LibrariesSection] = []
@@ -80,13 +76,11 @@ private final class LibrariesCollectionViewController: UIViewController, UIColle
     init(
         model: AppModel,
         server: ConnectedServer,
-        onSelectRoute: @escaping (AppRoute) -> Void,
-        onManageServer: @escaping () -> Void
+        onSelectRoute: @escaping (AppRoute) -> Void
     ) {
         self.model = model
         self.server = server
         self.onSelectRoute = onSelectRoute
-        self.onManageServer = onManageServer
         super.init(nibName: nil, bundle: nil)
         sections = makeSections(from: server)
         selectedTitles = makeSelectedTitles(from: sections)
@@ -354,24 +348,23 @@ private final class LibrariesCollectionViewController: UIViewController, UIColle
     }
 
     private func makeSections(from server: ConnectedServer) -> [LibrariesSection] {
-        let librarySections = server.libraries.filter { !$0.isHidden }.map { library in
-            let style = library.reference.artworkStyle == .poster ? LibrariesShelfStyle.poster : .wide
-            let items = library.items.map(applyingOptimisticWatchStatus)
-            let previewItems = library.recentUnwatchedItems(from: items)
+        let projection = LibrariesHomeProjection(server: server, itemTransform: applyingOptimisticWatchStatus)
+        let librarySections = projection.shelves.map { shelf in
+            let style = shelf.artworkStyle == .poster ? LibrariesShelfStyle.poster : .wide
             let openItem = LibrariesItem(
-                id: "\(library.id)-open",
-                title: library.title,
+                id: "\(shelf.id)-open",
+                title: shelf.title,
                 artworkURL: nil,
                 progress: nil,
                 isWatched: false,
                 mediaItem: nil,
-                route: library.reference.route,
+                route: shelf.libraryRoute,
                 style: style,
                 kind: .openLibrary,
                 iconName: "arrow.right"
             )
 
-            let mediaItems = previewItems.map { item in
+            let mediaItems = shelf.previewItems.map { item in
                 LibrariesItem(
                     id: item.id,
                     title: item.title,
@@ -387,12 +380,12 @@ private final class LibrariesCollectionViewController: UIViewController, UIColle
             }
 
             return LibrariesSection(
-                id: library.id,
-                title: library.title,
+                id: shelf.id,
+                title: shelf.title,
                 kind: .library(style),
                 items: [openItem] + mediaItems,
-                defaultSelectionTitle: library.title,
-                emptyMessage: previewItems.isEmpty ? "No recent items yet." : nil
+                defaultSelectionTitle: shelf.title,
+                emptyMessage: shelf.emptyMessage
             )
         }
 
@@ -408,7 +401,7 @@ private final class LibrariesCollectionViewController: UIViewController, UIColle
                     progress: nil,
                     isWatched: false,
                     mediaItem: nil,
-                    route: nil,
+                    route: projection.manageRoute,
                     style: .wide,
                     kind: .manageServer,
                     iconName: nil
@@ -486,13 +479,8 @@ private final class LibrariesCollectionViewController: UIViewController, UIColle
     }
 
     private func handlePrimaryAction(for item: LibrariesItem) {
-        switch item.kind {
-        case .manageServer:
-            onManageServer()
-        case .openLibrary, .media:
-            guard let route = item.route else { return }
-            onSelectRoute(route)
-        }
+        guard let route = item.route else { return }
+        onSelectRoute(route)
     }
 
     private func focusedQuickActionItem() -> MediaItem? {
