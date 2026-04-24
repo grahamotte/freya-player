@@ -100,19 +100,19 @@ final class MediaItemQuickActionHandler {
             let controller = QuickPlayPlayerViewController(
                 player: player,
                 resumeOffsetMilliseconds: item.resumeOffsetMilliseconds,
-                onStart: { [weak self] player in
+                onTimelineEvent: { [weak self] state, time, duration in
                     guard let self else { return }
                     Task {
                         await self.model.reportPlaybackTimeline(
                             for: playbackID,
-                            state: .playing,
-                            time: player.currentTime().milliseconds ?? 0,
-                            duration: player.currentItem?.duration.milliseconds,
+                            state: state,
+                            time: time,
+                            duration: duration,
                             sessionID: sessionID
                         )
                     }
                 },
-                onPlaybackEnded: { [weak self] in
+                onPlaybackEnded: { [weak self] _, _ in
                     guard let self else { return }
                     Task {
                         await self.model.markPlaybackCompleted(for: playbackID)
@@ -168,27 +168,23 @@ final class MediaItemQuickActionHandler {
 final class QuickPlayPlayerViewController: AVPlayerViewController {
     private let managedPlayer: AVPlayer
     private let resumeOffsetMilliseconds: Int?
-    private let onStart: (AVPlayer) -> Void
-    private let onPlaybackEnded: () -> Void
+    private let onTimelineEvent: (MediaPlaybackTimelineState, Int, Int?) -> Void
+    private let onPlaybackEnded: (Int, Int?) -> Void
     private let onDismiss: (AVPlayer) -> Void
+    private let lifecycle = MediaPlayerLifecycle()
 
-    private var timeControlObservation: NSKeyValueObservation?
-    private var itemStatusObservation: NSKeyValueObservation?
-    private var endObserver: NSObjectProtocol?
-    private var didStart = false
-    private var didSeekInitialPosition = false
     private var didDismiss = false
 
     init(
         player: AVPlayer,
         resumeOffsetMilliseconds: Int?,
-        onStart: @escaping (AVPlayer) -> Void,
-        onPlaybackEnded: @escaping () -> Void,
+        onTimelineEvent: @escaping (MediaPlaybackTimelineState, Int, Int?) -> Void,
+        onPlaybackEnded: @escaping (Int, Int?) -> Void,
         onDismiss: @escaping (AVPlayer) -> Void
     ) {
         managedPlayer = player
         self.resumeOffsetMilliseconds = resumeOffsetMilliseconds
-        self.onStart = onStart
+        self.onTimelineEvent = onTimelineEvent
         self.onPlaybackEnded = onPlaybackEnded
         self.onDismiss = onDismiss
         super.init(nibName: nil, bundle: nil)
@@ -203,9 +199,12 @@ final class QuickPlayPlayerViewController: AVPlayerViewController {
         super.viewDidLoad()
 
         player = managedPlayer
-        bindResumePositionIfNeeded()
-        observePlaybackStart()
-        observePlaybackEnd()
+        lifecycle.bind(
+            to: managedPlayer,
+            resumeOffsetMilliseconds: resumeOffsetMilliseconds,
+            onTimelineEvent: onTimelineEvent,
+            onPlaybackEnded: onPlaybackEnded
+        )
     }
 
     override func viewDidAppear(_ animated: Bool) {
@@ -219,73 +218,13 @@ final class QuickPlayPlayerViewController: AVPlayerViewController {
     }
 
     deinit {
-        cleanupObservers()
-    }
-
-    private func bindResumePositionIfNeeded() {
-        guard
-            let item = managedPlayer.currentItem,
-            let resumeOffsetMilliseconds,
-            resumeOffsetMilliseconds > 0
-        else {
-            didSeekInitialPosition = true
-            return
-        }
-
-        itemStatusObservation = item.observe(\.status, options: [.initial, .new]) { [weak self] item, _ in
-            guard let self, !self.didSeekInitialPosition, item.status == .readyToPlay else { return }
-            self.didSeekInitialPosition = true
-            self.managedPlayer.seek(
-                to: CMTime(milliseconds: resumeOffsetMilliseconds),
-                toleranceBefore: .zero,
-                toleranceAfter: .zero
-            )
-        }
-    }
-
-    private func observePlaybackStart() {
-        timeControlObservation = managedPlayer.observe(\.timeControlStatus, options: [.initial, .new]) { [weak self] player, _ in
-            guard let self, !self.didStart, player.timeControlStatus == .playing else { return }
-            self.didStart = true
-            self.onStart(player)
-        }
-    }
-
-    private func observePlaybackEnd() {
-        endObserver = NotificationCenter.default.addObserver(
-            forName: .AVPlayerItemDidPlayToEndTime,
-            object: managedPlayer.currentItem,
-            queue: .main
-        ) { [weak self] _ in
-            self?.onPlaybackEnded()
-        }
+        lifecycle.unbind()
     }
 
     private func finishDismissalIfNeeded() {
         guard !didDismiss else { return }
         didDismiss = true
-        cleanupObservers()
+        lifecycle.unbind()
         onDismiss(managedPlayer)
-    }
-
-    private func cleanupObservers() {
-        if let endObserver {
-            NotificationCenter.default.removeObserver(endObserver)
-        }
-
-        timeControlObservation = nil
-        itemStatusObservation = nil
-        endObserver = nil
-    }
-}
-
-private extension CMTime {
-    init(milliseconds: Int) {
-        self.init(seconds: Double(milliseconds) / 1000, preferredTimescale: 600)
-    }
-
-    var milliseconds: Int? {
-        guard isNumeric && seconds.isFinite else { return nil }
-        return max(Int((seconds * 1000).rounded()), 0)
     }
 }

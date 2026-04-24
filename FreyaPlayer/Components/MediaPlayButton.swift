@@ -291,16 +291,7 @@ private struct StockPlayerView: UIViewControllerRepresentable {
     }
 
     final class Coordinator {
-        private weak var player: AVPlayer?
-        private var timeObserver: Any?
-        private var timeControlObservation: NSKeyValueObservation?
-        private var itemStatusObservation: NSKeyValueObservation?
-        private var endObserver: NSObjectProtocol?
-        private var timelineTimer: Timer?
-        private var onTimelineEvent: ((MediaPlaybackTimelineState, Int, Int?) -> Void)?
-        private var onPlaybackEnded: ((Int, Int?) -> Void)?
-        private var lastState: MediaPlaybackTimelineState?
-        private var didSeekInitialPosition = false
+        private let lifecycle = MediaPlayerLifecycle()
 
         func bind(
             to player: AVPlayer,
@@ -308,130 +299,16 @@ private struct StockPlayerView: UIViewControllerRepresentable {
             onTimelineEvent: @escaping (MediaPlaybackTimelineState, Int, Int?) -> Void,
             onPlaybackEnded: @escaping (Int, Int?) -> Void
         ) {
-            guard self.player !== player else { return }
-
-            unbind()
-            self.player = player
-            self.onTimelineEvent = onTimelineEvent
-            self.onPlaybackEnded = onPlaybackEnded
-            didSeekInitialPosition = resumeOffsetMilliseconds == nil
-
-            timeObserver = player.addPeriodicTimeObserver(
-                forInterval: CMTime(seconds: 10, preferredTimescale: 600),
-                queue: .main
-            ) { [weak self] _ in
-                self?.sendCurrentTimeline()
-            }
-
-            if let item = player.currentItem, let resumeOffsetMilliseconds, resumeOffsetMilliseconds > 0 {
-                itemStatusObservation = item.observe(\.status, options: [.initial, .new]) { [weak self] item, _ in
-                    guard let self, !self.didSeekInitialPosition, item.status == .readyToPlay else { return }
-                    self.didSeekInitialPosition = true
-                    player.seek(
-                        to: CMTime(milliseconds: resumeOffsetMilliseconds),
-                        toleranceBefore: .zero,
-                        toleranceAfter: .zero
-                    )
-                }
-            }
-
-            timeControlObservation = player.observe(\.timeControlStatus, options: [.initial, .new]) { [weak self] player, _ in
-                self?.sendState(for: player)
-            }
-
-            endObserver = NotificationCenter.default.addObserver(
-                forName: .AVPlayerItemDidPlayToEndTime,
-                object: player.currentItem,
-                queue: .main
-            ) { [weak self] _ in
-                guard let self else { return }
-                let time = player.currentItem?.duration.milliseconds ?? player.currentTime().milliseconds ?? 0
-                let duration = player.currentItem?.duration.milliseconds
-                self.onPlaybackEnded?(time, duration)
-            }
+            lifecycle.bind(
+                to: player,
+                resumeOffsetMilliseconds: resumeOffsetMilliseconds,
+                onTimelineEvent: onTimelineEvent,
+                onPlaybackEnded: onPlaybackEnded
+            )
         }
 
         func unbind() {
-            if let timeObserver, let player {
-                player.removeTimeObserver(timeObserver)
-            }
-
-            if let endObserver {
-                NotificationCenter.default.removeObserver(endObserver)
-            }
-
-            timelineTimer?.invalidate()
-            timeObserver = nil
-            timeControlObservation = nil
-            itemStatusObservation = nil
-            endObserver = nil
-            timelineTimer = nil
-            self.player = nil
-            onTimelineEvent = nil
-            onPlaybackEnded = nil
-            lastState = nil
-            didSeekInitialPosition = false
+            lifecycle.unbind()
         }
-
-        private func sendCurrentTimeline() {
-            guard let player else { return }
-            onTimelineEvent?(
-                state(for: player),
-                player.currentTime().milliseconds ?? 0,
-                player.currentItem?.duration.milliseconds
-            )
-        }
-
-        private func sendState(for player: AVPlayer) {
-            let state = state(for: player)
-            updateTimelineTimer(for: state)
-            guard state != lastState else { return }
-            lastState = state
-            onTimelineEvent?(
-                state,
-                player.currentTime().milliseconds ?? 0,
-                player.currentItem?.duration.milliseconds
-            )
-        }
-
-        private func updateTimelineTimer(for state: MediaPlaybackTimelineState) {
-            guard state == .paused || state == .buffering else {
-                timelineTimer?.invalidate()
-                timelineTimer = nil
-                return
-            }
-
-            guard timelineTimer == nil else { return }
-
-            let timer = Timer(timeInterval: 15, repeats: true) { [weak self] _ in
-                self?.sendCurrentTimeline()
-            }
-            RunLoop.main.add(timer, forMode: .common)
-            timelineTimer = timer
-        }
-
-        private func state(for player: AVPlayer) -> MediaPlaybackTimelineState {
-            switch player.timeControlStatus {
-            case .paused:
-                return .paused
-            case .waitingToPlayAtSpecifiedRate:
-                return .buffering
-            case .playing:
-                return .playing
-            @unknown default:
-                return .paused
-            }
-        }
-    }
-}
-
-private extension CMTime {
-    init(milliseconds: Int) {
-        self.init(seconds: Double(milliseconds) / 1000, preferredTimescale: 600)
-    }
-
-    var milliseconds: Int? {
-        guard isNumeric && seconds.isFinite else { return nil }
-        return max(Int((seconds * 1000).rounded()), 0)
     }
 }
