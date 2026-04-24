@@ -47,15 +47,25 @@ struct LibrariesPage: View {
                         .scrollIndicators(.hidden)
                     }
                 }
+
+                HStack(spacing: 16) {
+                    NavigationLink(value: projection.manageRoute) {
+                        Text("Manage")
+                    }
+                    .buttonStyle(MediaGlassButtonStyle())
+
+                    NavigationLink(value: AppRoute.about) {
+                        Text("About")
+                    }
+                    .buttonStyle(MediaGlassButtonStyle())
+                }
+                .padding(.horizontal, 32)
+                .padding(.top, 8)
+                .padding(.bottom, 24)
             }
         }
         .scrollIndicators(.hidden)
         .background(LibrariesAmbientBackground())
-        .toolbar {
-            Button("Manage") {
-                path.append(projection.manageRoute)
-            }
-        }
         .task(id: server.id) {
             await PollingLoop.run {
                 await model.refreshConnection()

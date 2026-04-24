@@ -334,12 +334,25 @@ private final class LibrariesCollectionViewController: UIViewController, UIColle
                 return layoutSection
 
             case .manage:
+                let buttonWidth: CGFloat = 360
+                let buttonSpacing: CGFloat = 24
+                let buttonCount = section.items.count
                 let itemSize = NSCollectionLayoutSize(
-                    widthDimension: .absolute(360),
+                    widthDimension: .absolute(buttonWidth),
                     heightDimension: .absolute(72)
                 )
                 let item = NSCollectionLayoutItem(layoutSize: itemSize)
-                let group = NSCollectionLayoutGroup.horizontal(layoutSize: itemSize, subitems: [item])
+                let groupWidth = (buttonWidth * CGFloat(buttonCount)) + (buttonSpacing * CGFloat(max(buttonCount - 1, 0)))
+                let groupSize = NSCollectionLayoutSize(
+                    widthDimension: .absolute(groupWidth),
+                    heightDimension: .absolute(72)
+                )
+                let group = NSCollectionLayoutGroup.horizontal(
+                    layoutSize: groupSize,
+                    subitem: item,
+                    count: buttonCount
+                )
+                group.interItemSpacing = .fixed(buttonSpacing)
                 let layoutSection = NSCollectionLayoutSection(group: group)
                 layoutSection.contentInsets = .init(top: 28, leading: horizontalInset, bottom: 36, trailing: horizontalInset)
                 return layoutSection
@@ -402,6 +415,18 @@ private final class LibrariesCollectionViewController: UIViewController, UIColle
                     isWatched: false,
                     mediaItem: nil,
                     route: projection.manageRoute,
+                    style: .wide,
+                    kind: .manageServer,
+                    iconName: nil
+                ),
+                LibrariesItem(
+                    id: "about",
+                    title: "About",
+                    artworkURL: nil,
+                    progress: nil,
+                    isWatched: false,
+                    mediaItem: nil,
+                    route: .about,
                     style: .wide,
                     kind: .manageServer,
                     iconName: nil

@@ -23,6 +23,8 @@ struct AppView: View {
                         PlexSetupPage(model: model)
                     case .jellyfinSetup:
                         JellyfinSetupPage(model: model)
+                    case .about:
+                        AboutPage()
                     case .plexSettings:
                         PlexSettingsPage(model: model, path: $path)
                     case .jellyfinSettings:

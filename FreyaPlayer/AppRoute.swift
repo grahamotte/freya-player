@@ -3,6 +3,7 @@ import Foundation
 enum AppRoute: Hashable {
     case plexSetup
     case jellyfinSetup
+    case about
     case plexSettings
     case jellyfinSettings
     case library(LibraryReference)

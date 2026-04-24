@@ -19,6 +19,12 @@ struct ProviderPickerView: View {
                 }
                 .buttonStyle(MediaGlassButtonStyle(horizontalPadding: 72, verticalPadding: 44))
             }
+
+            NavigationLink(value: AppRoute.about) {
+                Label("About", systemImage: "info.circle")
+                    .font(.headline)
+            }
+            .buttonStyle(MediaGlassButtonStyle())
         }
         .padding(48)
         .frame(maxWidth: .infinity, maxHeight: .infinity)

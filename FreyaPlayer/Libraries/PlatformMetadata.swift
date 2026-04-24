@@ -1,6 +1,9 @@
 import Foundation
+import UIKit
 
 enum PlatformMetadata {
+    static let isTV: Bool = UIDevice.current.userInterfaceIdiom == .tv
+
     static let plexPlatformName: String = {
         #if os(tvOS)
         "tvOS"

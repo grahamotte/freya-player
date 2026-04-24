@@ -74,3 +74,17 @@
 - If a choice trades cleverness for clarity, choose clarity.
 - For navigation choices, prefer standard SwiftUI button styles before building custom surfaces.
 - Keep important actions like `Cancel` in the normal vertical focus path; don't tuck them into layouts that are hard to reach with the Siri Remote.
+
+## Platform Branching
+
+- Avoid `#if os(tvOS)` (or `#if !os(tvOS)`) inside pages, view bodies, and feature code. It clutters layout code and hides intent.
+- For runtime branching, use `PlatformMetadata.isTV` (or extend `PlatformMetadata` with whatever flag you need) so call sites stay plain Swift.
+- For SwiftUI modifiers that genuinely don't exist on one platform (e.g. `textSelection`), wrap the `#if` in a single `View` extension under `Components/PlatformViewShims.swift` and call the shim from features.
+- Whole-file gating with `#if os(tvOS)` at the top of a tvOS-only file (e.g. `Pages/Library/TvOS/...`) is fine; it's the inline branching inside shared view code we're avoiding.
+
+## Platform Branching
+
+- Avoid `#if os(tvOS)` (or `#if !os(tvOS)`) inside pages, view bodies, and feature code. It clutters layout code and hides intent.
+- For runtime branching, use `PlatformMetadata.isTV` (or extend `PlatformMetadata` with whatever flag you need) so call sites stay plain Swift.
+- For SwiftUI modifiers that genuinely don't exist on one platform (e.g. `textSelection`), wrap the `#if` in a single `View` extension under `Components/PlatformViewShims.swift` and call the shim from features.
+- Whole-file gating with `#if os(tvOS)` at the top of a tvOS-only file (e.g. `Pages/Library/TvOS/...`) is fine; it's the inline branching inside shared view code we're avoiding.
