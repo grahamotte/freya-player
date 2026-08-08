@@ -1,5 +1,5 @@
 {
-  "build": "1.17.8",
+  "build": "1.17.9",
   "contactEmail": "graham.otte@gmail.com",
   "contactFirstName": "Graham",
   "contactLastName": "Otte",
@@ -105,6 +105,6 @@
     },
     "android": {}
   },
-  "version": "1.17.8",
-  "whatsNew": "Fixed resume playback and seeking for some Plex media."
+  "version": "1.17.9",
+  "whatsNew": "Fixed restoring the player after exiting Picture in Picture."
 }
