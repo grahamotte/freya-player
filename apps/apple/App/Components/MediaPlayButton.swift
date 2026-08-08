@@ -639,6 +639,7 @@ final class StockPlayerViewController: AVPlayerViewController, AVPlayerViewContr
 
     private var didDismiss = false
     private var isPictureInPictureActive = false
+    private weak var pictureInPicturePresenter: UIViewController?
 
     init(
         playbackController: PlaybackSessionController,
@@ -669,6 +670,7 @@ final class StockPlayerViewController: AVPlayerViewController, AVPlayerViewContr
 
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
+        pictureInPicturePresenter = presentingViewController ?? pictureInPicturePresenter
         playbackController.play()
     }
 
@@ -731,6 +733,25 @@ final class StockPlayerViewController: AVPlayerViewController, AVPlayerViewContr
         onPictureInPictureChanged(false)
         if view.window == nil {
             finishDismissalIfNeeded()
+        }
+    }
+
+    func playerViewController(
+        _ playerViewController: AVPlayerViewController,
+        restoreUserInterfaceForPictureInPictureStopWithCompletionHandler completionHandler: @escaping (Bool) -> Void
+    ) {
+        guard view.window == nil else {
+            completionHandler(true)
+            return
+        }
+
+        guard let pictureInPicturePresenter, pictureInPicturePresenter.view.window != nil else {
+            completionHandler(false)
+            return
+        }
+
+        pictureInPicturePresenter.present(playerViewController, animated: true) {
+            completionHandler(true)
         }
     }
 }
