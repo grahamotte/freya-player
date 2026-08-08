@@ -1,6 +1,6 @@
 ---
 name: publish
-description: Version and publish Code Moto across its configured Apple targets, repository releases, and App Store Connect. Use only when the user explicitly invokes `$publish` or asks to use the publish skill by name.
+description: Version and publish Freya Player across its configured Apple targets, repository releases, and App Store Connect. Use only when the user explicitly invokes `$publish` or asks to use the publish skill by name.
 ---
 
 # Publish
@@ -36,7 +36,7 @@ description: Version and publish Code Moto across its configured Apple targets, 
 4. If App Store Connect reports that a build is still processing, wait using an available non-shell waiting mechanism and rerun `mise deploy:publish`. Its cache resumes completed work. Continue until every target finishes.
 5. Stop on other failures and report the target and stage. Do not edit the deploy cache or bypass validation.
 
-The task publishes the signed and notarized macOS revision to both configured repository hosts. Other Apple targets are distributed only through App Store Connect. Code Moto bundle identifiers intentionally stop at prepared App Store submissions, so report them as prepared, never submitted to review, unless the deploy implementation says otherwise.
+The task publishes the signed and notarized Mac Catalyst revision to both configured repository hosts. Other Apple targets are distributed only through App Store Connect.
 
 ## Report
 

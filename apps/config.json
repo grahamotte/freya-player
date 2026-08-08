@@ -1,79 +1,103 @@
 {
-  "build": "0.1.9",
-  "contactEmail": "go@graham.lol",
+  "build": "1.17.8",
+  "contactEmail": "graham.otte@gmail.com",
   "contactFirstName": "Graham",
   "contactLastName": "Otte",
-  "contactPhone": "+1 202 555 0100",
+  "contactPhone": "7142279963",
   "copyright": "2026 Graham Otte",
   "demoAccountName": "",
   "demoAccountPassword": "",
   "demoAccountRequired": false,
-  "description": "Code Moto helps developers build momentum with focused coding sessions. Name what you're working on, choose a session length, and track completed sessions entirely on your device.",
-  "keywords": "focus,timer,coding,developer,productivity,session,momentum,work",
-  "marketingUrl": "https://codemoto.org",
-  "name": "Code Moto",
-  "notes": "Code Moto does not require an account or sign-in. All session data is stored locally on the device.",
+  "description": "Freya Player is a native client for your personal Jellyfin or Plex server. Play your media using a fully native tvOS experience.\n\nA Jellyfin or Plex server is required to use this client player. Freya Player does not provide a server or any content itself.",
+  "keywords": "movies, video, tv, show, tv show, media, plex, jellyfin, native, library, video player",
+  "marketingUrl": "https://freyaplayer.com",
+  "name": "Freya Player",
+  "notes": "Freya Player requires a personal Plex or Jellyfin server. Choose a provider on the setup screen and sign in with an account that has access to a media server. The app does not provide media or a public demo service.",
   "primaryLocale": "en-US",
-  "promotionalText": "Build momentum with focused coding sessions and keep a private record of completed work.",
+  "promotionalText": "Watch your personal Plex or Jellyfin library in a native Apple platform experience.",
   "releaseType": "AFTER_APPROVAL",
-  "supportUrl": "https://codemoto.org",
+  "supportUrl": "https://freyaplayer.com",
   "targets": {
     "apple": {
       "ios": {
         "archiveDestination": "generic/platform=iOS",
-        "bundleIdentifier": "com.grahamotte.codemoto",
+        "bundleIdentifier": "com.grahamotte.freyaplayer",
         "platform": "IOS",
         "project": "apps/apple/App.xcodeproj",
-        "scheme": "App",
+        "scheme": "freya-player-ios-macos",
         "screenshots": [
           {
             "displayType": "APP_IPHONE_65",
-            "path": "apps/screenshots/ios-iphone-1.jpeg"
+            "path": "apps/screenshots/ios-iphone-1.png"
+          },
+          {
+            "displayType": "APP_IPHONE_65",
+            "path": "apps/screenshots/ios-iphone-2.png"
           },
           {
             "displayType": "APP_IPAD_PRO_3GEN_129",
-            "path": "apps/screenshots/ios-ipad-1.jpeg"
+            "path": "apps/screenshots/ios-ipad-1.png"
+          },
+          {
+            "displayType": "APP_IPAD_PRO_3GEN_129",
+            "path": "apps/screenshots/ios-ipad-2.png"
           }
         ],
         "simulatorDestination": "generic/platform=iOS Simulator",
-        "simulatorProduct": "Debug-iphonesimulator/App.app",
+        "simulatorProduct": "Debug-iphonesimulator/freya-player-ios-macos.app",
         "simulators": {
           "ipad": "iPad",
           "iphone": "iPhone"
         }
       },
       "macos": {
-        "archiveDestination": "generic/platform=macOS",
-        "bundleIdentifier": "com.grahamotte.codemoto",
+        "archiveDestination": "generic/platform=macOS,variant=Mac Catalyst",
+        "bundleIdentifier": "com.grahamotte.freyaplayer",
         "platform": "MAC_OS",
         "project": "apps/apple/App.xcodeproj",
-        "scheme": "App-macOS",
+        "scheme": "freya-player-ios-macos",
         "screenshots": [
           {
             "displayType": "APP_DESKTOP",
-            "path": "apps/screenshots/macos-1.jpeg"
+            "path": "apps/screenshots/macos-1.png"
+          },
+          {
+            "displayType": "APP_DESKTOP",
+            "path": "apps/screenshots/macos-2.png"
+          },
+          {
+            "displayType": "APP_DESKTOP",
+            "path": "apps/screenshots/macos-3.png"
           }
         ],
-        "simulatorDestination": "platform=macOS",
-        "simulatorProduct": "Debug/App-macOS.app",
+        "simulatorDestination": "platform=macOS,variant=Mac Catalyst",
+        "simulatorProduct": "Debug-maccatalyst/freya-player-macos.app",
         "simulators": {
           "macos": "Mac"
         }
       },
       "tvos": {
         "archiveDestination": "generic/platform=tvOS",
-        "bundleIdentifier": "com.grahamotte.codemoto",
+        "bundleIdentifier": "com.grahamotte.freyaplayer",
         "platform": "TV_OS",
         "project": "apps/apple/App.xcodeproj",
-        "scheme": "App-tvOS",
+        "scheme": "freya-player-tvos",
         "screenshots": [
           {
             "displayType": "APP_APPLE_TV",
-            "path": "apps/screenshots/tvos-1.jpeg"
+            "path": "apps/screenshots/tvos-1.png"
+          },
+          {
+            "displayType": "APP_APPLE_TV",
+            "path": "apps/screenshots/tvos-2.png"
+          },
+          {
+            "displayType": "APP_APPLE_TV",
+            "path": "apps/screenshots/tvos-3.png"
           }
         ],
         "simulatorDestination": "generic/platform=tvOS Simulator",
-        "simulatorProduct": "Debug-appletvsimulator/App-tvOS.app",
+        "simulatorProduct": "Debug-appletvsimulator/freya-player-tvos.app",
         "simulators": {
           "tv": "Apple TV"
         }
@@ -81,6 +105,6 @@
     },
     "android": {}
   },
-  "version": "0.1.9",
-  "whatsNew": "Bug fixes."
+  "version": "1.17.8",
+  "whatsNew": "Fixed resume playback and seeking for some Plex media."
 }
