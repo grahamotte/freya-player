@@ -43,7 +43,7 @@ frontend/dist
 .ruby-lsp
 .mise.local.toml
 *.xcuserstate
-creds.txt
+docs/creds.txt
 xcuserdata/
 /*/tmp
 /*/tmp/*
