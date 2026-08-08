@@ -338,6 +338,9 @@ depends = ["dependencies:deploy"]
 usage = 'arg "<target>" help="Device to launch" choices "iphone" "phone" "ipad" "tablet" "mac" "macos" "osx" "tv" "tvos"'
 run = 'cd deploy && ruby simulate.rb "$usage_target"'
 
+[tasks.xcode]
+run = "open apps/apple/App.xcodeproj"
+
 #
 # Application
 #
