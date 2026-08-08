@@ -59,123 +59,33 @@ The "Repo Specific" section blow contains rules specific to this repo only.
 
 ## Repo Specific
 
-### Overall Rules
-
-When the user says "remember this" or similar, do this:
-
-- Review the current chat conversation in its entirety.
-- Review the introspection document located at <project_root>/.cursor/rules/introspection.mdc
-- Update this file with any significant learnings from the conversation.
-- Remember, this file is for general structural notes about the system, getting too specific will muddle the usefulness of the document.
-- Also, remember, these notes are for you in the future, so orient them as such.
-
-### Ruby
-
-- Do not add comments to the code
-- Run specific test with `mise exec -- bundle exec ruby -I test <file>`
-- Do not use .empty?, .nil?, if obj, etc - use .blank? or .present? always
-- NEVER use `sleep`, you are doing something wrong if you sleep
-- Always test your code unless explicitly told not to
-- Always use double quotes for strings
-- Always add a trailing comma in multiline lists of arguments
-
-### Typescript
-
-- Whenever something is null it's null | undefined, in zod terms it's nullish, NEVER type or check just null or just undefined, always both.
-- Do not add comments to the code
-- Test TypeScript business logic with its corresponding unit test file
-- Use `pnpm`, not npm
-- Use `mise tsc` to typecheck -- DO NOT TYPE CHECK ANY OTHER WAY!
-- Use lodash when possible
-- Use ShadCN components, ask for them to be installed if they dont exist
-- Use tailwind for styles
-
 ### Freya Player
 
-#### Aim
+Freya Player is a native Apple client for personal Plex and Jellyfin servers. It targets tvOS, iOS and iPadOS, and Mac Catalyst. Prefer stock platform behavior, SwiftUI, AVKit, Foundation networking, and the least code that solves the problem well. Use UIKit where tvOS focus or collection-view behavior requires it.
 
-Freya is a small native Apple video player for Plex and Jellyfin on tvOS, iOS, and Mac Catalyst. Prefer stock Apple UI, platform behavior, SwiftUI, AVKit, URLSession, and the least code that solves the problem well. The Apple app lives in `apps/apple/App`; its project is `apps/apple/App.xcodeproj`.
+### Apple App Architecture
 
-#### Core Model
+- The Apple app source is in `apps/apple/App`; the Xcode project is `apps/apple/App.xcodeproj`.
+- `AppView` owns navigation through `AppRoute`. `AppModel` owns connection state, connector selection, refresh scheduling, cache mutation, library preferences, and playback reporting.
+- UI code consumes app-owned models such as `ConnectedServer`, `LibraryShelf`, `LibraryReference`, `MediaItem`, and `MediaPlaybackID`. Do not expose Plex or Jellyfin response models outside their provider implementation.
+- Keep provider API details, decoding, authentication storage, playback URL construction, and provider errors under `apps/apple/App/Connectors/Plex` or `apps/apple/App/Connectors/Jellyfin`. Shared connector behavior belongs in `MediaConnector` only when both providers need it.
+- `LibraryCache` is the UI source of truth for loaded media. Views schedule refreshes through `AppModel`; cache and `RefreshTracker` changes drive repainting.
+- Keep refresh work deduplicated through `RefreshTracker`, and route connector HTTP through `URLSession.gatedData` and `RequestScheduler`.
+- Apply watched-state mutations optimistically, sync them through the connector, and restore the previous cached state on failure. Playback completion must update local watched state immediately.
+- `PlaybackSessionController` owns AVPlayer lifecycle, timeline reporting, and recovery. `MediaPlayerItemFactory` owns `AVPlayerItem` metadata and artwork. Provider-specific playback behavior stays in provider clients and connectors.
 
-- **Connector**: Plex or Jellyfin. Provider API details stay under `apps/apple/App/Connectors/<Provider>/`.
-- **ConnectedServer**: the active provider/server/account plus its library shelves.
-- **LibraryReference**: stable identity and display defaults for a library.
-- **LibraryShelf**: a library as shown on the home page, including preview items and hidden state.
-- **MediaItem**: app-owned movie, series, season, episode, or other item. UI should use this, not provider models.
-- **MediaPlaybackID**: provider/item identity for playback and watched-state writes.
-- **LibraryCache**: in-memory plus JSON cache. This is the UI source of truth for library contents.
-- **RefreshTracker**: dedups and exposes in-flight background refresh work.
-- **MediaSessionStore**: `UserDefaults` for library filters, sort defaults, library order, and hidden libraries.
+### Apple App Layout
 
-#### Architecture
-
-- `AppView` owns the navigation stack and routes with `AppRoute`.
-- `AppModel` owns connection lifecycle, active connector choice, cache mutation, refresh scheduling, library ordering/hiding, and playback reporting.
-- Views read from `LibraryCache` and `AppModel`; they should not await network work except user-initiated playback URL/options.
-- Connectors fetch provider data, map it into app-owned models, and feed `LibraryCache` through `AppModel`.
-- Connector HTTP uses `GatedURLSession` and `RequestScheduler`; do not add unbounded connector `URLSession` calls.
-- Refreshes are fire-and-forget from views. Cache changes and `RefreshTracker` updates repaint the UI.
-- Mutations are optimistic: update the cache first, sync second, and revert on failure.
-- User-visible watched state for collections is derived from cached leaves the app actually shows, not provider rollups.
-- Polling is for slow cache repaint/connection refresh cadence; network refreshes also happen on appearance and user action.
-
-#### Playback
-
-- `MediaPlayButton` resolves playback options/URLs and presents `StockPlayerView`.
-- `MediaPlayerLifecycle` handles resume seek, timeline reporting, completion, and stall recovery.
-- `MediaPlayerItemFactory` attaches metadata/artwork to `AVPlayerItem`.
-- Plex and Jellyfin playback quirks belong in their connector/client files.
-- Playback completion should keep local watched state in sync immediately; do not rely only on a later refresh.
-
-#### Layout
-
-- App shell: `FreyaPlayerApp.swift`, `AppView.swift`, `AppModel.swift`, and `AppRoute.swift`.
-- Shared UI: `apps/apple/App/Components/`.
-- Shared non-view helpers: `apps/apple/App/Libraries/`.
+- Shared views and playback UI: `apps/apple/App/Components/`.
+- Shared non-view infrastructure: `apps/apple/App/Libraries/`.
 - App-owned data types: `apps/apple/App/Models/`.
-- Connector contract: `apps/apple/App/Connectors/MediaConnector.swift`.
-- Provider implementations: `apps/apple/App/Connectors/Plex/` and `apps/apple/App/Connectors/Jellyfin/`.
-- User-facing screens: `apps/apple/App/Pages/<Feature>/`.
-- Page-specific shared UI: `apps/apple/App/Pages/<Feature>/Components/`.
-- Keep helpers beside the feature that uses them until there is a real second use.
-- Keep folders shallow and filenames PascalCase.
+- User-facing features: `apps/apple/App/Pages/<Feature>/`, with feature-only components under that page.
+- Keep a helper with its feature until it has a real second use. Keep folders shallow and Swift filenames PascalCase.
+- Centralize platform differences in `PlatformMetadata`, `PlatformLibraryPageContent`, and `PlatformLibrariesPageContent` where practical. Preserve normal tvOS focus movement when adding actions to UIKit collection views.
 
-#### Pages
+### Apple Workflow
 
-- **Setup**: provider picker plus Plex PIN flow and Jellyfin username/password flow.
-- **Libraries page**: home page for the connected server. It uses `LibrariesHomeProjection` over `ConnectedServer` and `LibraryCache`.
-- **Library page**: browses one library with filter/sort controls managed by `LibraryPageState`.
-- **Item page**: detail pages for movies, series, seasons, episodes, and other media.
-- **Settings page**: server management, cache clearing/resync, default library controls, library ordering, and hidden libraries.
-- **About page**: app info.
-
-#### Platforms
-
-- Keep compile-time platform checks in `apps/apple/App/Libraries/PlatformMetadata.swift` where possible.
-- Use `PlatformMetadata` and `PlatformLibraryPageContent` / `PlatformLibrariesPageContent` for platform selection.
-- tvOS has custom UIKit collection views for focused library browsing. Keep tvOS actions, especially `Cancel`, in the normal vertical focus path.
-- iOS and Mac Catalyst mostly use SwiftUI layouts.
-
-#### Connectors
-
-- Keep Plex and Jellyfin API details, decoding, auth storage, playback URL construction, and provider errors inside provider folders.
-- Map provider models into `ConnectedServer`, `LibraryReference`, `LibraryShelf`, `MediaItem`, and `MediaPlaybackID` at the connector boundary.
-- Provider-only helpers stay with that provider, even if they look utility-like.
-- Do not reintroduce old lowercase paths like `browsing/`, `management/`, `lib/`, `views/`, or `connectors/plex/`.
-
-#### Workflow
-
-- Build, test, simulate, and publish through the root `mise` tasks and Code Moto tooling, not copied legacy scripts or Xcode UI steps.
-- `mise test` runs the complete repository suite, including the portable Apple core tests.
-- `mise simulate` builds, installs, and launches configured Apple simulator targets.
-- `mise xcode` opens the Apple Xcode project.
-- Use `$publish` for the configured Apple release workflow.
-- You may use `creds.txt` to query real Plex or Jellyfin instances when needed.
+- Use the root `mise` tasks for Apple work.
+- `mise test` runs the repository suite, including the portable Apple logic tests. It does not compile every platform-specific Swift file; for changes to app shell, UI, playback, or connectors, also build the relevant target with `mise simulate <iphone|ipad|macos|tv>` when practical.
+- Use `mise xcode` to open the project and `$publish` for the release workflow.
 - Keep documentation short and practical.
-
-#### References
-
-- Plex API docs: `https://developer.plex.tv/pms/`
-- Plex account linking uses the PIN flow at `plex.tv/link`.
-- Rivulet can be a useful tvOS Plex reference: `https://github.com/l984-451/Rivulet`
