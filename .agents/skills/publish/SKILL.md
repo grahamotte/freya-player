@@ -1,6 +1,6 @@
 ---
 name: publish
-description: Version and publish Code Moto across its configured Apple targets, repository releases, and App Store Connect. Use only when the user explicitly invokes `$publish` or asks to use the publish skill by name.
+description: Version and publish Freya Player across its configured Apple targets, repository releases, and App Store Connect. Use only when the user explicitly invokes `$publish` or asks to use the publish skill by name.
 ---
 
 # Publish
@@ -12,4 +12,4 @@ description: Version and publish Code Moto across its configured Apple targets, 
 5. If anything else fails, stop publishing and help the user diagnose it before proceeding. Make the failure immediately clear, focus on the error and its impact, inspect the relevant logs and state, and work with the user on recovery instead of presenting a routine release summary.
 6. When publishing succeeds, briefly report the version, release notes, version commit, repository releases, and App Store status for each target.
 
-The macOS revision is signed, notarized, and released through the configured repository hosts. Other Apple targets are distributed through App Store Connect. `--no-review` affects only App Store review submission; repository releases and App Store preparation still run. Report prepared App Store submissions as prepared, not submitted for review, unless the publish task says otherwise.
+The task publishes the signed and notarized Mac Catalyst revision to both configured repository hosts. Other Apple targets are distributed only through App Store Connect. `--no-review` affects only App Store review submission; repository releases and App Store preparation still run. Report prepared App Store submissions as prepared, not submitted for review, unless the publish task says otherwise.

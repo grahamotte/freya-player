@@ -7,6 +7,7 @@
 .byebug_history
 .yarn-integrity
 /.bundle
+/.build
 /app/assets/builds/*
 /config/master.key
 /config/credentials.yml.enc
@@ -40,5 +41,9 @@ frontend/dist
 .env.production
 .env.development
 .ruby-lsp
+.mise.local.toml
+*.xcuserstate
+creds.txt
+xcuserdata/
 /*/tmp
 /*/tmp/*
