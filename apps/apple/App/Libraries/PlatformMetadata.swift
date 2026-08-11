@@ -55,6 +55,10 @@ enum PlatformMetadata {
     static var prefersAACPlaybackAudio: Bool {
         true
     }
+
+    static var requiresTranscodedPlaybackAudio: Bool {
+        PlaybackCompatibility.requiresTranscodedAudio
+    }
 }
 
 extension PlatformMetadata {
