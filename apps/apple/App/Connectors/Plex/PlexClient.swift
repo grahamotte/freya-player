@@ -94,7 +94,8 @@ final class PlexClient {
         offsetMilliseconds: Int? = nil
     ) async throws -> MediaPlaybackResource {
         let metadata = try await playbackMetadata(for: ratingKey, connection: connection)
-        let directStreamAudio = metadata.canDirectStreamAudio(selection?.audioID)
+        let requiresTranscodedAudio = PlatformMetadata.requiresTranscodedPlaybackAudio
+        let directStreamAudio = !requiresTranscodedAudio && metadata.canDirectStreamAudio(selection?.audioID)
 
         if let selection,
            (selection.audioID != nil || selection.subtitleID != nil),
@@ -139,7 +140,8 @@ final class PlexClient {
             )
         }
 
-        if selection?.quality ?? .automatic == .automatic,
+        if !requiresTranscodedAudio,
+           selection?.quality ?? .automatic == .automatic,
            let url = directPlayURL(
                from: metadata,
                connection: connection,

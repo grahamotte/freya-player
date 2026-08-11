@@ -131,6 +131,7 @@ final class JellyfinClient {
         userID: String,
         selection: MediaPlaybackSelection?
     ) async throws -> JellyfinPlaybackInfoResponse {
+        let usesAutomaticQuality = selection?.quality == nil || selection?.quality == .automatic
         var request = URLRequest(url: try url(serverURL: serverURL, path: "/Items/\(itemID)/PlaybackInfo"))
         request.httpMethod = "POST"
         request.httpBody = try JSONEncoder().encode(
@@ -139,8 +140,8 @@ final class JellyfinClient {
                 MaxStreamingBitrate: selection?.quality.maxStreamingBitrate,
                 AudioStreamIndex: selection?.audioID.flatMap(Int.init),
                 SubtitleStreamIndex: selection?.subtitleID.flatMap(Int.init),
-                EnableDirectPlay: selection?.quality == nil || selection?.quality == .automatic,
-                EnableDirectStream: selection?.quality == nil || selection?.quality == .automatic,
+                EnableDirectPlay: usesAutomaticQuality && !PlatformMetadata.requiresTranscodedPlaybackAudio,
+                EnableDirectStream: usesAutomaticQuality,
                 EnableTranscoding: true
             )
         )
@@ -161,7 +162,10 @@ final class JellyfinClient {
             throw MediaConnectorError.unavailable
         }
 
-        if selection?.quality ?? .automatic == .automatic,
+        let requiresTranscodedAudio = PlatformMetadata.requiresTranscodedPlaybackAudio
+
+        if !requiresTranscodedAudio,
+           selection?.quality ?? .automatic == .automatic,
            selection?.audioID == nil,
            selection?.subtitleID == nil,
            mediaSource.supportsDirectPlay,
@@ -219,6 +223,7 @@ final class JellyfinClient {
             URLQueryItem(name: "videoCodec", value: "h264"),
             URLQueryItem(name: "profile", value: "high"),
             URLQueryItem(name: "audioCodec", value: Self.playbackAudioCodecs),
+            requiresTranscodedAudio ? URLQueryItem(name: "allowAudioStreamCopy", value: "false") : nil,
             URLQueryItem(name: "deviceId", value: deviceID),
             URLQueryItem(name: "api_key", value: accessToken)
         ]
@@ -228,12 +233,21 @@ final class JellyfinClient {
             throw MediaConnectorError.unavailable
         }
 
-        let method: JellyfinPlaybackMethod = mediaSource.supportsDirectStream ? .directStream : .transcode
+        let method: JellyfinPlaybackMethod = requiresTranscodedAudio || !mediaSource.supportsDirectStream
+            ? .transcode
+            : .directStream
+        let descriptionPrefix: String? = if requiresTranscodedAudio {
+            "Transcoding: AAC audio"
+        } else if method == .transcode {
+            "Transcoding: H.264 video • AAC audio"
+        } else {
+            nil
+        }
         return (
             MediaPlaybackResource(
                 url: url,
                 localStartOffsetMilliseconds: offsetMilliseconds,
-                descriptionPrefix: method == .transcode ? "Transcoding: H.264 video • AAC audio" : nil
+                descriptionPrefix: descriptionPrefix
             ),
             method,
             mediaSource.id
