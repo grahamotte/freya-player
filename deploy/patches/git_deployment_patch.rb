@@ -20,7 +20,7 @@ class GitDeploymentPatch < BasePatch
       end
       Cmd.local("GIT_SSH_COMMAND=\"ssh -i #{Constants.ssh_key_path}\" git remote add deployment #{Constants.deploy_user}@#{Instance.ip}:#{Constants.remote_git_dir}")
 
-      Cmd.local("GIT_SSH_COMMAND=\"ssh -i #{Constants.ssh_key_path}\" git push -f deployment master")
+      Cmd.local("GIT_SSH_COMMAND=\"ssh -i #{Constants.ssh_key_path}\" git push deployment master")
 
       Cmd.ssh("sudo mkdir -p #{Constants.remote_root}")
       Cmd.ssh("sudo chown -R #{Constants.deploy_user}:#{Constants.deploy_user} #{Constants.remote_root}")

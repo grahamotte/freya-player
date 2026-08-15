@@ -18,7 +18,7 @@ class GitRepoPatchTest < Minitest::Test
     ENV["GITHUB_REPO"] = ""
     Cmd.expects(:local).with(includes("git remote remove codeberg")).raises("missing")
     Cmd.expects(:local).with(includes("git remote add codeberg git@example.com:repo.git"))
-    Cmd.expects(:local).with(includes("git push -f codeberg master"))
+    Cmd.expects(:local).with(includes("git push codeberg master"))
 
     GitRepoPatch.always
   ensure

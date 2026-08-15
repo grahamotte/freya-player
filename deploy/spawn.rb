@@ -114,7 +114,7 @@ class Spawner
     create_environment_files(target_dir)
 
     @output.puts "New app created at #{target_dir}"
-    @output.puts "Run 'mise rebase' there to rebase on Code Moto."
+    @output.puts "Run 'mise merge' there to merge updates from Code Moto."
     target_dir
   end
 

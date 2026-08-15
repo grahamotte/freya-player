@@ -12,7 +12,7 @@ class GitRepoPatch < BasePatch
 
       Cmd.local("GIT_SSH_COMMAND='ssh -i #{Constants.ssh_key_path}' git remote remove #{remote}") rescue StandardError
       Cmd.local("GIT_SSH_COMMAND='ssh -i #{Constants.ssh_key_path}' git remote add #{remote} #{repo}")
-      Cmd.local("GIT_SSH_COMMAND='ssh -i #{Constants.ssh_key_path}' git push -f #{remote} master")
+      Cmd.local("GIT_SSH_COMMAND='ssh -i #{Constants.ssh_key_path}' git push #{remote} master")
     end
   end
 end

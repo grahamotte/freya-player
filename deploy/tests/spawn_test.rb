@@ -130,6 +130,7 @@ class SpawnerTest < Minitest::Test
     assert_equal "sfo3", production.fetch("INSTANCE_REGION")
     refute_equal development.fetch("JWT_SECRET"), production.fetch("JWT_SECRET")
     assert_includes @shell.commands, [ %w[git remote remove origin], target_dir ]
+    assert_includes @output.string, "Run 'mise merge' there to merge updates from Code Moto."
     assert_equal 0600, File.stat(File.join(target_dir, ".env.production")).mode & 0777
   end
 

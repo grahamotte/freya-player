@@ -11,7 +11,7 @@ class GitDeploymentPatchTest < Minitest::Test
     GitDeploymentPatch.always
 
     assert local.any? { |command| command.include?("git remote add deployment deploy@1.2.3.4:") }
-    assert local.any? { |command| command.include?("git push -f deployment master") }
+    assert local.any? { |command| command.include?("git push deployment master") }
     assert_includes remote, "sudo mkdir -p /var/www/example.com"
     assert_includes remote, "sudo chown -R deploy:deploy /var/www/example.com"
     assert_includes remote, "cd /var/www/example.com && git fetch"
