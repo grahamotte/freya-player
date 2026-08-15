@@ -92,6 +92,7 @@ final class MediaItemQuickActionHandler {
             var activeRemoteSessionID = resource.remoteSessionID
             var seekTask: Task<Void, Never>?
             var recoveryTask: Task<Void, Never>?
+            var didCompletePlayback = false
             let playbackController = PlaybackSessionController()
             let controller = StockPlayerViewController(
                 playbackController: playbackController,
@@ -104,13 +105,15 @@ final class MediaItemQuickActionHandler {
                     let time = playbackController?.currentTimeMilliseconds ?? 0
                     let duration = playbackController?.durationMilliseconds
 
-                    self.model.reportPlaybackTimeline(
-                        for: playbackID,
-                        state: .stopped,
-                        time: time,
-                        duration: duration,
-                        sessionID: activeSessionID
-                    )
+                    if !didCompletePlayback {
+                        self.model.reportPlaybackTimeline(
+                            for: playbackID,
+                            state: .stopped,
+                            time: time,
+                            duration: duration,
+                            sessionID: activeSessionID
+                        )
+                    }
                     playbackController?.stop()
                     self.model.stopPlaybackSession(for: playbackID, sessionID: activeRemoteSessionID)
                 }
@@ -134,8 +137,16 @@ final class MediaItemQuickActionHandler {
                             sessionID: activeSessionID
                         )
                     },
-                    onPlaybackEnded: { [weak self] _, _ in
-                        self?.model.markPlaybackCompleted(for: playbackID)
+                    onPlaybackEnded: { [weak self] time, duration in
+                        didCompletePlayback = true
+                        self?.model.reportPlaybackTimeline(
+                            for: playbackID,
+                            state: .stopped,
+                            time: time,
+                            duration: duration,
+                            sessionID: activeSessionID
+                        )
+                        self?.model.markPlaybackCompleted(for: playbackID, sessionID: activeSessionID)
                         controller.dismiss(animated: true)
                     },
                     onRecoveryNeeded: { [weak self] savedTime, playbackError in
@@ -317,6 +328,7 @@ private struct QuickPlaybackPresenter: UIViewControllerRepresentable {
         var activeRemoteSessionID = request.resource.remoteSessionID
         var seekTask: Task<Void, Never>?
         var recoveryTask: Task<Void, Never>?
+        var didCompletePlayback = false
         let playbackController = PlaybackSessionController()
         let controller = StockPlayerViewController(
             playbackController: playbackController,
@@ -326,13 +338,15 @@ private struct QuickPlaybackPresenter: UIViewControllerRepresentable {
                 recoveryTask?.cancel()
                 let time = playbackController.currentTimeMilliseconds
                 let duration = playbackController.durationMilliseconds
-                model.reportPlaybackTimeline(
-                    for: request.playbackID,
-                    state: .stopped,
-                    time: time,
-                    duration: duration,
-                    sessionID: activeSessionID
-                )
+                if !didCompletePlayback {
+                    model.reportPlaybackTimeline(
+                        for: request.playbackID,
+                        state: .stopped,
+                        time: time,
+                        duration: duration,
+                        sessionID: activeSessionID
+                    )
+                }
                 playbackController.stop()
                 model.stopPlaybackSession(for: request.playbackID, sessionID: activeRemoteSessionID)
                 onPlayerDismissed()
@@ -358,8 +372,17 @@ private struct QuickPlaybackPresenter: UIViewControllerRepresentable {
                         sessionID: activeSessionID
                     )
                 },
-                onPlaybackEnded: { _, _ in
-                    model.markPlaybackCompleted(for: request.playbackID)
+                onPlaybackEnded: { time, duration in
+                    didCompletePlayback = true
+                    model.reportPlaybackTimeline(
+                        for: request.playbackID,
+                        state: .stopped,
+                        time: time,
+                        duration: duration,
+                        sessionID: activeSessionID
+                    )
+                    model.markPlaybackCompleted(for: request.playbackID, sessionID: activeSessionID)
+                    controller.dismiss(animated: true)
                 },
                 onRecoveryNeeded: { savedTime, playbackError in
                     guard canRecover else {

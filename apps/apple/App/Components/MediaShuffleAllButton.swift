@@ -19,15 +19,16 @@ struct MediaPlayAllButton: View {
     @State private var seekTask: Task<Void, Never>?
     @State private var recoveryTask: Task<Void, Never>?
     @State private var prepareTask: Task<Void, Never>?
+    @State private var loadTask: Task<Void, Never>?
     @FocusState private var isPlayFocused: Bool
 
     var body: some View {
         Menu {
             Button("In Order") {
-                Task { await start(shuffled: false) }
+                begin(shuffled: false)
             }
             Button("Shuffle") {
-                Task { await start(shuffled: true) }
+                begin(shuffled: true)
             }
         } label: {
             if isLoading {
@@ -62,20 +63,28 @@ struct MediaPlayAllButton: View {
         queue.indices.contains(index) ? queue[index] : nil
     }
 
+    private func begin(shuffled: Bool) {
+        loadTask?.cancel()
+        loadTask = Task { await start(shuffled: shuffled) }
+    }
+
     private func start(shuffled: Bool) async {
         let items = orderedPlayableItems
         queue = shuffled ? items.shuffled() : items
         index = 0
         didRetryCurrent = false
         preparedNext = nil
+        resumeOffset = nil
         await loadCurrent(showPlayer: true)
     }
 
     private func loadCurrent(showPlayer: Bool = false) async {
+        guard !Task.isCancelled else { return }
         guard let item = currentItem, let id = item.playbackID else {
             isShowingPlayer = false
             return
         }
+        let currentIndex = index
 
         isLoading = true
         defer { isLoading = false }
@@ -88,6 +97,10 @@ struct MediaPlayAllButton: View {
                 sessionID: nextSessionID,
                 offsetMilliseconds: startOffset
             )
+            guard !Task.isCancelled, index == currentIndex else {
+                model.stopPlaybackSession(for: id, sessionID: resource.remoteSessionID)
+                return
+            }
             sessionID = nextSessionID
             didFinishCurrent = false
             resumeOffset = nil
@@ -97,6 +110,7 @@ struct MediaPlayAllButton: View {
                 isShowingPlayer = true
             }
         } catch {
+            guard !Task.isCancelled, index == currentIndex else { return }
             index += 1
             didRetryCurrent = false
             await loadCurrent(showPlayer: showPlayer)
@@ -107,9 +121,11 @@ struct MediaPlayAllButton: View {
         seekTask?.cancel()
         recoveryTask?.cancel()
         prepareTask?.cancel()
+        loadTask?.cancel()
         seekTask = nil
         recoveryTask = nil
         prepareTask = nil
+        loadTask = nil
         let playbackID = currentItem?.playbackID ?? queue.compactMap(\.playbackID).first
         if let playbackID { reportStop(for: playbackID) }
         playbackController?.stop()
@@ -147,7 +163,7 @@ struct MediaPlayAllButton: View {
 
         didFinishCurrent = true
         model.reportPlaybackTimeline(for: id, state: .stopped, time: time, duration: duration, sessionID: sessionID)
-        model.markPlaybackCompleted(for: id)
+        model.markPlaybackCompleted(for: id, sessionID: sessionID)
         advance(to: index + 1)
     }
 
@@ -162,7 +178,8 @@ struct MediaPlayAllButton: View {
             self.preparedNext = nil
             schedulePrepareNext()
         } else {
-            Task { await loadCurrent() }
+            loadTask?.cancel()
+            loadTask = Task { await loadCurrent() }
         }
     }
 

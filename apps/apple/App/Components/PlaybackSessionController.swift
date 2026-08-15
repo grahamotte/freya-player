@@ -24,6 +24,7 @@ final class PlaybackSessionController {
     private var enableSubtitles = false
     private var shouldPlayWhenReady = false
     private var didPrepareCurrentItem = false
+    private var canSendTimelineEvents = false
     private var didRequestRecovery = false
     private var recoveryOffsetMilliseconds = 0
     private var pendingNavigationOffsetMilliseconds: Int?
@@ -70,6 +71,7 @@ final class PlaybackSessionController {
         self.onRecoveryNeeded = onRecoveryNeeded
         self.onNavigationNeeded = onNavigationNeeded
         didPrepareCurrentItem = false
+        canSendTimelineEvents = false
         didRequestRecovery = false
         recoveryOffsetMilliseconds = self.startOffsetMilliseconds ?? 0
         pendingNavigationOffsetMilliseconds = nil
@@ -81,7 +83,6 @@ final class PlaybackSessionController {
         observePlaybackEnd(item)
         observePlaybackFailure(item)
         observeDiagnostics(item)
-        sendState()
     }
 
     func play() {
@@ -117,6 +118,7 @@ final class PlaybackSessionController {
         lastState = nil
         shouldPlayWhenReady = false
         didPrepareCurrentItem = false
+        canSendTimelineEvents = false
     }
 
     var currentTimeMilliseconds: Int {
@@ -188,7 +190,9 @@ final class PlaybackSessionController {
         enableSubtitlesIfNeeded(on: item)
 
         guard let startOffsetMilliseconds else {
+            canSendTimelineEvents = true
             if shouldPlayWhenReady { player.play() }
+            sendState()
             return
         }
 
@@ -201,8 +205,10 @@ final class PlaybackSessionController {
             toleranceAfter: tolerance
         ) { [weak self, weak item] _ in
             guard let item, self?.player.currentItem === item else { return }
-            guard let self, self.shouldPlayWhenReady else { return }
-            self.player.play()
+            guard let self else { return }
+            self.canSendTimelineEvents = true
+            if self.shouldPlayWhenReady { self.player.play() }
+            self.sendState()
         }
     }
 
@@ -270,11 +276,13 @@ final class PlaybackSessionController {
     }
 
     private func sendCurrentTimeline() {
+        guard canSendTimelineEvents else { return }
         rememberCurrentTime()
         onTimelineEvent?(state(), currentTimeMilliseconds, durationMilliseconds)
     }
 
     private func sendState() {
+        guard canSendTimelineEvents else { return }
         let state = state()
         if state == .playing, onNavigationNeeded == nil {
             pendingNavigationOffsetMilliseconds = nil

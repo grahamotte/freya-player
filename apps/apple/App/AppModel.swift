@@ -31,6 +31,12 @@ final class AppModel: ObservableObject {
     private var activeLibraryOrder: [String] = []
     private var activeHiddenLibraryIDs: Set<String> = []
     private var cacheGeneration = 0
+    private let playbackReportQueue = PlaybackReportQueue<PlaybackReportKey>()
+
+    private struct PlaybackReportKey: Hashable {
+        let id: MediaPlaybackID
+        let sessionID: String
+    }
 
     convenience init() {
         self.init(
@@ -338,9 +344,12 @@ final class AppModel: ObservableObject {
         duration: Int?,
         sessionID: String
     ) {
-        Task { [weak self] in
-            guard let self else { return }
-            try? await self.connector(for: id.providerID).reportPlaybackTimeline(
+        let connector = connector(for: id.providerID)
+        playbackReportQueue.enqueue(
+            for: PlaybackReportKey(id: id, sessionID: sessionID),
+            isTerminal: state == .stopped
+        ) {
+            try? await connector.reportPlaybackTimeline(
                 for: id,
                 state: state,
                 time: time,
@@ -357,15 +366,17 @@ final class AppModel: ObservableObject {
         }
     }
 
-    func markPlaybackCompleted(for id: MediaPlaybackID) {
-        Task { [weak self] in
+    func markPlaybackCompleted(for id: MediaPlaybackID, sessionID: String) {
+        let previous = libraryCache.leaves(under: id.itemID)
+        _ = libraryCache.applyOptimisticWatchStatus(for: id.itemID, isWatched: true)
+        let connector = connector(for: id.providerID)
+
+        playbackReportQueue.enqueueFinalization(
+            for: PlaybackReportKey(id: id, sessionID: sessionID)
+        ) { [weak self] in
             guard let self else { return }
-
-            let previous = self.libraryCache.leaves(under: id.itemID)
-            _ = self.libraryCache.applyOptimisticWatchStatus(for: id.itemID, isWatched: true)
-
             do {
-                try await self.connector(for: id.providerID).markPlaybackCompleted(for: id)
+                try await connector.markPlaybackCompleted(for: id)
                 if let item = self.libraryCache.item(id.itemID) {
                     self.refreshItem(item)
                 }

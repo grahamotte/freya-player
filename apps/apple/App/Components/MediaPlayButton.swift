@@ -314,7 +314,6 @@ struct MediaPlayButton: View {
 
         recoveryTask?.cancel()
         recoveryTask = Task {
-            guard !isLoading else { return }
             isLoading = true
             defer { isLoading = false }
             let resumeOffset = savedTime > 0
@@ -388,7 +387,7 @@ struct MediaPlayButton: View {
     private func playbackEnded(time: Int, duration: Int?) {
         didCompletePlayback = true
         reportTimeline(state: .stopped, time: time, duration: duration)
-        model.markPlaybackCompleted(for: id)
+        model.markPlaybackCompleted(for: id, sessionID: playbackSessionID)
         presentedPlayerController?.dismiss(animated: true)
         presentedPlayerController = nil
         playbackController?.stop()
