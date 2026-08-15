@@ -1,5 +1,5 @@
 {
-  "build": "1.17.10",
+  "build": "1.18.0",
   "contactEmail": "graham.otte@gmail.com",
   "contactFirstName": "Graham",
   "contactLastName": "Otte",
@@ -105,6 +105,6 @@
     },
     "android": {}
   },
-  "version": "1.17.10",
-  "whatsNew": "Fixed HomePod playback on tvOS 27."
+  "version": "1.18.0",
+  "whatsNew": "Redesigned media details with artwork galleries and improved layouts. Improved playback reliability, library refreshes, and portrait artwork display."
 }
