@@ -11,7 +11,7 @@ Use this skill when the user asks to update dependencies, bump versions, upgrade
 
 Update all of these, unless the user narrows the request:
 
-1. `.tool-versions`
+1. The `[tools]` table in `mise.toml`
 2. `frontend/package.json`
 3. every Ruby `Gemfile`
 4. every Ruby `*.gemspec`
@@ -21,7 +21,7 @@ Prefer latest versions even when they are major upgrades. Pin all direct depende
 ## Workflow
 
 1. Inspect the current diff first and preserve unrelated user changes.
-2. Update `.tool-versions`:
+2. Update the `[tools]` table in `mise.toml`:
    - For each tool, use `mise latest <tool>` or the appropriate `mise latest <tool>@<major>` when staying on the same major/minor family is intentional.
    - Install or verify each changed tool with `mise install <tool>@<version>`.
    - Do not disable artifact verification to make an old version work. If a tool install fails because attestations are missing, choose a newer version that verifies.
@@ -30,7 +30,7 @@ Prefer latest versions even when they are major upgrades. Pin all direct depende
    - Run from `frontend`.
    - Use latest eligible versions, including majors, while keeping the 7-day release-age hardening: `pnpm update --latest --save-exact --config.minimum-release-age=10080`.
    - Ensure every dependency and devDependency in `frontend/package.json` is exact pinned, for example `"react": "19.2.6"`, with no `^` or `~`.
-   - Keep `packageManager` pinned to the `.tool-versions` pnpm version.
+   - Keep `packageManager` pinned to the `mise.toml` pnpm version.
    - Let pnpm generate `pnpm-lock.yaml`; do not edit it by hand.
    - Confirm `pnpm outdated --config.minimum-release-age=10080` reports nothing outdated.
 4. Update Ruby dependencies:
