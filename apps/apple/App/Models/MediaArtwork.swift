@@ -3,11 +3,17 @@ import Foundation
 
 struct MediaArtworkSet: Hashable, Codable {
     let posterURL: URL?
+    let thumbnailURL: URL?
     let landscapeURL: URL?
     let backdropURL: URL?
 
     func url(for style: MediaArtworkStyle) -> URL? {
-        posterURL ?? landscapeURL
+        switch style {
+        case .poster:
+            return posterURL ?? thumbnailURL ?? landscapeURL ?? backdropURL
+        case .landscape:
+            return landscapeURL ?? thumbnailURL ?? backdropURL ?? posterURL
+        }
     }
 }
 

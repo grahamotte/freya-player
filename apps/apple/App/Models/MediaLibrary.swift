@@ -79,7 +79,7 @@ struct LibraryReference: Hashable, Identifiable, Codable {
             isWatched: isWatched,
             progress: isWatched ? 1 : (progress > 0 ? progress : nil),
             resumeOffsetMilliseconds: nil,
-            artwork: .init(posterURL: nil, landscapeURL: nil, backdropURL: nil),
+            artwork: .init(posterURL: nil, thumbnailURL: nil, landscapeURL: nil, backdropURL: nil),
             detailSections: nil
         )
     }

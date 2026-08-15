@@ -55,6 +55,7 @@ func makeMediaItem(
         resumeOffsetMilliseconds: resumeOffsetMilliseconds,
         artwork: MediaArtworkSet(
             posterURL: URL(string: "https://example.com/poster"),
+            thumbnailURL: URL(string: "https://example.com/thumbnail"),
             landscapeURL: URL(string: "https://example.com/landscape"),
             backdropURL: URL(string: "https://example.com/backdrop")
         ),

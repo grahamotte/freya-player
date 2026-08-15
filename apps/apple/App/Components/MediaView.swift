@@ -4,6 +4,7 @@ struct MediaViewData {
     let title: String
     let metadata: [Metadata]
     let detailSections: [MediaItemDetailSection]
+    let detailArtwork: [Artwork]
     let synopsis: String
     let artworkURL: URL?
     let artworkStyle: MediaArtworkStyle
@@ -17,6 +18,14 @@ struct MediaViewData {
         let value: String
 
         var id: String { label }
+    }
+
+    struct Artwork: Identifiable {
+        let label: String
+        let url: URL
+        let style: MediaArtworkStyle
+
+        var id: String { "\(label):\(url.absoluteString)" }
     }
 }
 
@@ -56,7 +65,14 @@ struct MediaView<Content: View>: View {
                 .presentationBackground(.clear)
         }
         .fullScreenCover(isPresented: $isShowingDetails) {
-            FullItemDetailsView(title: data.title, sections: data.detailSections)
+            FullItemDetailsView(
+                title: data.title,
+                synopsis: data.synopsis,
+                sections: data.detailSections,
+                artwork: data.detailArtwork,
+                artworkURL: data.artworkURL,
+                backdropURL: data.backdropURL
+            )
                 .presentationBackground(.clear)
         }
     }
@@ -261,65 +277,312 @@ extension MediaView where Content == EmptyView {
     }
 }
 
+private struct FullScreenLayout {
+    let size: CGSize
+
+    var horizontalPadding: CGFloat {
+        if PlatformMetadata.isTV {
+            return min(72, max(32, size.width * 0.04))
+        }
+
+        return size.width < 600 ? 16 : 32
+    }
+
+    var controlTopPadding: CGFloat {
+        PlatformMetadata.isTV ? 32 : 16
+    }
+
+    var controlBottomPadding: CGFloat {
+        PlatformMetadata.isTV ? 20 : 8
+    }
+
+    var contentBottomPadding: CGFloat {
+        PlatformMetadata.isTV ? 64 : 32
+    }
+
+    func contentWidth(maximum: CGFloat) -> CGFloat {
+        min(maximum, max(size.width - (horizontalPadding * 2), 1))
+    }
+}
+
 private struct FullItemDetailsView: View {
     let title: String
+    let synopsis: String
     let sections: [MediaItemDetailSection]
+    let artwork: [MediaViewData.Artwork]
+    let artworkURL: URL?
+    let backdropURL: URL?
     @Environment(\.dismiss) private var dismiss
-    @FocusState private var focusedRowID: String?
+    @FocusState private var focusedItemID: String?
 
     var body: some View {
-        ZStack(alignment: .topTrailing) {
-            Color.black.opacity(0.88)
-                .ignoresSafeArea()
+        GeometryReader { proxy in
+            let layout = FullScreenLayout(size: proxy.size)
+            let contentWidth = layout.contentWidth(maximum: PlatformMetadata.isTV ? 1600 : 1040)
 
-            ScrollView {
-                VStack(alignment: .leading, spacing: 32) {
-                    Text(title)
-                        .font(.largeTitle.bold())
+            ZStack {
+                MediaBackdropView(artworkURL: artworkURL, backdropURL: backdropURL)
 
-                    ForEach(sections) { section in
-                        VStack(alignment: .leading, spacing: 16) {
-                            Text(section.title)
-                                .font(.title2.bold())
+                Color.black.opacity(0.4)
+                    .ignoresSafeArea()
 
-                            ForEach(section.rows) { row in
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text(row.label)
-                                        .font(.caption.weight(.semibold))
-                                        .foregroundStyle(AppTheme.secondaryText)
+                VStack(spacing: 0) {
+                    HStack {
+                        Spacer(minLength: 0)
+                        closeButton
+                    }
+                    .padding(.horizontal, layout.horizontalPadding)
+                    .padding(.top, layout.controlTopPadding)
+                    .padding(.bottom, layout.controlBottomPadding)
 
-                                    Text(row.value)
-                                        .font(.body)
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: contentSpacing) {
+                            header
+                            descriptionSection
+
+                            if !artwork.isEmpty {
+                                artworkGallery(availableWidth: contentWidth)
+                            }
+
+                            LazyVStack(alignment: .leading, spacing: sectionSpacing) {
+                                ForEach(sections) { section in
+                                    if !section.rows.isEmpty {
+                                        detailSection(section, availableWidth: contentWidth)
+                                    }
                                 }
-                                .focusable(PlatformMetadata.isTV)
-                                .focused($focusedRowID, equals: "\(section.id):\(row.id)")
                             }
                         }
+                        .frame(width: contentWidth, alignment: .leading)
+                        .padding(.bottom, layout.contentBottomPadding)
+                        .frame(maxWidth: .infinity, alignment: .center)
+                        .tvOSFocusSection()
                     }
+                    .scrollIndicators(.hidden)
                 }
-                .frame(maxWidth: PlatformMetadata.isTV ? 1400 : 860, alignment: .leading)
-                .padding(32)
-                .frame(maxWidth: .infinity, alignment: .center)
             }
-
-            closeButton
+            .frame(width: proxy.size.width, height: proxy.size.height)
         }
         .tvExitCommand { dismiss() }
-        .task {
-            guard PlatformMetadata.isTV, let section = sections.first, let row = section.rows.first else { return }
-            focusedRowID = "\(section.id):\(row.id)"
+        .defaultFocus($focusedItemID, initialFocusID)
+    }
+
+    private var header: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(title)
+                .font(PlatformMetadata.isTV ? .system(size: 58, weight: .bold) : .largeTitle.bold())
+                .frame(maxWidth: 1100, alignment: .leading)
+
+            Text("\(rowCount) fields across \(nonemptySections.count) sections")
+                .font(.callout)
+                .foregroundStyle(AppTheme.secondaryText)
         }
     }
 
-    @ViewBuilder
+    private var descriptionSection: some View {
+        let focusID = "description"
+        let isFocused = focusedItemID == focusID
+
+        return VStack(alignment: .leading, spacing: 16) {
+            detailHeading("Description", caption: nil)
+
+            Text(synopsis)
+                .font(.body)
+                .foregroundStyle(AppTheme.secondaryText)
+                .fixedSize(horizontal: false, vertical: true)
+                .userSelectableText()
+                .padding(PlatformMetadata.isTV ? 20 : 16)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background {
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .fill(isFocused ? AppTheme.emphasizedSurfaceFill : AppTheme.subtleSurfaceFill)
+                }
+                .focusable(PlatformMetadata.isTV)
+                .focused($focusedItemID, equals: focusID)
+        }
+        .tvOSFocusSection()
+    }
+
+    private func artworkGallery(availableWidth: CGFloat) -> some View {
+        VStack(alignment: .leading, spacing: 16) {
+            detailHeading("Artwork", caption: nil)
+
+            ScrollView(.horizontal) {
+                HStack(alignment: .top, spacing: PlatformMetadata.isTV ? 24 : 16) {
+                    ForEach(artwork) { image in
+                        let focusID = "artwork:\(image.id)"
+
+                        FullItemDetailArtwork(
+                            image: image,
+                            isFocused: focusedItemID == focusID,
+                            availableWidth: availableWidth
+                        )
+                            .focusable(PlatformMetadata.isTV)
+                            .focused($focusedItemID, equals: focusID)
+                    }
+                }
+                .padding(.vertical, 8)
+                .padding(.horizontal, 4)
+            }
+            .scrollIndicators(.hidden)
+        }
+        .tvOSFocusSection()
+    }
+
+    private func detailSection(_ section: MediaItemDetailSection, availableWidth: CGFloat) -> some View {
+        VStack(alignment: .leading, spacing: PlatformMetadata.isTV ? 24 : 18) {
+            detailHeading(
+                section.title,
+                caption: "\(section.rows.count) \(section.rows.count == 1 ? "field" : "fields")"
+            )
+
+            LazyVGrid(
+                columns: detailColumns(availableWidth: availableWidth),
+                alignment: .leading,
+                spacing: gridSpacing
+            ) {
+                ForEach(section.rows) { row in
+                    let focusID = rowFocusID(section: section, row: row)
+
+                    FullItemDetailRow(row: row, isFocused: focusedItemID == focusID)
+                        .focusable(PlatformMetadata.isTV)
+                        .focused($focusedItemID, equals: focusID)
+                }
+            }
+        }
+        .padding(.vertical, PlatformMetadata.isTV ? 20 : 12)
+        .overlay(alignment: .top) {
+            Divider()
+                .overlay(AppTheme.surfaceBorder)
+        }
+        .tvOSFocusSection()
+    }
+
+    private func detailHeading(_ title: String, caption: String?) -> some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(alignment: .firstTextBaseline, spacing: 16) {
+                Text(title)
+                    .font(PlatformMetadata.isTV ? .title2.bold() : .title3.bold())
+
+                Spacer(minLength: 0)
+
+                if let caption {
+                    Text(caption)
+                        .font(.caption)
+                        .foregroundStyle(AppTheme.secondaryText)
+                }
+            }
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(PlatformMetadata.isTV ? .title2.bold() : .title3.bold())
+
+                if let caption {
+                    Text(caption)
+                        .font(.caption)
+                        .foregroundStyle(AppTheme.secondaryText)
+                }
+            }
+        }
+    }
+
+    private func detailColumns(availableWidth: CGFloat) -> [GridItem] {
+        let preferredMinimum: CGFloat = PlatformMetadata.isTV ? 360 : (PlatformMetadata.isPhone ? 220 : 280)
+        let minimum = min(preferredMinimum, max(availableWidth, 1))
+        return [GridItem(.adaptive(minimum: minimum), spacing: gridSpacing, alignment: .top)]
+    }
+
+    private var contentSpacing: CGFloat {
+        PlatformMetadata.isTV ? 48 : 32
+    }
+
+    private var sectionSpacing: CGFloat {
+        PlatformMetadata.isTV ? 28 : 20
+    }
+
+    private var gridSpacing: CGFloat {
+        PlatformMetadata.isTV ? 16 : 12
+    }
+
+    private var nonemptySections: [MediaItemDetailSection] {
+        sections.filter { !$0.rows.isEmpty }
+    }
+
+    private var rowCount: Int {
+        sections.reduce(0) { $0 + $1.rows.count }
+    }
+
+    private var initialFocusID: String? {
+        guard PlatformMetadata.isTV else { return nil }
+        return "description"
+    }
+
+    private func rowFocusID(section: MediaItemDetailSection, row: MediaItemDetailSection.Row) -> String {
+        return "\(section.id):\(row.id)"
+    }
+
     private var closeButton: some View {
-        #if os(tvOS)
-        EmptyView()
-        #else
-        Button("Done") { dismiss() }
-            .buttonStyle(MediaGlassButtonStyle(horizontalPadding: 20, verticalPadding: 10))
-            .padding(28)
-        #endif
+        Button { dismiss() } label: {
+            Label("Close", systemImage: "xmark")
+        }
+        .buttonStyle(
+            MediaGlassButtonStyle(
+                horizontalPadding: PlatformMetadata.isTV ? 22 : 20,
+                verticalPadding: PlatformMetadata.isTV ? 14 : 10
+            )
+        )
+    }
+}
+
+private struct FullItemDetailArtwork: View {
+    let image: MediaViewData.Artwork
+    let isFocused: Bool
+    let availableWidth: CGFloat
+
+    private var height: CGFloat {
+        let preferredHeight: CGFloat = PlatformMetadata.isTV ? 280 : 210
+        let availableImageWidth = max(availableWidth - 20, 1)
+        return min(preferredHeight, availableImageWidth / image.style.aspectRatio)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            MediaArtworkView(url: image.url, title: image.label, style: image.style)
+                .frame(width: height * image.style.aspectRatio, height: height)
+
+            Text(image.label)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(AppTheme.secondaryText)
+        }
+        .padding(10)
+        .background {
+            RoundedRectangle(cornerRadius: 26, style: .continuous)
+                .fill(isFocused ? AppTheme.emphasizedSurfaceFill : .clear)
+        }
+    }
+}
+
+private struct FullItemDetailRow: View {
+    let row: MediaItemDetailSection.Row
+    let isFocused: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(row.label)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(AppTheme.secondaryText)
+
+            Text(row.value)
+                .font(.body.monospaced())
+                .foregroundStyle(AppTheme.primaryText)
+                .fixedSize(horizontal: false, vertical: true)
+                .userSelectableText()
+        }
+        .frame(maxWidth: .infinity, minHeight: PlatformMetadata.isTV ? 86 : 72, alignment: .topLeading)
+        .padding(PlatformMetadata.isTV ? 20 : 16)
+        .background {
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(isFocused ? AppTheme.emphasizedSurfaceFill : AppTheme.subtleSurfaceFill)
+        }
     }
 }
 
@@ -489,38 +752,52 @@ private struct FullItemTextView: View {
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        ZStack(alignment: .topTrailing) {
-            Color.black.opacity(0.88)
-                .ignoresSafeArea()
+        GeometryReader { proxy in
+            let layout = FullScreenLayout(size: proxy.size)
 
-            ScrollView {
-                VStack(alignment: .leading, spacing: 24) {
-                    Text(title)
-                        .font(.largeTitle.bold())
+            ZStack {
+                Color.black.opacity(0.88)
+                    .ignoresSafeArea()
 
-                    Text(synopsis)
-                        .font(.body)
-                        .foregroundStyle(AppTheme.secondaryText)
+                VStack(spacing: 0) {
+                    HStack {
+                        Spacer(minLength: 0)
+                        closeButton
+                    }
+                    .padding(.horizontal, layout.horizontalPadding)
+                    .padding(.top, layout.controlTopPadding)
+                    .padding(.bottom, layout.controlBottomPadding)
+
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 24) {
+                            Text(title)
+                                .font(.largeTitle.bold())
+
+                            Text(synopsis)
+                                .font(.body)
+                                .foregroundStyle(AppTheme.secondaryText)
+                        }
+                        .frame(width: layout.contentWidth(maximum: 860), alignment: .leading)
+                        .padding(.bottom, layout.contentBottomPadding)
+                        .frame(maxWidth: .infinity, alignment: .center)
+                    }
                 }
-                .frame(maxWidth: 860, alignment: .leading)
-                .padding(32)
-                .frame(maxWidth: .infinity, alignment: .center)
             }
-
-            closeButton
+            .frame(width: proxy.size.width, height: proxy.size.height)
         }
         .tvExitCommand { dismiss() }
     }
 
-    @ViewBuilder
     private var closeButton: some View {
-        #if os(tvOS)
-        EmptyView()
-        #else
-        Button("Done") { dismiss() }
-            .buttonStyle(MediaGlassButtonStyle(horizontalPadding: 20, verticalPadding: 10))
-            .padding(28)
-        #endif
+        Button { dismiss() } label: {
+            Label("Close", systemImage: "xmark")
+        }
+        .buttonStyle(
+            MediaGlassButtonStyle(
+                horizontalPadding: PlatformMetadata.isTV ? 22 : 20,
+                verticalPadding: PlatformMetadata.isTV ? 14 : 10
+            )
+        )
     }
 }
 

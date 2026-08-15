@@ -206,37 +206,17 @@ struct PlexMediaItem: Decodable, Identifiable, Hashable {
         return components.url
     }
 
-    private func posterImagePath(for kind: MediaItemKind) -> String? {
+    private func thumbnailImagePath(for kind: MediaItemKind) -> String? {
         switch kind {
         case .movie, .series, .season:
             return thumb ?? parentThumb ?? grandparentThumb
-        case .episode:
-            return nil
-        case .other:
+        case .episode, .other:
             return thumb
         }
     }
 
-    private func landscapeImagePath(for kind: MediaItemKind) -> String? {
-        switch kind {
-        case .movie, .series, .season:
-            return nil
-        case .episode:
-            return thumb
-        case .other:
-            return art ?? thumb
-        }
-    }
-
-    private func backdropImagePath(for kind: MediaItemKind) -> String? {
-        switch kind {
-        case .movie, .series, .season:
-            return art
-        case .episode:
-            return thumb
-        case .other:
-            return art ?? thumb
-        }
+    private var backdropImagePath: String? {
+        art
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -429,6 +409,9 @@ extension PlexMediaItem {
         fallbackKind: MediaItemKind
     ) -> MediaItem {
         let kind = resolvedKind(fallbackKind: fallbackKind)
+        let thumbnailSize = kind.artworkStyle == .poster
+            ? (width: 480, height: 720)
+            : (width: 780, height: 439)
 
         return MediaItem(
             providerID: providerID,
@@ -447,24 +430,19 @@ extension PlexMediaItem {
             progress: progress,
             resumeOffsetMilliseconds: !isWatched ? viewOffset : nil,
             artwork: MediaArtworkSet(
-                posterURL: imageURL(
+                posterURL: nil,
+                thumbnailURL: imageURL(
                     baseURL: serverURL,
                     token: serverToken,
-                    path: posterImagePath(for: kind),
-                    width: 480,
-                    height: 720
+                    path: thumbnailImagePath(for: kind),
+                    width: thumbnailSize.width,
+                    height: thumbnailSize.height
                 ),
-                landscapeURL: imageURL(
-                    baseURL: serverURL,
-                    token: serverToken,
-                    path: landscapeImagePath(for: kind),
-                    width: 780,
-                    height: 439
-                ),
+                landscapeURL: nil,
                 backdropURL: imageURL(
                     baseURL: serverURL,
                     token: serverToken,
-                    path: backdropImagePath(for: kind),
+                    path: backdropImagePath,
                     width: 1920,
                     height: 1080
                 )

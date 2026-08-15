@@ -55,7 +55,7 @@ struct MediaItem: Hashable, Identifiable, Codable {
     }
 
     var backdropURL: URL? {
-        artwork.backdropURL ?? artwork.landscapeURL
+        artwork.backdropURL ?? artwork.landscapeURL ?? artwork.thumbnailURL
     }
 
     var runtimeText: String? {
