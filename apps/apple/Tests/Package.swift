@@ -22,7 +22,6 @@ let package = Package(
                 "Connectors/Plex/PlexModels.swift",
                 "Connectors/Plex/PlexSessionStore.swift",
                 "FreyaPlayerApp.swift",
-                "Libraries/GatedURLSession.swift",
                 "Libraries/KeychainStore.swift",
                 "Libraries/LibraryCache.swift",
                 "Libraries/MediaViewData+MediaItem.swift",

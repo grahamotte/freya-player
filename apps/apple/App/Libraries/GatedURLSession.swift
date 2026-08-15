@@ -8,6 +8,7 @@ extension URLSession {
         priority: RequestScheduler.Priority = .normal
     ) async throws -> (Data, URLResponse) {
         var timedRequest = request
+        timedRequest.cachePolicy = .reloadIgnoringLocalCacheData
         timedRequest.timeoutInterval = min(timedRequest.timeoutInterval, 15)
         let request = timedRequest
         return try await RequestScheduler.shared.run(priority: priority) {
