@@ -69,10 +69,9 @@ struct MediaView<Content: View>: View {
         let metrics = metrics.balancedPanelPadding
         let availableWidth = proxy.size.width - (metrics.horizontalPadding * 2)
         let synopsisWidth = availableWidth - metrics.panelHorizontalPadding
-        let collapse = min(max((detailScrollOffset - 12) / 140, 0), 1)
-        let fade = min(max((detailScrollOffset - 8) / 64, 0), 1)
+        let fade = min(max(detailScrollOffset / 160, 0), 1)
         let fadeOpacity = Double(fade)
-        let artworkSectionHeight = proxy.size.height * (0.38 - (collapse * 0.18))
+        let artworkSectionHeight = proxy.size.height * 0.38
         let artworkBounds = CGSize(
             width: availableWidth,
             height: max(artworkSectionHeight - metrics.topPadding, 1)
@@ -98,7 +97,7 @@ struct MediaView<Content: View>: View {
                                 )
                             )
                     }
-                    .opacity(1 - (fadeOpacity * 0.45))
+                    .opacity(1 - fadeOpacity)
 
                 Spacer(minLength: 0)
             }
@@ -151,26 +150,21 @@ struct MediaView<Content: View>: View {
         tracksOffset: Bool
     ) -> some View {
         ScrollView {
-            if tracksOffset {
-                GeometryReader { proxy in
-                    Color.clear.preference(
-                        key: DetailScrollOffsetKey.self,
-                        value: -proxy.frame(in: .named("itemDetailScroll")).minY
-                    )
-                }
-                .frame(height: 1)
-            }
-
             detailsContent(synopsisWidth: synopsisWidth, metrics: metrics)
         }
-        .coordinateSpace(name: "itemDetailScroll")
-        .onPreferenceChange(DetailScrollOffsetKey.self) { detailScrollOffset = $0 }
+        .onScrollGeometryChange(for: CGFloat.self) { geometry in
+            guard tracksOffset else { return 0 }
+            return max(geometry.contentOffset.y + geometry.contentInsets.top, 0)
+        } action: { _, offset in
+            detailScrollOffset = offset
+        }
         .padding(.leading, metrics.panelLeadingPadding)
         .padding(.trailing, metrics.panelTrailingPadding)
         .padding(.vertical, metrics.panelVerticalPadding)
         .frame(width: width, alignment: .leading)
         .frame(maxHeight: .infinity, alignment: .leading)
         .scrollIndicators(.hidden)
+        .scrollBounceBehavior(.basedOnSize, axes: .vertical)
         .scrollClipDisabled()
     }
 
@@ -457,14 +451,6 @@ private extension View {
                 endPoint: .trailing
             )
         )
-    }
-}
-
-private struct DetailScrollOffsetKey: PreferenceKey {
-    static var defaultValue: CGFloat = 0
-
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        value = nextValue()
     }
 }
 
