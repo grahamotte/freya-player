@@ -130,7 +130,6 @@ final class PlexClient {
             return MediaPlaybackResource(
                 url: url,
                 localStartOffsetMilliseconds: nil,
-                reloadsForSeek: true,
                 remoteSessionID: sessionID,
                 descriptionPrefix: metadata.transcodingDescription(
                     quality: selection.quality,
@@ -177,7 +176,6 @@ final class PlexClient {
         return MediaPlaybackResource(
             url: url,
             localStartOffsetMilliseconds: nil,
-            reloadsForSeek: true,
             remoteSessionID: sessionID,
             descriptionPrefix: metadata.transcodingDescription(
                 quality: quality,
