@@ -1,5 +1,5 @@
 {
-  "build": "1.19.1",
+  "build": "1.19.2",
   "contactEmail": "graham.otte@gmail.com",
   "contactFirstName": "Graham",
   "contactLastName": "Otte",
@@ -105,6 +105,6 @@
     },
     "android": {}
   },
-  "version": "1.19.1",
-  "whatsNew": "Added manual library refresh. Home shelves now follow each library's saved filter and sort, with more reliable background updates, artwork loading, and immediate sort changes."
+  "version": "1.19.2",
+  "whatsNew": "Improved Play Options with remembered quality, audio, and subtitle choices, clearer defaults and transcoding details, and a smoother playback start. Added manual library refresh. Home shelves now follow each library's saved filter and sort, with more reliable updates and artwork loading."
 }
