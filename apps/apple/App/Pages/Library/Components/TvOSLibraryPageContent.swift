@@ -32,9 +32,6 @@ struct TvOSLibraryPageContent: View {
         .background(AppBackground())
         .task(id: library.id) {
             state.update(library: library)
-            await PollingLoop.run {
-                state.refresh()
-            }
         }
         .onReceive(defaultsDidChange) { _ in
             state.loadSavedControls()
@@ -583,6 +580,7 @@ private final class LibraryGridCell: UICollectionViewCell {
     private var imageHeightConstraint: NSLayoutConstraint!
     private var imageTask: Task<Void, Never>?
     private var currentArtworkURL: URL?
+    private var isShowingArtwork = false
     private var style: LibraryTileStyle = .landscape
 
     override init(frame: CGRect) {
@@ -660,6 +658,8 @@ private final class LibraryGridCell: UICollectionViewCell {
     }
 
     func configure(item: MediaItem, subtitle: String?, artworkURL: URL?, style: LibraryTileStyle) {
+        let didChangeArtwork = currentArtworkURL != artworkURL
+
         self.style = style
         accessibilityLabel = item.title
         currentArtworkURL = artworkURL
@@ -668,29 +668,44 @@ private final class LibraryGridCell: UICollectionViewCell {
         subtitleLabel.text = subtitle
         iconView.image = UIImage(systemName: style.placeholderIconName)
         progressView.setProgress(item.progress, isWatched: item.isWatched)
-        imageView.image = Self.placeholderImage
-        placeholderStack.isHidden = false
         imageHeightConstraint.constant = style.imageHeight(for: bounds.width)
 
-        imageTask?.cancel()
-        imageTask = nil
+        if didChangeArtwork {
+            imageTask?.cancel()
+            imageTask = nil
+            isShowingArtwork = false
+            imageView.image = Self.placeholderImage
+            placeholderStack.isHidden = false
+        }
 
-        guard let artworkURL else { return }
+        guard let artworkURL else {
+            imageView.image = Self.placeholderImage
+            placeholderStack.isHidden = false
+            isShowingArtwork = false
+            return
+        }
+
+        guard !isShowingArtwork else { return }
+        guard imageTask == nil else { return }
 
         if let image = ArtworkImageCache.shared.image(for: artworkURL) {
             imageView.image = image
             placeholderStack.isHidden = true
+            isShowingArtwork = true
             return
         }
 
         imageTask = Task { [weak self] in
-            guard let image = await ArtworkImageCache.shared.loadImage(from: artworkURL) else { return }
+            let image = await ArtworkImageCache.shared.loadImage(from: artworkURL)
             guard !Task.isCancelled else { return }
 
             await MainActor.run {
                 guard let self, self.currentArtworkURL == artworkURL else { return }
+                self.imageTask = nil
+                guard let image else { return }
                 self.imageView.image = image
                 self.placeholderStack.isHidden = true
+                self.isShowingArtwork = true
             }
         }
     }
@@ -706,6 +721,7 @@ private final class LibraryGridCell: UICollectionViewCell {
         imageTask?.cancel()
         imageTask = nil
         currentArtworkURL = nil
+        isShowingArtwork = false
         imageView.image = Self.placeholderImage
         placeholderStack.isHidden = false
         progressView.setProgress(nil, isWatched: false)

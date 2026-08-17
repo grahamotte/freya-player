@@ -15,14 +15,6 @@ struct TvOSLibrariesPageContent: View {
         )
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(LibrariesAmbientBackground())
-        .task(id: server.id) {
-            await PollingLoop.run {
-                model.refreshConnection()
-                for library in server.libraries where !library.isHidden && library.reference.defaultItemKind == .series {
-                    _ = model.warmLibraryChildren(library.reference)
-                }
-            }
-        }
     }
 }
 
@@ -57,6 +49,8 @@ private final class LibrariesCollectionViewController: UIViewController, UIColle
     private var focusedSectionID: String?
     private var preferredFocusItemID: String?
     private var cacheSubscription: AnyCancellable?
+    private var refreshSubscription: AnyCancellable?
+    private var isRefreshing = false
     private lazy var quickActionHandler = MediaItemQuickActionHandler(
         presenter: self,
         model: model,
@@ -76,6 +70,7 @@ private final class LibrariesCollectionViewController: UIViewController, UIColle
         self.model = model
         self.server = server
         self.onSelectRoute = onSelectRoute
+        self.isRefreshing = model.isRefreshingAllLibraries(server)
         super.init(nibName: nil, bundle: nil)
         sections = makeSections(from: server)
         selectedTitles = makeSelectedTitles(from: sections)
@@ -84,6 +79,16 @@ private final class LibrariesCollectionViewController: UIViewController, UIColle
             .throttle(for: .milliseconds(250), scheduler: DispatchQueue.main, latest: true)
             .sink { [weak self] _ in
                 self?.rebuildSectionsPreservingScrollPosition()
+            }
+
+        refreshSubscription = model.refreshTracker.$inFlight
+            .sink { [weak self] inFlight in
+                guard let self else { return }
+                let nextIsRefreshing = inFlight.contains(.connection)
+                    || self.server.libraries.contains { inFlight.contains(.library($0.id)) }
+                guard self.isRefreshing != nextIsRefreshing else { return }
+                self.isRefreshing = nextIsRefreshing
+                self.rebuildSectionsPreservingScrollPosition()
             }
     }
 
@@ -139,8 +144,10 @@ private final class LibrariesCollectionViewController: UIViewController, UIColle
     }
 
     func update(server: ConnectedServer) {
+        guard self.server != server else { return }
         let shouldPreserveScrollPosition = self.server.id == server.id
         self.server = server
+        isRefreshing = model.isRefreshingAllLibraries(server)
         sections = makeSections(from: server)
         selectedTitles = makeSelectedTitles(from: sections)
 
@@ -161,12 +168,15 @@ private final class LibrariesCollectionViewController: UIViewController, UIColle
         let item = sections[indexPath.section].items[indexPath.item]
 
         switch item.kind {
-        case .manageServer:
+        case .manageServer, .refresh:
             let cell = collectionView.dequeueReusableCell(
                 withReuseIdentifier: LibrariesActionCell.reuseIdentifier,
                 for: indexPath
             ) as! LibrariesActionCell
-            cell.configure(title: item.title)
+            cell.configure(
+                title: item.title,
+                isRefreshing: item.kind == .refresh(isRefreshing: true)
+            )
             return cell
 
         case .openLibrary, .media:
@@ -219,6 +229,10 @@ private final class LibrariesCollectionViewController: UIViewController, UIColle
     func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {
         let item = sections[indexPath.section].items[indexPath.item]
         handlePrimaryAction(for: item)
+    }
+
+    func collectionView(_ collectionView: UICollectionView, canFocusItemAt indexPath: IndexPath) -> Bool {
+        sections[indexPath.section].items[indexPath.item].kind != .refresh(isRefreshing: true)
     }
 
     func indexPathForPreferredFocusedView(in collectionView: UICollectionView) -> IndexPath? {
@@ -416,6 +430,18 @@ private final class LibrariesCollectionViewController: UIViewController, UIColle
             kind: .manage,
             items: [
                 LibrariesItem(
+                    id: "refresh",
+                    title: isRefreshing ? "Refreshing..." : "Refresh",
+                    artworkURL: nil,
+                    progress: nil,
+                    isWatched: false,
+                    mediaItem: nil,
+                    route: nil,
+                    style: .wide,
+                    kind: .refresh(isRefreshing: isRefreshing),
+                    iconName: nil
+                ),
+                LibrariesItem(
                     id: "manage-server",
                     title: "Manage",
                     artworkURL: nil,
@@ -513,6 +539,11 @@ private final class LibrariesCollectionViewController: UIViewController, UIColle
     }
 
     private func handlePrimaryAction(for item: LibrariesItem) {
+        if item.kind == .refresh(isRefreshing: false) {
+            model.refreshAllLibraries(server)
+            return
+        }
+
         guard let route = item.route else { return }
         onSelectRoute(route)
     }
@@ -570,7 +601,10 @@ private final class LibrariesCollectionViewController: UIViewController, UIColle
             case let cell as LibraryTileCell:
                 cell.configure(item: item)
             case let cell as LibrariesActionCell:
-                cell.configure(title: item.title)
+                cell.configure(
+                    title: item.title,
+                    isRefreshing: item.kind == .refresh(isRefreshing: true)
+                )
             default:
                 continue
             }
@@ -628,6 +662,7 @@ private enum LibrariesItemKind: Hashable {
     case openLibrary
     case media
     case manageServer
+    case refresh(isRefreshing: Bool)
 }
 
 private struct LibrariesSectionReloadKey: Equatable {
@@ -782,12 +817,36 @@ private final class LibraryTileCell: UICollectionViewCell {
 
 private final class LibrariesActionCell: UICollectionViewListCell {
     static let reuseIdentifier = "LibrariesActionCell"
-    private var title = ""
+    private let activityIndicator = UIActivityIndicatorView(style: .medium)
+    private let titleLabel = UILabel()
+    private let stackView = UIStackView()
+    private var isRefreshing = false
 
     override init(frame: CGRect) {
         super.init(frame: frame)
         clipsToBounds = false
         contentView.clipsToBounds = false
+
+        activityIndicator.hidesWhenStopped = true
+
+        titleLabel.font = .preferredFont(forTextStyle: .headline)
+        titleLabel.numberOfLines = 1
+        titleLabel.textAlignment = .center
+
+        stackView.axis = .horizontal
+        stackView.alignment = .center
+        stackView.spacing = 10
+        stackView.translatesAutoresizingMaskIntoConstraints = false
+        stackView.addArrangedSubview(activityIndicator)
+        stackView.addArrangedSubview(titleLabel)
+
+        contentView.addSubview(stackView)
+        NSLayoutConstraint.activate([
+            stackView.leadingAnchor.constraint(greaterThanOrEqualTo: contentView.leadingAnchor, constant: 28),
+            stackView.trailingAnchor.constraint(lessThanOrEqualTo: contentView.trailingAnchor, constant: -28),
+            stackView.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
+            stackView.centerYAnchor.constraint(equalTo: contentView.centerYAnchor)
+        ])
     }
 
     @available(*, unavailable)
@@ -795,28 +854,32 @@ private final class LibrariesActionCell: UICollectionViewListCell {
         fatalError("init(coder:) has not been implemented")
     }
 
-    func configure(title: String) {
-        self.title = title
+    func configure(title: String, isRefreshing: Bool) {
+        titleLabel.text = title
+        self.isRefreshing = isRefreshing
+        if isRefreshing {
+            activityIndicator.startAnimating()
+        } else {
+            activityIndicator.stopAnimating()
+        }
         setNeedsUpdateConfiguration()
     }
 
     override func updateConfiguration(using state: UICellConfigurationState) {
         super.updateConfiguration(using: state)
 
-        var content = UIListContentConfiguration.cell().updated(for: state)
-        content.text = title
-        content.textProperties.font = .preferredFont(forTextStyle: .headline)
-        content.textProperties.alignment = .center
-        content.textProperties.numberOfLines = 1
-        content.textProperties.color = state.isFocused ? AppTheme.uiInverseText : AppTheme.uiPrimaryText
-        content.directionalLayoutMargins = .init(top: 0, leading: 28, bottom: 0, trailing: 28)
-        contentConfiguration = content
+        let isFocused = state.isFocused && !isRefreshing
+        let foregroundColor = isFocused
+            ? AppTheme.uiInverseText
+            : isRefreshing ? AppTheme.uiSecondaryText : AppTheme.uiPrimaryText
+        titleLabel.textColor = foregroundColor
+        activityIndicator.color = foregroundColor
 
         var background = UIBackgroundConfiguration.clear().updated(for: state)
         background.cornerRadius = 36
-        background.backgroundColor = state.isFocused ? AppTheme.uiPrimaryText : AppTheme.uiSurfaceBorder
-        background.strokeColor = state.isFocused ? .clear : AppTheme.uiPrimaryText.withAlphaComponent(0.28)
-        background.strokeWidth = state.isFocused ? 0 : 1
+        background.backgroundColor = isFocused ? AppTheme.uiPrimaryText : AppTheme.uiSurfaceBorder
+        background.strokeColor = isFocused ? .clear : AppTheme.uiPrimaryText.withAlphaComponent(isRefreshing ? 0.14 : 0.28)
+        background.strokeWidth = isFocused ? 0 : 1
         backgroundConfiguration = background
     }
 }

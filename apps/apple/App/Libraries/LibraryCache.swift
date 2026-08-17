@@ -11,11 +11,13 @@ import Combine
 /// episodes/movies that we'd actually show pages for.
 @MainActor
 final class LibraryCache: ObservableObject {
-    @Published private(set) var snapshot: LibraryCacheSnapshot
+    private(set) var snapshot: LibraryCacheSnapshot
     @Published private(set) var storageSizeBytes: Int64
 
     private let storage: LibraryCacheStorage
     private var pendingSave: Task<Void, Never>?
+    private var batchDepth = 0
+    private var hasPendingBatchChanges = false
     private let snapshotDidChangeSubject = PassthroughSubject<LibraryCacheSnapshot, Never>()
 
     var snapshotDidChange: AnyPublisher<LibraryCacheSnapshot, Never> {
@@ -36,7 +38,8 @@ final class LibraryCache: ObservableObject {
 
     func install(server: ConnectedServer) {
         let key = Self.serverKey(providerID: server.providerID, serverID: server.serverID)
-        var next = snapshot.serverKey == key ? snapshot : LibraryCacheSnapshot(serverKey: key)
+        let isCurrentServer = snapshot.serverKey == key
+        var next = isCurrentServer ? snapshot : LibraryCacheSnapshot(serverKey: key)
 
         next.serverKey = key
 
@@ -47,33 +50,62 @@ final class LibraryCache: ObservableObject {
             nextLibraries[shelf.id] = CachedLibrary(reference: shelf.reference, isHidden: shelf.isHidden)
             libraryOrder.append(shelf.id)
 
-            next.libraryItemIDs[shelf.id] = shelf.items.map(\.id)
+            let incomingIDs = shelf.items.map(\.id)
+            if isCurrentServer, let cachedIDs = next.libraryItemIDs[shelf.id], !cachedIDs.isEmpty {
+                let cachedIDSet = Set(cachedIDs)
+                next.libraryItemIDs[shelf.id] = cachedIDs + incomingIDs.filter { !cachedIDSet.contains($0) }
+            } else {
+                next.libraryItemIDs[shelf.id] = incomingIDs
+            }
             for item in shelf.items {
-                next.itemsByID[item.id] = item
+                next.itemsByID[item.id] = item.preservingNewerSeriesAddedAt(
+                    from: next.itemsByID[item.id]
+                )
             }
         }
 
         next.libraries = nextLibraries
         next.libraryOrder = libraryOrder
         next.libraryItemIDs = next.libraryItemIDs.filter { nextLibraries[$0.key] != nil }
-        snapshot = next
-        snapshotDidChangeSubject.send(snapshot)
-
-        scheduleSave()
+        commit(next)
     }
 
     func clear() {
         pendingSave?.cancel()
-        snapshot = LibraryCacheSnapshot()
+        batchDepth = 0
+        hasPendingBatchChanges = false
+        let empty = LibraryCacheSnapshot()
+        if snapshot != empty {
+            snapshot = empty
+            objectWillChange.send()
+            snapshotDidChangeSubject.send(snapshot)
+        }
         storage.clear()
-        storageSizeBytes = storage.sizeBytes()
-        snapshotDidChangeSubject.send(snapshot)
+        let nextStorageSizeBytes = storage.sizeBytes()
+        if storageSizeBytes != nextStorageSizeBytes {
+            storageSizeBytes = nextStorageSizeBytes
+        }
     }
 
     // MARK: - Reads
 
     func libraries() -> [CachedLibrary] {
         snapshot.libraryOrder.compactMap { snapshot.libraries[$0] }
+    }
+
+    func beginBatchUpdates() {
+        batchDepth += 1
+    }
+
+    func endBatchUpdates() {
+        guard batchDepth > 0 else { return }
+        batchDepth -= 1
+        guard batchDepth == 0, hasPendingBatchChanges else { return }
+        var next = snapshot
+        next.pruneUnreachableItems()
+        snapshot = next
+        hasPendingBatchChanges = false
+        publishSnapshot()
     }
 
     func libraryItems(for libraryID: String) -> [MediaItem] {
@@ -100,7 +132,7 @@ final class LibraryCache: ObservableObject {
         guard !itemLeaves.isEmpty else { return item }
 
         let stats = MediaItem.derivedWatchStats(fromLeaves: itemLeaves)
-        return item.applyingLatestEpisodeAddedAt(from: itemLeaves).applyingWatchStats(
+        return item.applyingWatchStats(
             isWatched: stats.isWatched,
             progress: stats.progress,
             resumeOffsetMilliseconds: nil
@@ -143,35 +175,67 @@ final class LibraryCache: ObservableObject {
     // MARK: - Ingest (writes from connector responses)
 
     func ingest(items: [MediaItem], asTopLevelOf libraryID: String) {
+        let resolvedItems = items.map {
+            $0.preservingNewerSeriesAddedAt(from: snapshot.itemsByID[$0.id])
+        }
+        let itemIDs = resolvedItems.map(\.id)
+        if snapshot.libraryItemIDs[libraryID] == itemIDs,
+           resolvedItems.allSatisfy({ snapshot.itemsByID[$0.id] == $0 }) {
+            return
+        }
+
         var next = snapshot
-        next.libraryItemIDs[libraryID] = items.map(\.id)
-        for item in items {
+        next.libraryItemIDs[libraryID] = itemIDs
+        for item in resolvedItems {
             next.itemsByID[item.id] = item
         }
-        next.pruneUnreachableItems()
-        snapshot = next
-        snapshotDidChangeSubject.send(snapshot)
-        scheduleSave()
+        if batchDepth == 0 {
+            next.pruneUnreachableItems()
+        }
+        commit(next)
     }
 
     func ingest(children: [MediaItem], of parentID: String) {
+        let childIDs = children.map(\.id)
+        if snapshot.childItemIDs[parentID] == childIDs,
+           children.allSatisfy({ snapshot.itemsByID[$0.id] == $0 }) {
+            return
+        }
+
         var next = snapshot
-        next.childItemIDs[parentID] = children.map(\.id)
+        next.childItemIDs[parentID] = childIDs
         for child in children {
             next.itemsByID[child.id] = child
         }
-        next.pruneUnreachableItems()
-        snapshot = next
-        snapshotDidChangeSubject.send(snapshot)
-        scheduleSave()
+        if batchDepth == 0 {
+            next.pruneUnreachableItems()
+        }
+        commit(next)
     }
 
     func ingest(item: MediaItem) {
+        let item = item.preservingNewerSeriesAddedAt(from: snapshot.itemsByID[item.id])
+        guard snapshot.itemsByID[item.id] != item else { return }
+
         var next = snapshot
         next.itemsByID[item.id] = item
-        snapshot = next
-        snapshotDidChangeSubject.send(snapshot)
-        scheduleSave()
+        commit(next)
+    }
+
+    func cacheLatestEpisodeAddedAt(for seriesIDs: [String]) {
+        var next = snapshot
+        var didChange = false
+
+        for seriesID in seriesIDs {
+            guard let series = next.itemsByID[seriesID] else { continue }
+            let updated = series.applyingLatestEpisodeAddedAt(from: leaves(under: seriesID))
+            guard updated != series else { continue }
+            next.itemsByID[seriesID] = updated
+            didChange = true
+        }
+
+        guard didChange else { return }
+        commit(next)
     }
 
     // MARK: - Mutations
@@ -200,9 +264,7 @@ final class LibraryCache: ObservableObject {
             next.itemsByID[target.id] = target.settingWatchStatus(isWatched)
         }
 
-        snapshot = next
-        snapshotDidChangeSubject.send(snapshot)
-        scheduleSave()
+        commit(next, publishImmediately: true)
         return targets
     }
 
@@ -212,12 +274,32 @@ final class LibraryCache: ObservableObject {
             next.itemsByID[previous.id] = previous
         }
 
-        snapshot = next
-        snapshotDidChangeSubject.send(snapshot)
-        scheduleSave()
+        commit(next, publishImmediately: true)
     }
 
     // MARK: - Persistence
+
+    private func commit(
+        _ next: LibraryCacheSnapshot,
+        publishImmediately: Bool = false
+    ) {
+        guard snapshot != next else { return }
+        snapshot = next
+
+        if batchDepth > 0, !publishImmediately {
+            hasPendingBatchChanges = true
+            return
+        }
+
+        hasPendingBatchChanges = false
+        publishSnapshot()
+    }
+
+    private func publishSnapshot() {
+        objectWillChange.send()
+        snapshotDidChangeSubject.send(snapshot)
+        scheduleSave()
+    }
 
     private func scheduleSave() {
         pendingSave?.cancel()
@@ -226,7 +308,9 @@ final class LibraryCache: ObservableObject {
             guard !Task.isCancelled else { return }
             storage.save(snapshot)
             guard !Task.isCancelled else { return }
-            self?.storageSizeBytes = storage.sizeBytes()
+            let nextStorageSizeBytes = storage.sizeBytes()
+            guard self?.storageSizeBytes != nextStorageSizeBytes else { return }
+            self?.storageSizeBytes = nextStorageSizeBytes
         }
     }
 

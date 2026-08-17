@@ -292,10 +292,24 @@ final class AppModel: ObservableObject {
         }
     }
 
-    /// Schedule a refresh of `library`'s top-level items in the background.
+    func refreshAllLibraries(_ server: ConnectedServer) {
+        refreshConnection()
+        for library in server.libraries {
+            refreshLibrary(library.reference)
+        }
+    }
+
+    func isRefreshingAllLibraries(_ server: ConnectedServer) -> Bool {
+        refreshTracker.isRefreshing(.connection)
+            || server.libraries.contains {
+                refreshTracker.isRefreshing(.library($0.id))
+            }
+    }
+
+    /// Schedule a full recursive refresh of `library` in the background.
     func refreshLibrary(_ library: LibraryReference) {
         refreshTracker.run(.library(library.id)) { [weak self] in
-            await self?._refreshLibrary(library)
+            await self?._resyncLibrary(library)
         }
     }
 
@@ -310,16 +324,6 @@ final class AppModel: ObservableObject {
     func refreshItem(_ item: MediaItem) {
         refreshTracker.run(.item(item.id)) { [weak self] in
             await self?._refreshItem(item)
-        }
-    }
-
-    /// Walk every series in `library`, pulling seasons/episodes into the
-    /// cache concurrently. Per-item HTTP is bounded by `RequestScheduler`'s
-    /// global cap. Returns a cancellable handle so the caller can stop the
-    /// walk when its page goes away.
-    func warmLibraryChildren(_ library: LibraryReference) -> Task<Void, Never> {
-        Task { [weak self] in
-            await self?._warmLibraryChildren(library)
         }
     }
 
@@ -419,7 +423,9 @@ final class AppModel: ObservableObject {
         do {
             let server = try await activeConnector.refreshConnection()
             guard generation == cacheGeneration else { return }
-            plexLinkCode = nil
+            if plexLinkCode != nil {
+                plexLinkCode = nil
+            }
             setConnectedServer(server)
         } catch {
             if existingServer == nil {
@@ -429,6 +435,8 @@ final class AppModel: ObservableObject {
     }
 
     private func _resyncLibrary(_ library: LibraryReference) async {
+        libraryCache.beginBatchUpdates()
+        defer { libraryCache.endBatchUpdates() }
         await _refreshLibrary(library)
         await _warmLibraryChildren(library)
     }
@@ -510,6 +518,8 @@ final class AppModel: ObservableObject {
                 await self?._refreshChildrenWork(of: item, recursive: true)
             }.value
         }
+
+        libraryCache.cacheLatestEpisodeAddedAt(for: topLevel.map(\.id))
     }
 
     private func _applyAndSyncWatchStatus(for item: MediaItem, isWatched: Bool) async {
@@ -716,7 +726,9 @@ final class AppModel: ObservableObject {
 
         let server = applyActiveLibraryOrder(to: server)
         libraryCache.install(server: server)
-        connectionState = .connected(server)
+        let metadataServer = server.clearingCachedItems()
+        guard connectedServer != metadataServer else { return }
+        connectionState = .connected(metadataServer)
     }
 
     private func rememberLibraryOrder(_ libraryIDs: [String], for server: ConnectedServer) {

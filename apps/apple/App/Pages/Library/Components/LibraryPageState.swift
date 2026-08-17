@@ -13,7 +13,6 @@ final class LibraryPageState: ObservableObject {
     private let store: MediaSessionStore
     private var cacheSubscription: AnyCancellable?
     private var modelSubscription: AnyCancellable?
-    private var warmTask: Task<Void, Never>?
 
     init(model: AppModel, library: LibraryReference) {
         let store = MediaSessionStore()
@@ -39,12 +38,9 @@ final class LibraryPageState: ObservableObject {
         modelSubscription = model.refreshTracker.objectWillChange
             .throttle(for: .milliseconds(250), scheduler: DispatchQueue.main, latest: true)
             .sink { [weak self] _ in
-                self?.objectWillChange.send()
+                guard let self, self.items.isEmpty else { return }
+                self.objectWillChange.send()
             }
-    }
-
-    deinit {
-        warmTask?.cancel()
     }
 
     var items: [MediaItem] {
@@ -83,17 +79,8 @@ final class LibraryPageState: ObservableObject {
 
     func update(library: LibraryReference) {
         guard self.library != library else { return }
-        warmTask?.cancel()
-        warmTask = nil
         self.library = library
         loadSavedControls()
-    }
-
-    /// Refresh top-level items on every poll and warm series once per visit.
-    func refresh() {
-        model.refreshLibrary(library)
-        guard warmTask == nil else { return }
-        warmTask = model.warmLibraryChildren(library)
     }
 
     func loadSavedControls() {

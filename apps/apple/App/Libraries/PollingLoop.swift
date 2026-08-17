@@ -8,7 +8,7 @@ import Foundation
 @MainActor
 enum PollingLoop {
     static func run(
-        every interval: Duration = .seconds(300),
+        every interval: Duration = .seconds(600),
         _ action: @escaping @MainActor () -> Void
     ) async {
         action()

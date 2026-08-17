@@ -3,6 +3,7 @@ import SwiftUI
 struct LibrariesPage: View {
     @ObservedObject var model: AppModel
     @ObservedObject private var cache: LibraryCache
+    @State private var isRefreshing: Bool
     let server: ConnectedServer
     @Binding var path: [AppRoute]
 
@@ -14,6 +15,7 @@ struct LibrariesPage: View {
     init(model: AppModel, server: ConnectedServer, path: Binding<[AppRoute]>) {
         self.model = model
         self.cache = model.libraryCache
+        _isRefreshing = State(initialValue: model.isRefreshingAllLibraries(server))
         self.server = server
         _path = path
     }
@@ -66,6 +68,22 @@ struct LibrariesPage: View {
                 }
 
                 HStack(spacing: 16) {
+                    Button {
+                        model.refreshAllLibraries(server)
+                    } label: {
+                        if isRefreshing {
+                            HStack(spacing: 8) {
+                                ProgressView()
+                                    .controlSize(.small)
+                                Text("Refreshing...")
+                            }
+                        } else {
+                            Text("Refresh")
+                        }
+                    }
+                    .buttonStyle(MediaGlassButtonStyle())
+                    .disabled(isRefreshing)
+
                     NavigationLink(value: projection.manageRoute) {
                         Text("Manage")
                     }
@@ -83,13 +101,10 @@ struct LibrariesPage: View {
         }
         .scrollIndicators(.hidden)
         .background(LibrariesAmbientBackground())
-        .task(id: server.id) {
-            await PollingLoop.run {
-                model.refreshConnection()
-                for library in server.libraries where !library.isHidden && library.reference.defaultItemKind == .series {
-                    _ = model.warmLibraryChildren(library.reference)
-                }
-            }
+        .onReceive(model.refreshTracker.$inFlight) { _ in
+            let nextIsRefreshing = model.isRefreshingAllLibraries(server)
+            guard isRefreshing != nextIsRefreshing else { return }
+            isRefreshing = nextIsRefreshing
         }
     }
 }

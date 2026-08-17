@@ -36,9 +36,6 @@ struct IOSLibraryPageContent: View {
         .background(AppBackground())
         .task(id: library.id) {
             state.update(library: library)
-            await PollingLoop.run {
-                state.refresh()
-            }
         }
         .onReceive(defaultsDidChange) { _ in
             state.loadSavedControls()

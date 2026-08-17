@@ -204,6 +204,12 @@ struct MediaItem: Hashable, Identifiable, Codable {
         guard let latestAddedAt else { return self }
         return withAddedAt(latestAddedAt)
     }
+
+    func preservingNewerSeriesAddedAt(from cachedItem: MediaItem?) -> MediaItem {
+        guard kind == .series, let cachedAddedAt = cachedItem?.addedAt else { return self }
+        guard cachedAddedAt > (addedAt ?? .min) else { return self }
+        return withAddedAt(cachedAddedAt)
+    }
 }
 
 struct MediaItemDetailSection: Hashable, Codable, Identifiable {

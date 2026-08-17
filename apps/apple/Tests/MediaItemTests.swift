@@ -37,6 +37,15 @@ final class MediaItemTests: XCTestCase {
 
         XCTAssertEqual(show.applyingLatestEpisodeAddedAt(from: episodes).addedAt, 300)
     }
+
+    func testPreservesCachedSeriesAddedAtAcrossMetadataRefreshes() {
+        let cached = makeMediaItem(kind: .series, addedAt: 300)
+        let refreshed = makeMediaItem(kind: .series, addedAt: 50)
+        let movie = makeMediaItem(kind: .movie, addedAt: 50)
+
+        XCTAssertEqual(refreshed.preservingNewerSeriesAddedAt(from: cached).addedAt, 300)
+        XCTAssertEqual(movie.preservingNewerSeriesAddedAt(from: cached).addedAt, 50)
+    }
 }
 
 func makeMediaItem(

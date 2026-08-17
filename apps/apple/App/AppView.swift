@@ -55,6 +55,13 @@ struct AppView: View {
                     }
                 }
         }
+        .task(id: model.connectedServer?.id) {
+            guard let server = model.connectedServer else { return }
+            await PollingLoop.run {
+                guard let currentServer = model.connectedServer, currentServer.id == server.id else { return }
+                model.refreshAllLibraries(currentServer)
+            }
+        }
         .alert("Connection Failed", isPresented: savedConnectionFailurePresented) {
             Button("Retry", role: .cancel) {
                 model.retrySavedConnection()
