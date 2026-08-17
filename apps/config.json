@@ -1,5 +1,5 @@
 {
-  "build": "1.19.0",
+  "build": "1.19.1",
   "contactEmail": "graham.otte@gmail.com",
   "contactFirstName": "Graham",
   "contactLastName": "Otte",
@@ -105,6 +105,6 @@
     },
     "android": {}
   },
-  "version": "1.19.0",
-  "whatsNew": "Added manual library refresh. Home shelves now follow each library's saved filter and sort, with more reliable background updates and artwork loading."
+  "version": "1.19.1",
+  "whatsNew": "Added manual library refresh. Home shelves now follow each library's saved filter and sort, with more reliable background updates, artwork loading, and immediate sort changes."
 }
