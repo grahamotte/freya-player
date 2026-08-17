@@ -20,6 +20,7 @@ final class MediaSessionStore {
     private let defaultLibrarySortOrderKeyPrefix = "media.server.library.sort.order.default"
     private let libraryOrderKeyPrefix = "media.server.library.order"
     private let hiddenLibrariesKeyPrefix = "media.server.library.hidden"
+    private let playbackSettingsKeyPrefix = "media.playback.settings"
 
     init(defaults: any DefaultsStore = UserDefaults.standard) {
         self.defaults = defaults
@@ -113,11 +114,30 @@ final class MediaSessionStore {
         defaults.set(Array(libraryIDs), forKey: key(prefix: hiddenLibrariesKeyPrefix, providerID: providerID, serverID: serverID))
     }
 
+    func playbackSettings(for id: MediaPlaybackID, serverID: String) -> MediaPlaybackSettings? {
+        guard let data = defaults.object(
+            forKey: key(prefix: playbackSettingsKeyPrefix, id: id, serverID: serverID)
+        ) as? Data else {
+            return nil
+        }
+
+        return try? JSONDecoder().decode(MediaPlaybackSettings.self, from: data)
+    }
+
+    func setPlaybackSettings(_ settings: MediaPlaybackSettings, for id: MediaPlaybackID, serverID: String) {
+        guard let data = try? JSONEncoder().encode(settings) else { return }
+        defaults.set(data, forKey: key(prefix: playbackSettingsKeyPrefix, id: id, serverID: serverID))
+    }
+
     private func key(prefix: String, library: LibraryReference) -> String {
         "\(prefix).\(library.providerID.rawValue).\(library.serverID).\(library.id)"
     }
 
     private func key(prefix: String, providerID: MediaProviderID, serverID: String) -> String {
         "\(prefix).\(providerID.rawValue).\(serverID)"
+    }
+
+    private func key(prefix: String, id: MediaPlaybackID, serverID: String) -> String {
+        "\(prefix).\(id.providerID.rawValue).\(serverID).\(id.itemID)"
     }
 }

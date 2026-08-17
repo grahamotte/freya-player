@@ -398,6 +398,16 @@ final class AppModel: ObservableObject {
         try await connector(for: id.providerID).playbackOptions(for: id)
     }
 
+    func playbackSettings(for id: MediaPlaybackID) -> MediaPlaybackSettings? {
+        guard let server = connectedServer, server.providerID == id.providerID else { return nil }
+        return mediaSessionStore.playbackSettings(for: id, serverID: server.serverID)
+    }
+
+    func setPlaybackSettings(_ settings: MediaPlaybackSettings, for id: MediaPlaybackID) {
+        guard let server = connectedServer, server.providerID == id.providerID else { return }
+        mediaSessionStore.setPlaybackSettings(settings, for: id, serverID: server.serverID)
+    }
+
     /// Resolve a playable URL. Same exception as `playbackOptions(for:)`.
     func playbackURL(
         for id: MediaPlaybackID,

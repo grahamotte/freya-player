@@ -98,6 +98,19 @@ struct MediaItem: Hashable, Identifiable, Codable {
         (resumeOffsetMilliseconds ?? 0) > 0 && !isWatched
     }
 
+    var playButtonTitle: String {
+        guard hasResume, let resumeOffsetMilliseconds else { return "Play" }
+
+        let totalSeconds = resumeOffsetMilliseconds / 1_000
+        let hours = totalSeconds / 3_600
+        let minutes = totalSeconds % 3_600 / 60
+        let seconds = totalSeconds % 60
+        let timestamp = hours > 0
+            ? String(format: "%d:%02d:%02d", hours, minutes, seconds)
+            : String(format: "%d:%02d", minutes, seconds)
+        return "Resume at \(timestamp)"
+    }
+
     private static let dateFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.dateStyle = .long

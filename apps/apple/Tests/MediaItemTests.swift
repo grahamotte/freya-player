@@ -8,10 +8,15 @@ final class MediaItemTests: XCTestCase {
 
         XCTAssertEqual(item.runtimeText, "1h 30m")
         XCTAssertTrue(item.hasResume)
+        XCTAssertEqual(item.playButtonTitle, "Resume at 0:12")
         XCTAssertEqual(item.playbackID?.itemID, item.id)
         XCTAssertEqual(item.artworkURL, item.artwork.posterURL)
         XCTAssertEqual(MediaItemKind.episode.artworkStyle, .landscape)
         XCTAssertFalse(MediaItemKind.season.isPlayable)
+        XCTAssertEqual(
+            makeMediaItem(resumeOffsetMilliseconds: 3_723_000).playButtonTitle,
+            "Resume at 1:02:03"
+        )
     }
 
     func testWatchStatusAndDerivedProgress() {

@@ -149,17 +149,28 @@ final class JellyfinConnector: JellyfinConnecting {
         }
 
         let streams = mediaSource.mediaStreams ?? []
+        let videoHeight = streams.first(where: { $0.type == "Video" })?.height
+        let transcodesBoth = !mediaSource.supportsDirectPlay && !mediaSource.supportsDirectStream
+        let transcodesAudio = PlatformMetadata.requiresTranscodedPlaybackAudio || transcodesBoth
+        let audioOptions = streams
+            .filter { $0.type == "Audio" }
+            .map {
+                let canDirectStream = ["aac", "mp3"].contains($0.codec?.lowercased() ?? "")
+                return MediaPlaybackOption(
+                    id: String($0.index),
+                    title: $0.displayTitle ?? $0.language ?? "Audio \($0.index)",
+                    transcodingTitle: transcodesAudio || !canDirectStream ? "AAC" : nil
+                )
+            }
+        let selectedAudioID = mediaSource.defaultAudioStreamIndex.map(String.init) ?? audioOptions.first?.id
+        let defaultAudioTranscoding = selectedAudioID.flatMap { audioID in
+            audioOptions.first(where: { $0.id == audioID })?.transcodingTitle
+        }
 
         return MediaPlaybackOptions(
-            qualityOptions: MediaPlaybackQuality.allCases,
-            audioOptions: streams
-                .filter { $0.type == "Audio" }
-                .map {
-                    MediaPlaybackOption(
-                        id: String($0.index),
-                        title: $0.displayTitle ?? $0.language ?? "Audio \($0.index)"
-                    )
-                },
+            videoHeight: videoHeight,
+            qualityOptions: MediaPlaybackQuality.transcodingOptions(forVideoHeight: videoHeight),
+            audioOptions: audioOptions,
             subtitleOptions: streams
                 .filter { $0.type == "Subtitle" }
                 .map {
@@ -168,8 +179,10 @@ final class JellyfinConnector: JellyfinConnecting {
                         title: $0.displayTitle ?? $0.language ?? "Subtitle \($0.index)"
                     )
                 },
-            selectedAudioID: mediaSource.defaultAudioStreamIndex.map(String.init),
-            selectedSubtitleID: mediaSource.defaultSubtitleStreamIndex.map(String.init)
+            selectedAudioID: selectedAudioID,
+            selectedSubtitleID: mediaSource.defaultSubtitleStreamIndex.map(String.init),
+            defaultVideoTranscoding: transcodesBoth ? "H.264" : nil,
+            defaultAudioTranscoding: defaultAudioTranscoding
         )
     }
 

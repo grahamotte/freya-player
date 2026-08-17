@@ -83,7 +83,7 @@ final class PlexClient {
 
     func playbackOptions(for ratingKey: String, connection: PlexConnectionSummary) async throws -> MediaPlaybackOptions? {
         let metadata = try await playbackMetadata(for: ratingKey, connection: connection)
-        return metadata.playbackOptions()
+        return metadata.playbackOptions(maxVideoBitrate: connection.automaticVideoBitrateLimit)
     }
 
     func playbackURL(
@@ -96,17 +96,23 @@ final class PlexClient {
         let metadata = try await playbackMetadata(for: ratingKey, connection: connection)
         let requiresTranscodedAudio = PlatformMetadata.requiresTranscodedPlaybackAudio
         let directStreamAudio = !requiresTranscodedAudio && metadata.canDirectStreamAudio(selection?.audioID)
+        let usesCustomAudio = selection.map { $0.audioID != $0.defaultAudioID } == true
+        let changesSubtitle = selection.map { $0.subtitleID != $0.defaultSubtitleID } == true
 
         if let selection,
-           (selection.audioID != nil || selection.subtitleID != nil),
+           (usesCustomAudio || changesSubtitle),
            let partID = metadata.selectedPartID {
             try await setStreamSelection(
                 partID: partID,
-                audioStreamID: selection.audioID ?? metadata.playbackOptions()?.selectedAudioID,
+                audioStreamID: selection.audioID,
                 subtitleStreamID: selection.subtitleID,
                 connection: connection
             )
+        }
 
+        if let selection,
+           (usesCustomAudio || selection.subtitleID != nil),
+           metadata.selectedPartID != nil {
             try await preparePlaybackSession(
                 ratingKey: ratingKey,
                 connection: connection,
@@ -323,7 +329,7 @@ final class PlexClient {
 
         components.queryItems = [
             URLQueryItem(name: "allParts", value: "0"),
-            URLQueryItem(name: "audioStreamID", value: audioStreamID),
+            URLQueryItem(name: "audioStreamID", value: audioStreamID ?? "0"),
             URLQueryItem(name: "subtitleStreamID", value: subtitleStreamID ?? "0"),
             URLQueryItem(name: "X-Plex-Token", value: connection.serverToken)
         ]
@@ -889,21 +895,31 @@ private struct PlexPlaybackMetadata: Decodable {
         return true
     }
 
-    func playbackOptions() -> MediaPlaybackOptions? {
+    func playbackOptions(maxVideoBitrate: Int? = nil) -> MediaPlaybackOptions? {
         guard let media = media?.first(where: { $0.parts?.isEmpty == false }),
               let part = media.parts?.first else {
             return nil
         }
 
-        let audioOptions = part.audioOptions
+        let requiresTranscodedAudio = PlatformMetadata.requiresTranscodedPlaybackAudio
+        let audioOptions = part.audioOptions(requiresTranscoding: requiresTranscodedAudio)
         let subtitleOptions = part.subtitleOptions
+        let selectedAudioID = part.selectedAudioID ?? audioOptions.first?.id
+        let defaultAudioTranscoding = selectedAudioID.flatMap { audioID in
+            audioOptions.first(where: { $0.id == audioID })?.transcodingTitle
+        }
+        let exceedsBitrateLimit = maxVideoBitrate.map { (media.bitrate ?? .max) > $0 } == true
+        let videoHeight = media.playbackVideoHeight
 
         return MediaPlaybackOptions(
-            qualityOptions: MediaPlaybackQuality.allCases,
+            videoHeight: videoHeight,
+            qualityOptions: MediaPlaybackQuality.transcodingOptions(forVideoHeight: videoHeight),
             audioOptions: audioOptions,
             subtitleOptions: subtitleOptions,
-            selectedAudioID: part.selectedAudioID ?? audioOptions.first?.id,
-            selectedSubtitleID: part.selectedSubtitleID
+            selectedAudioID: selectedAudioID,
+            selectedSubtitleID: part.selectedSubtitleID,
+            defaultVideoTranscoding: !media.canDirectStreamVideo || exceedsBitrateLimit ? "H.264" : nil,
+            defaultAudioTranscoding: defaultAudioTranscoding
         )
     }
 
@@ -935,8 +951,19 @@ private struct PlexPlaybackMetadata: Decodable {
         let container: String?
         let videoCodec: String?
         let audioCodec: String?
+        let videoResolution: String?
         let bitrate: Int?
+        let height: Int?
         let parts: [Part]?
+
+        var playbackVideoHeight: Int? {
+            switch videoResolution?.lowercased() {
+            case "4k": return 2160
+            case "8k": return 4320
+            case let resolution?: return Int(resolution.filter(\.isNumber)) ?? height
+            case nil: return height
+            }
+        }
 
         var hasSelectableStreams: Bool {
             parts?.contains(where: \.hasSelectableStreams) == true
@@ -964,7 +991,9 @@ private struct PlexPlaybackMetadata: Decodable {
             case container
             case videoCodec
             case audioCodec
+            case videoResolution
             case bitrate
+            case height
             case parts = "Part"
         }
     }
@@ -974,12 +1003,18 @@ private struct PlexPlaybackMetadata: Decodable {
         let key: String
         let streams: [Stream]?
 
-        var audioOptions: [MediaPlaybackOption] {
+        func audioOptions(requiresTranscoding: Bool) -> [MediaPlaybackOption] {
             streams?
                 .filter { $0.streamType == 2 }
                 .compactMap { stream in
                     guard let id = stream.id else { return nil }
-                    return MediaPlaybackOption(id: id, title: stream.displayName)
+                    let canDirectStream = !PlatformMetadata.prefersAACPlaybackAudio
+                        || ["aac", "mp3"].contains(stream.codec?.lowercased() ?? "")
+                    return MediaPlaybackOption(
+                        id: id,
+                        title: stream.displayName,
+                        transcodingTitle: requiresTranscoding || !canDirectStream ? "AAC" : nil
+                    )
                 } ?? []
         }
 

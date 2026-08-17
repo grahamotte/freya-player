@@ -31,6 +31,29 @@ final class MediaSessionStoreTests: XCTestCase {
         XCTAssertEqual(store.hiddenLibraryIDs(providerID: .plex, serverID: "one"), ["a"])
         XCTAssertTrue(store.libraryOrder(providerID: .jellyfin, serverID: "one").isEmpty)
     }
+
+    func testPersistsPlaybackSettingsPerServerAndMediaItem() {
+        let store = MediaSessionStore(defaults: MemoryDefaultsStore())
+        let id = MediaPlaybackID(providerID: .plex, itemID: "movie-one")
+        let settings = MediaPlaybackSettings(
+            quality: .p720,
+            audioID: "french",
+            subtitleID: nil
+        )
+
+        store.setPlaybackSettings(settings, for: id, serverID: "server-one")
+
+        XCTAssertEqual(store.playbackSettings(for: id, serverID: "server-one"), settings)
+        XCTAssertNil(store.playbackSettings(for: id, serverID: "server-two"))
+        XCTAssertNil(store.playbackSettings(
+            for: MediaPlaybackID(providerID: .plex, itemID: "movie-two"),
+            serverID: "server-one"
+        ))
+        XCTAssertNil(store.playbackSettings(
+            for: MediaPlaybackID(providerID: .jellyfin, itemID: "movie-one"),
+            serverID: "server-one"
+        ))
+    }
 }
 
 private final class MemoryDefaultsStore: DefaultsStore {

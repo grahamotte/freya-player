@@ -17,7 +17,6 @@ struct MediaPlayButton: View {
     @State private var playbackDialogError: String?
     @State private var isShowingPlaybackDialog = false
     @State private var isHandlingLongPress = false
-    @State private var playsAfterDialogDismisses = false
     @State private var draftQuality: MediaPlaybackQuality = .automatic
     @State private var draftAudioID: String?
     @State private var draftSubtitleID: String?
@@ -40,17 +39,18 @@ struct MediaPlayButton: View {
                     return
                 }
 
+                let settings = model.playbackSettings(for: id)
                 Task {
-                    await startPlayback(selection: nil)
+                    await startPlayback(settings: settings)
                 }
             } label: {
                 Label {
                     Text(item.hasResume ? "Resume" : "Play")
                 } icon: {
                     Image(systemName: "play.fill")
-                        .opacity(isLoading ? 0 : 1)
+                        .opacity(isLoadingOptions ? 0 : 1)
                         .overlay {
-                            if isLoading {
+                            if isLoadingOptions {
                                 ProgressView()
                                     .controlSize(.small)
                             }
@@ -59,7 +59,7 @@ struct MediaPlayButton: View {
             }
             .buttonStyle(MediaGlassButtonStyle())
             .focused($isPlayFocused)
-            .disabled(isLoading)
+            .disabled(isLoading || isLoadingOptions)
             .simultaneousGesture(
                 LongPressGesture(minimumDuration: 0.5)
                     .onEnded { _ in
@@ -84,24 +84,27 @@ struct MediaPlayButton: View {
             isLoading: isLoading,
             error: playbackDialogError,
             qualityOptions: qualityOptions,
+            defaultResolutionTitle: defaultResolutionTitle,
             audioOptions: playbackOptions?.audioOptions ?? [],
             subtitleOptions: playbackOptions?.subtitleOptions ?? [],
+            selectedAudioID: playbackOptions?.selectedAudioID,
+            selectedSubtitleID: playbackOptions?.selectedSubtitleID,
+            defaultVideoTranscoding: playbackOptions?.defaultVideoTranscoding,
+            defaultAudioTranscoding: playbackOptions?.defaultAudioTranscoding,
             draftQuality: $draftQuality,
             draftAudioID: $draftAudioID,
             draftSubtitleID: $draftSubtitleID,
-            playTitle: item.hasResume ? "Resume" : "Play",
+            playTitle: item.playButtonTitle,
             onClose: {
                 isShowingPlaybackDialog = false
             },
             onPlay: {
-                playsAfterDialogDismisses = true
+                let selection = draftPlaybackSelection
+                model.setPlaybackSettings(MediaPlaybackSettings(selection: selection), for: id)
+                isLoading = true
                 isShowingPlaybackDialog = false
-            },
-            onDismiss: {
-                guard playsAfterDialogDismisses else { return }
-                playsAfterDialogDismisses = false
                 Task {
-                    await startPlayback(selection: draftPlaybackSelection)
+                    await startPlayback(selection: selection)
                 }
             }
         ))
@@ -115,25 +118,50 @@ struct MediaPlayButton: View {
     }
 
     private var qualityOptions: [MediaPlaybackQuality] {
-        let options = playbackOptions?.qualityOptions ?? MediaPlaybackQuality.allCases
-        return [.automatic] + options.filter { $0 != .automatic }
+        [.automatic] + (playbackOptions?.qualityOptions
+            ?? MediaPlaybackQuality.transcodingOptions(forVideoHeight: nil))
+    }
+
+    private var defaultResolutionTitle: String {
+        playbackOptions?.defaultResolutionTitle ?? "Automatic (Default)"
     }
 
     @discardableResult
     private func startPlayback(selection: MediaPlaybackSelection?) async -> Bool {
+        await startPlayback(selection: selection, settings: nil)
+    }
+
+    @discardableResult
+    private func startPlayback(settings: MediaPlaybackSettings?) async -> Bool {
+        await startPlayback(selection: nil, settings: settings)
+    }
+
+    private func startPlayback(
+        selection initialSelection: MediaPlaybackSelection?,
+        settings: MediaPlaybackSettings?
+    ) async -> Bool {
         isLoading = true
 
         let sessionID = UUID().uuidString
         playbackFailure = nil
-        activeSelection = selection
+        activeSelection = nil
         playbackSessionID = sessionID
         didCompletePlayback = false
         didRetryPlayback = false
         currentResumeOffset = nil
         let controller = playbackController ?? PlaybackSessionController()
         playbackController = controller
+        let playerViewController = presentPlayerViewController(controller, isLoading: true)
 
         do {
+            let selection: MediaPlaybackSelection?
+            if let settings {
+                let options = try await rememberedPlaybackOptions()
+                selection = playbackSelection(for: settings, options: options)
+            } else {
+                selection = initialSelection
+            }
+            activeSelection = selection
             let resource = try await model.playbackURL(
                 for: id,
                 selection: selection,
@@ -145,22 +173,63 @@ struct MediaPlayButton: View {
                 isLoading = false
                 return false
             }
-            load(controller, resource: resource, autoplay: false)
-            presentPlayerViewController(controller) {
-                isLoading = false
+            load(controller, resource: resource)
+            if let playerViewController,
+               presentedPlayerController === playerViewController {
+                playerViewController.setLoading(false)
+            } else {
+                presentPlayerViewController(controller)
             }
+            isLoading = false
             return true
         } catch {
             guard playbackController === controller else {
                 isLoading = false
                 return false
             }
-            playbackFailure = PlaybackFailure(error)
-            controller.stop()
-            playbackController = nil
-            isLoading = false
+            failPlaybackStart(controller, failure: PlaybackFailure(error))
             return false
         }
+    }
+
+    private func rememberedPlaybackOptions() async throws -> MediaPlaybackOptions? {
+        if let playbackOptions {
+            return playbackOptions
+        }
+
+        let options = try await model.playbackOptions(for: id)
+        playbackOptions = options
+        return options
+    }
+
+    private func playbackSelection(
+        for settings: MediaPlaybackSettings,
+        options: MediaPlaybackOptions?
+    ) -> MediaPlaybackSelection {
+        guard let options else {
+            return MediaPlaybackSelection(
+                quality: settings.quality,
+                audioID: settings.audioID,
+                subtitleID: settings.subtitleID
+            )
+        }
+
+        let availableQualities = [.automatic] + options.qualityOptions
+        return MediaPlaybackSelection(
+            quality: availableQualities.contains(settings.quality) ? settings.quality : .automatic,
+            audioID: restoredTrackID(
+                settings.audioID,
+                options: options.audioOptions,
+                defaultID: options.selectedAudioID
+            ),
+            subtitleID: restoredTrackID(
+                settings.subtitleID,
+                options: options.subtitleOptions,
+                defaultID: options.selectedSubtitleID
+            ),
+            defaultAudioID: options.selectedAudioID,
+            defaultSubtitleID: options.selectedSubtitleID
+        )
     }
 
     private func load(
@@ -190,32 +259,54 @@ struct MediaPlayButton: View {
         )
     }
 
+    @discardableResult
     private func presentPlayerViewController(
         _ playbackController: PlaybackSessionController,
-        completion: (() -> Void)? = nil
-    ) {
+        isLoading: Bool = false
+    ) -> StockPlayerViewController? {
         if let controller = presentedPlayerController, controller.view.window != nil {
             controller.configure(
                 to: playbackController,
                 onPictureInPictureChanged: pictureInPictureChanged
             )
-            completion?()
-            return
+            controller.setLoading(isLoading)
+            return controller
         }
 
         presentedPlayerController?.clearDismissHandler()
-        guard let presenter = rootPresenter() else {
-            completion?()
-            return
-        }
+        guard let presenter = rootPresenter() else { return nil }
 
         let controller = StockPlayerViewController(
             playbackController: playbackController,
             onPictureInPictureChanged: pictureInPictureChanged,
             onDismiss: stopPlayback
         )
+        controller.setLoading(isLoading)
         presentedPlayerController = controller
-        presenter.present(controller, animated: true, completion: completion)
+        presenter.present(controller, animated: true)
+        return controller
+    }
+
+    private func failPlaybackStart(
+        _ playbackController: PlaybackSessionController,
+        failure: PlaybackFailure
+    ) {
+        let playerViewController = presentedPlayerController
+        playerViewController?.clearDismissHandler()
+        presentedPlayerController = nil
+        playbackController.stop()
+        self.playbackController = nil
+        isLoading = false
+
+        guard let playerViewController else {
+            playbackFailure = failure
+            return
+        }
+
+        playerViewController.dismiss(animated: true) {
+            playbackFailure = failure
+            onPlaybackDismissed()
+        }
     }
 
     private func rootPresenter() -> UIViewController? {
@@ -233,9 +324,7 @@ struct MediaPlayButton: View {
 
     private func showPlaybackDialog() async {
         do {
-            if playbackOptions == nil {
-                try await fetchPlaybackOptions()
-            }
+            try await fetchPlaybackOptions()
             playbackFailure = nil
             playbackDialogError = nil
             resetDraftSelection()
@@ -256,24 +345,42 @@ struct MediaPlayButton: View {
     }
 
     private func resetDraftSelection() {
-        draftQuality = .automatic
-        draftAudioID = nil
-        draftSubtitleID = nil
-    }
-
-    private var draftPlaybackSelection: MediaPlaybackSelection? {
-        let qualityChanged = draftQuality != .automatic
-        let audioChanged = draftAudioID != nil
-        let subtitleChanged = draftSubtitleID != nil
-
-        guard qualityChanged || audioChanged || subtitleChanged else {
-            return nil
+        guard let settings = model.playbackSettings(for: id) else {
+            draftQuality = .automatic
+            draftAudioID = playbackOptions?.selectedAudioID
+            draftSubtitleID = playbackOptions?.selectedSubtitleID
+            return
         }
 
-        return MediaPlaybackSelection(
+        draftQuality = qualityOptions.contains(settings.quality) ? settings.quality : .automatic
+        draftAudioID = restoredTrackID(
+            settings.audioID,
+            options: playbackOptions?.audioOptions ?? [],
+            defaultID: playbackOptions?.selectedAudioID
+        )
+        draftSubtitleID = restoredTrackID(
+            settings.subtitleID,
+            options: playbackOptions?.subtitleOptions ?? [],
+            defaultID: playbackOptions?.selectedSubtitleID
+        )
+    }
+
+    private func restoredTrackID(
+        _ storedID: String?,
+        options: [MediaPlaybackOption],
+        defaultID: String?
+    ) -> String? {
+        guard let storedID else { return nil }
+        return options.contains(where: { $0.id == storedID }) ? storedID : defaultID
+    }
+
+    private var draftPlaybackSelection: MediaPlaybackSelection {
+        MediaPlaybackSelection(
             quality: draftQuality,
             audioID: draftAudioID,
-            subtitleID: draftSubtitleID
+            subtitleID: draftSubtitleID,
+            defaultAudioID: playbackOptions?.selectedAudioID,
+            defaultSubtitleID: playbackOptions?.selectedSubtitleID
         )
     }
 
@@ -409,52 +516,62 @@ private struct PlaybackDialogModifier: ViewModifier {
     let isLoading: Bool
     let error: String?
     let qualityOptions: [MediaPlaybackQuality]
+    let defaultResolutionTitle: String
     let audioOptions: [MediaPlaybackOption]
     let subtitleOptions: [MediaPlaybackOption]
+    let selectedAudioID: String?
+    let selectedSubtitleID: String?
+    let defaultVideoTranscoding: String?
+    let defaultAudioTranscoding: String?
     @Binding var draftQuality: MediaPlaybackQuality
     @Binding var draftAudioID: String?
     @Binding var draftSubtitleID: String?
     let playTitle: String
     let onClose: () -> Void
     let onPlay: () -> Void
-    let onDismiss: () -> Void
 
+    @ViewBuilder
     func body(content: Content) -> some View {
-        #if targetEnvironment(macCatalyst)
-        content
-            .fullScreenCover(isPresented: $isPresented, onDismiss: onDismiss) {
-                PlaybackOptionsDialog(
-                    isLoading: isLoading,
-                    error: error,
-                    qualityOptions: qualityOptions,
-                    audioOptions: audioOptions,
-                    subtitleOptions: subtitleOptions,
-                    draftQuality: $draftQuality,
-                    draftAudioID: $draftAudioID,
-                    draftSubtitleID: $draftSubtitleID,
-                    playTitle: playTitle,
-                    onClose: onClose,
-                    onPlay: onPlay
-                )
-            }
-        #else
-        content
-            .sheet(isPresented: $isPresented, onDismiss: onDismiss) {
-                PlaybackOptionsDialog(
-                    isLoading: isLoading,
-                    error: error,
-                    qualityOptions: qualityOptions,
-                    audioOptions: audioOptions,
-                    subtitleOptions: subtitleOptions,
-                    draftQuality: $draftQuality,
-                    draftAudioID: $draftAudioID,
-                    draftSubtitleID: $draftSubtitleID,
-                    playTitle: playTitle,
-                    onClose: onClose,
-                    onPlay: onPlay
-                )
-            }
-        #endif
+        if PlatformMetadata.isPhone {
+            content
+                .fullScreenCover(isPresented: $isPresented) {
+                    ZStack {
+                        Color.black.opacity(0.5)
+                            .ignoresSafeArea()
+
+                        playbackDialog
+                            .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
+                            .shadow(color: .black.opacity(0.35), radius: 28, y: 12)
+                    }
+                    .presentationBackground(.clear)
+                }
+        } else {
+            content
+                .sheet(isPresented: $isPresented) {
+                    playbackDialog
+                }
+        }
+    }
+
+    private var playbackDialog: some View {
+        PlaybackOptionsDialog(
+            isLoading: isLoading,
+            error: error,
+            qualityOptions: qualityOptions,
+            defaultResolutionTitle: defaultResolutionTitle,
+            audioOptions: audioOptions,
+            subtitleOptions: subtitleOptions,
+            selectedAudioID: selectedAudioID,
+            selectedSubtitleID: selectedSubtitleID,
+            defaultVideoTranscoding: defaultVideoTranscoding,
+            defaultAudioTranscoding: defaultAudioTranscoding,
+            draftQuality: $draftQuality,
+            draftAudioID: $draftAudioID,
+            draftSubtitleID: $draftSubtitleID,
+            playTitle: playTitle,
+            onClose: onClose,
+            onPlay: onPlay
+        )
     }
 }
 
@@ -462,8 +579,13 @@ private struct PlaybackOptionsDialog: View {
     let isLoading: Bool
     let error: String?
     let qualityOptions: [MediaPlaybackQuality]
+    let defaultResolutionTitle: String
     let audioOptions: [MediaPlaybackOption]
     let subtitleOptions: [MediaPlaybackOption]
+    let selectedAudioID: String?
+    let selectedSubtitleID: String?
+    let defaultVideoTranscoding: String?
+    let defaultAudioTranscoding: String?
     @Binding var draftQuality: MediaPlaybackQuality
     @Binding var draftAudioID: String?
     @Binding var draftSubtitleID: String?
@@ -471,93 +593,110 @@ private struct PlaybackOptionsDialog: View {
     let onClose: () -> Void
     let onPlay: () -> Void
 
-    @Environment(\.dismiss) private var dismiss
+    @FocusState private var isPlayFocused: Bool
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            HStack {
-                Text("Play Options")
-                    .font(dialogTitleFont)
+        VStack(alignment: .leading, spacing: 22) {
+            Text("Play Options")
+                .font(dialogTitleFont)
 
-                Spacer()
-
-#if !os(tvOS)
-                Button {
-                    dismiss()
-                    onClose()
-                } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.title)
-                        .foregroundStyle(.secondary)
-                        .frame(width: 32, height: 32)
-                }
-                .buttonStyle(.plain)
-                .contentShape(Circle())
-                .frame(width: 44, height: 44)
-#endif
-            }
-
-            VStack(spacing: 12) {
+            VStack(spacing: 16) {
                 playbackMenu(title: title(for: draftQuality), systemImage: "display") {
                     ForEach(qualityOptions) { quality in
                         Button {
                             draftQuality = quality
                         } label: {
-                            PlaybackOptionsMenuItem(title: title(for: quality), isSelected: quality == draftQuality)
+                            PlaybackOptionsMenuItem(
+                                title: title(for: quality),
+                                isSelected: quality == draftQuality
+                            )
                         }
                     }
                 }
 
                 playbackMenu(title: audioTitle, systemImage: "speaker.wave.3.fill") {
-                    Button {
-                        draftAudioID = nil
-                    } label: {
-                        PlaybackOptionsMenuItem(title: "Default Language", isSelected: draftAudioID == nil)
-                    }
-
                     ForEach(audioOptions) { option in
                         Button {
                             draftAudioID = option.id
                         } label: {
-                            PlaybackOptionsMenuItem(title: option.title, isSelected: option.id == draftAudioID)
+                            PlaybackOptionsMenuItem(
+                                title: trackTitle(option, defaultID: selectedAudioID),
+                                isSelected: option.id == draftAudioID
+                            )
                         }
+                    }
+
+                    Button {
+                        draftAudioID = nil
+                    } label: {
+                        PlaybackOptionsMenuItem(
+                            title: noneTitle(defaultID: selectedAudioID),
+                            isSelected: draftAudioID == nil
+                        )
                     }
                 }
 
                 playbackMenu(title: subtitleTitle, systemImage: "captions.bubble") {
-                    Button {
-                        draftSubtitleID = nil
-                    } label: {
-                        PlaybackOptionsMenuItem(title: "Default Subtitles", isSelected: draftSubtitleID == nil)
-                    }
-
                     ForEach(subtitleOptions) { option in
                         Button {
                             draftSubtitleID = option.id
                         } label: {
-                            PlaybackOptionsMenuItem(title: option.title, isSelected: option.id == draftSubtitleID)
+                            PlaybackOptionsMenuItem(
+                                title: trackTitle(option, defaultID: selectedSubtitleID),
+                                isSelected: option.id == draftSubtitleID
+                            )
                         }
+                    }
+
+                    Button {
+                        draftSubtitleID = nil
+                    } label: {
+                        PlaybackOptionsMenuItem(
+                            title: noneTitle(defaultID: selectedSubtitleID),
+                            isSelected: draftSubtitleID == nil
+                        )
                     }
                 }
             }
 
-            Button(action: onPlay) {
-                Label(playTitle, systemImage: "play.fill")
-                    .frame(maxWidth: .infinity)
-            }
-            .buttonStyle(MediaGlassButtonStyle(horizontalPadding: 22, verticalPadding: 12))
-            .disabled(isLoading)
+            transcodingBlock
 
             if let error {
                 Text(error)
                     .font(.callout)
-                    .foregroundStyle(AppTheme.secondaryText)
+                    .foregroundStyle(.orange)
+            }
+
+            VStack(spacing: 14) {
+                Button(action: play) {
+                    Group {
+                        if isLoading {
+                            ProgressView()
+                        } else {
+                            Label(playTitle, systemImage: "play.fill")
+                        }
+                    }
+                    .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(MediaGlassButtonStyle(horizontalPadding: 24, verticalPadding: 16))
+                .focused($isPlayFocused)
+                .disabled(isLoading)
+
+                Button(role: .cancel, action: cancel) {
+                    Text("Cancel")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(MediaGlassButtonStyle(horizontalPadding: 24, verticalPadding: 16))
             }
         }
+        .padding(34)
         .foregroundStyle(AppTheme.primaryText)
-        .padding(28)
-        .frame(maxWidth: 520)
+        .frame(width: dialogWidth)
+        .background(AppTheme.backgroundTop)
         .presentationSizing(.fitted)
+        .task {
+            isPlayFocused = true
+        }
     }
 
     private var dialogTitleFont: Font {
@@ -568,18 +707,113 @@ private struct PlaybackOptionsDialog: View {
 #endif
     }
 
+    private func cancel() {
+#if targetEnvironment(macCatalyst)
+        dismissPresentation(completion: onClose)
+#else
+        onClose()
+#endif
+    }
+
+    private func play() {
+        dismissPresentation(completion: onPlay)
+    }
+
+    private func dismissPresentation(completion: @escaping () -> Void) {
+        let window = UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .filter { $0.activationState == .foregroundActive }
+            .flatMap(\.windows)
+            .first(where: \.isKeyWindow)
+        var controller = window?.rootViewController
+        while let presented = controller?.presentedViewController {
+            controller = presented
+        }
+        guard let controller, controller.presentingViewController != nil else {
+            completion()
+            return
+        }
+        controller.dismiss(animated: false, completion: completion)
+    }
+
     private var audioTitle: String {
-        guard let draftAudioID else { return "Default Language" }
-        return audioOptions.first(where: { $0.id == draftAudioID })?.title ?? "Default Language"
+        guard let draftAudioID,
+              let option = audioOptions.first(where: { $0.id == draftAudioID }) else {
+            return noneTitle(defaultID: selectedAudioID)
+        }
+        return trackTitle(option, defaultID: selectedAudioID)
     }
 
     private var subtitleTitle: String {
-        guard let draftSubtitleID else { return "Default Subtitles" }
-        return subtitleOptions.first(where: { $0.id == draftSubtitleID })?.title ?? "Default Subtitles"
+        guard let draftSubtitleID,
+              let option = subtitleOptions.first(where: { $0.id == draftSubtitleID }) else {
+            return noneTitle(defaultID: selectedSubtitleID)
+        }
+        return trackTitle(option, defaultID: selectedSubtitleID)
     }
 
     private func title(for quality: MediaPlaybackQuality) -> String {
-        quality == .automatic ? "Default Resolution" : quality.title
+        quality == .automatic ? defaultResolutionTitle : quality.title
+    }
+
+    private var dialogWidth: CGFloat {
+#if os(tvOS)
+        720
+#else
+        guard PlatformMetadata.isPhone else { return 640 }
+        let screenWidth = UIApplication.shared.connectedScenes
+            .compactMap { ($0 as? UIWindowScene)?.screen.bounds.width }
+            .first ?? 390
+        return min(screenWidth - 24, 640)
+#endif
+    }
+
+    private var transcodingBlock: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            transcodingLine(label: "Video transcoding", value: videoTranscoding)
+            transcodingLine(label: "Audio transcoding", value: audioTranscoding)
+        }
+        .padding(18)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(AppTheme.surfaceFill)
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+    }
+
+    private var videoTranscoding: String? {
+        draftQuality == .automatic
+            ? defaultVideoTranscoding
+            : "H.264 at \(draftQuality.title)"
+    }
+
+    private var audioTranscoding: String? {
+        draftAudioID.flatMap { audioID in
+            audioOptions.first(where: { $0.id == audioID })?.transcodingTitle
+        } ?? (draftAudioID == selectedAudioID ? defaultAudioTranscoding : nil)
+    }
+
+    private func transcodingLine(label: String, value: String?) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
+            Text("\(label):")
+            Text(value ?? "None")
+                .foregroundStyle(value == nil ? AppTheme.secondaryText : .orange)
+        }
+        .font(transcodingTextFont)
+    }
+
+    private var transcodingTextFont: Font {
+#if os(tvOS)
+        .system(size: 18)
+#else
+        .callout
+#endif
+    }
+
+    private func trackTitle(_ option: MediaPlaybackOption, defaultID: String?) -> String {
+        option.id == defaultID ? "\(option.title) (Default)" : option.title
+    }
+
+    private func noneTitle(defaultID: String?) -> String {
+        defaultID == nil ? "None (Default)" : "None"
     }
 
     private func playbackMenu<Content: View>(
@@ -592,7 +826,7 @@ private struct PlaybackOptionsDialog: View {
                 .lineLimit(1)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .buttonStyle(MediaGlassButtonStyle(horizontalPadding: 22, verticalPadding: 12))
+        .buttonStyle(MediaGlassButtonStyle(horizontalPadding: 24, verticalPadding: 16))
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
@@ -635,9 +869,11 @@ final class StockPlayerViewController: AVPlayerViewController, AVPlayerViewContr
     var playbackController: PlaybackSessionController
     private var onPictureInPictureChanged: (Bool) -> Void
     private var onDismiss: (() -> Void)?
+    private let loadingIndicator = UIActivityIndicatorView(style: .large)
 
     private var didDismiss = false
     private var isPictureInPictureActive = false
+    private var isLoading = false
     private weak var pictureInPicturePresenter: UIViewController?
 
     init(
@@ -662,6 +898,15 @@ final class StockPlayerViewController: AVPlayerViewController, AVPlayerViewContr
 
         delegate = self
         player = playbackController.player
+        loadingIndicator.hidesWhenStopped = true
+        loadingIndicator.color = .white
+        loadingIndicator.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(loadingIndicator)
+        NSLayoutConstraint.activate([
+            loadingIndicator.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            loadingIndicator.centerYAnchor.constraint(equalTo: view.centerYAnchor),
+        ])
+        updateLoadingIndicator()
 #if os(iOS)
         allowsPictureInPicturePlayback = true
 #endif
@@ -705,6 +950,12 @@ final class StockPlayerViewController: AVPlayerViewController, AVPlayerViewContr
         onDismiss = nil
     }
 
+    func setLoading(_ isLoading: Bool) {
+        self.isLoading = isLoading
+        guard isViewLoaded else { return }
+        updateLoadingIndicator()
+    }
+
 #if os(tvOS)
     func playerViewController(
         _ playerViewController: AVPlayerViewController,
@@ -720,6 +971,14 @@ final class StockPlayerViewController: AVPlayerViewController, AVPlayerViewContr
         guard !didDismiss else { return }
         didDismiss = true
         onDismiss?()
+    }
+
+    private func updateLoadingIndicator() {
+        if isLoading {
+            loadingIndicator.startAnimating()
+        } else {
+            loadingIndicator.stopAnimating()
+        }
     }
 
     func playerViewControllerWillStartPictureInPicture(_ playerViewController: AVPlayerViewController) {

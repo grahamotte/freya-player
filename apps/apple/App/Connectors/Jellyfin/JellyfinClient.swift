@@ -138,8 +138,8 @@ final class JellyfinClient {
             JellyfinPlaybackInfoBody(
                 UserId: userID,
                 MaxStreamingBitrate: selection?.quality.maxStreamingBitrate,
-                AudioStreamIndex: selection?.audioID.flatMap(Int.init),
-                SubtitleStreamIndex: selection?.subtitleID.flatMap(Int.init),
+                AudioStreamIndex: selection.map { $0.audioID.flatMap(Int.init) ?? -1 },
+                SubtitleStreamIndex: selection.map { $0.subtitleID.flatMap(Int.init) ?? -1 },
                 EnableDirectPlay: usesAutomaticQuality && !PlatformMetadata.requiresTranscodedPlaybackAudio,
                 EnableDirectStream: usesAutomaticQuality,
                 EnableTranscoding: true
@@ -163,10 +163,11 @@ final class JellyfinClient {
         }
 
         let requiresTranscodedAudio = PlatformMetadata.requiresTranscodedPlaybackAudio
+        let usesDefaultAudio = selection == nil || selection?.audioID == selection?.defaultAudioID
 
         if !requiresTranscodedAudio,
            selection?.quality ?? .automatic == .automatic,
-           selection?.audioID == nil,
+           usesDefaultAudio,
            selection?.subtitleID == nil,
            mediaSource.supportsDirectPlay,
            let url = directPlayURL(
@@ -208,8 +209,8 @@ final class JellyfinClient {
             throw MediaConnectorError.unavailable
         }
 
-        let selectedAudioIndex = selection?.audioID
-        let selectedSubtitleIndex = selection?.subtitleID
+        let selectedAudioIndex = selection.map { $0.audioID ?? "-1" }
+        let selectedSubtitleIndex = selection.map { $0.subtitleID ?? "-1" }
 
         components.queryItems = [
             playbackInfo.playSessionId.map { URLQueryItem(name: "playSessionId", value: $0) },
@@ -219,7 +220,7 @@ final class JellyfinClient {
             selection?.quality.videoResolution.map { URLQueryItem(name: "maxHeight", value: $0) },
             selectedAudioIndex.map { URLQueryItem(name: "audioStreamIndex", value: $0) },
             selectedSubtitleIndex.map { URLQueryItem(name: "subtitleStreamIndex", value: $0) },
-            selectedSubtitleIndex.map { _ in URLQueryItem(name: "subtitleMethod", value: "Encode") },
+            selection?.subtitleID.map { _ in URLQueryItem(name: "subtitleMethod", value: "Encode") },
             URLQueryItem(name: "videoCodec", value: "h264"),
             URLQueryItem(name: "profile", value: "high"),
             URLQueryItem(name: "audioCodec", value: Self.playbackAudioCodecs),
