@@ -4,8 +4,10 @@ struct LibrariesPage: View {
     @ObservedObject var model: AppModel
     @ObservedObject private var cache: LibraryCache
     @State private var isRefreshing: Bool
+    @State private var preferenceRevision = 0
     let server: ConnectedServer
     @Binding var path: [AppRoute]
+    private let defaultsDidChange = NotificationCenter.default.publisher(for: UserDefaults.didChangeNotification)
 
     private var pagePadding: CGFloat { PlatformMetadata.isPhone ? 16 : 32 }
     private var sectionSpacing: CGFloat { PlatformMetadata.isPhone ? 20 : 32 }
@@ -21,7 +23,8 @@ struct LibrariesPage: View {
     }
 
     private var projection: LibrariesHomeProjection {
-        LibrariesHomeProjection(server: server, cache: cache)
+        _ = preferenceRevision
+        return LibrariesHomeProjection(server: server, cache: cache)
     }
 
     var body: some View {
@@ -105,6 +108,9 @@ struct LibrariesPage: View {
             let nextIsRefreshing = model.isRefreshingAllLibraries(server)
             guard isRefreshing != nextIsRefreshing else { return }
             isRefreshing = nextIsRefreshing
+        }
+        .onReceive(defaultsDidChange) { _ in
+            preferenceRevision &+= 1
         }
     }
 }

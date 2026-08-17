@@ -49,6 +49,7 @@ private final class LibrariesCollectionViewController: UIViewController, UIColle
     private var focusedSectionID: String?
     private var preferredFocusItemID: String?
     private var cacheSubscription: AnyCancellable?
+    private var defaultsSubscription: AnyCancellable?
     private var refreshSubscription: AnyCancellable?
     private var isRefreshing = false
     private lazy var quickActionHandler = MediaItemQuickActionHandler(
@@ -77,6 +78,11 @@ private final class LibrariesCollectionViewController: UIViewController, UIColle
 
         cacheSubscription = model.libraryCache.snapshotDidChange
             .throttle(for: .milliseconds(250), scheduler: DispatchQueue.main, latest: true)
+            .sink { [weak self] _ in
+                self?.rebuildSectionsPreservingScrollPosition()
+            }
+
+        defaultsSubscription = NotificationCenter.default.publisher(for: UserDefaults.didChangeNotification)
             .sink { [weak self] _ in
                 self?.rebuildSectionsPreservingScrollPosition()
             }
