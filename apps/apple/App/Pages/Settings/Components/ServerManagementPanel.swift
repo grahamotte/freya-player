@@ -5,9 +5,9 @@ struct ServerManagementPanel: View {
     @ObservedObject private var cache: LibraryCache
     @Binding var path: [AppRoute]
 
-    @State private var defaultFilter = LibraryPageFilter.all
-    @State private var defaultSort = LibraryPageSort.title
-    @State private var defaultSortOrder = LibraryPageSortOrder.ascending
+    @State private var defaultFilter = LibraryPageFilter.unwatched
+    @State private var defaultSort = LibraryPageSort.addedAt
+    @State private var defaultSortOrder = LibraryPageSortOrder.descending
     @State private var isShowingDeactivateAlert = false
 
     private let store = MediaSessionStore()

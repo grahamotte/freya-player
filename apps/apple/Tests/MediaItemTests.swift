@@ -25,6 +25,18 @@ final class MediaItemTests: XCTestCase {
         XCTAssertFalse(stats.isWatched)
         XCTAssertEqual(stats.progress, 0.75)
     }
+
+    func testLatestAddedAtUsesNewestEpisode() {
+        let show = makeMediaItem(kind: .series, addedAt: 50)
+        let episodes = [
+            makeMediaItem(kind: .episode, addedAt: 100),
+            makeMediaItem(kind: .episode, addedAt: 300),
+            makeMediaItem(kind: .episode, addedAt: 200),
+            makeMediaItem(kind: .movie, addedAt: 400),
+        ]
+
+        XCTAssertEqual(show.applyingLatestEpisodeAddedAt(from: episodes).addedAt, 300)
+    }
 }
 
 func makeMediaItem(

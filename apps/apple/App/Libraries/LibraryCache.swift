@@ -100,7 +100,7 @@ final class LibraryCache: ObservableObject {
         guard !itemLeaves.isEmpty else { return item }
 
         let stats = MediaItem.derivedWatchStats(fromLeaves: itemLeaves)
-        return item.applyingWatchStats(
+        return item.applyingLatestEpisodeAddedAt(from: itemLeaves).applyingWatchStats(
             isWatched: stats.isWatched,
             progress: stats.progress,
             resumeOffsetMilliseconds: nil

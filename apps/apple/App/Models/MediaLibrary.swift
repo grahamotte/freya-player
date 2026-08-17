@@ -7,10 +7,6 @@ struct LibraryShelf: Hashable, Identifiable, Codable {
     let items: [MediaItem]
     let isHidden: Bool
 
-    var recentUnwatchedItems: [MediaItem] {
-        recentUnwatchedItems(from: items)
-    }
-
     func settingHidden(_ isHidden: Bool) -> LibraryShelf {
         LibraryShelf(
             id: id,
@@ -31,16 +27,17 @@ struct LibraryShelf: Hashable, Identifiable, Codable {
         )
     }
 
-    func recentUnwatchedItems(from items: [MediaItem]) -> [MediaItem] {
+    func previewItems(
+        from items: [MediaItem],
+        filter: LibraryPageFilter,
+        sort: LibraryPageSort,
+        order: LibraryPageSortOrder
+    ) -> [MediaItem] {
         Array(
-            items
-                .filter { !$0.isWatched }
-                .sorted { a, b in
-                    let aAdded = a.addedAt ?? Int.min
-                    let bAdded = b.addedAt ?? Int.min
-                    if aAdded != bAdded { return aAdded > bAdded }
-                    return a.title.localizedStandardCompare(b.title) == .orderedAscending
-                }
+            sort.items(
+                from: items.filter { filter.matches($0) },
+                order: order
+            )
                 .prefix(20)
         )
     }

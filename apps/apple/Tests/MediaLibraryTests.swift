@@ -2,7 +2,7 @@ import XCTest
 @testable import FreyaPlayerCore
 
 final class MediaLibraryTests: XCTestCase {
-    func testRecentItemsAreUnwatchedSortedAndLimited() {
+    func testPreviewItemsUseLibraryControlsAndAreLimited() {
         let items = (0..<25).map {
             makeMediaItem(
                 id: String($0),
@@ -13,8 +13,24 @@ final class MediaLibraryTests: XCTestCase {
         }
         let shelf = makeLibraryShelf(items: items)
 
-        XCTAssertEqual(shelf.recentUnwatchedItems.count, 20)
-        XCTAssertEqual(shelf.recentUnwatchedItems.first?.id, "23")
+        let previewItems = shelf.previewItems(
+            from: items,
+            filter: .unwatched,
+            sort: .addedAt,
+            order: .descending
+        )
+
+        XCTAssertEqual(previewItems.count, 20)
+        XCTAssertEqual(previewItems.first?.id, "23")
+        XCTAssertEqual(
+            shelf.previewItems(
+                from: items,
+                filter: .all,
+                sort: .addedAt,
+                order: .descending
+            ).first?.id,
+            "24"
+        )
         XCTAssertFalse(shelf.settingHidden(true).items.isEmpty)
     }
 

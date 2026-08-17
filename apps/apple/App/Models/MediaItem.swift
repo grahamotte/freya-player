@@ -194,6 +194,16 @@ struct MediaItem: Hashable, Identifiable, Codable {
         }
         return (false, progress / Double(leaves.count))
     }
+
+    func applyingLatestEpisodeAddedAt(from episodes: [MediaItem]) -> MediaItem {
+        guard kind == .series else { return self }
+        let latestAddedAt = episodes
+            .filter { $0.kind == .episode }
+            .compactMap(\.addedAt)
+            .max()
+        guard let latestAddedAt else { return self }
+        return withAddedAt(latestAddedAt)
+    }
 }
 
 struct MediaItemDetailSection: Hashable, Codable, Identifiable {

@@ -86,6 +86,9 @@ struct LibrariesPage: View {
         .task(id: server.id) {
             await PollingLoop.run {
                 model.refreshConnection()
+                for library in server.libraries where !library.isHidden && library.reference.defaultItemKind == .series {
+                    _ = model.warmLibraryChildren(library.reference)
+                }
             }
         }
     }
