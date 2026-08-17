@@ -1,5 +1,5 @@
 {
-  "build": "1.18.0",
+  "build": "1.19.0",
   "contactEmail": "graham.otte@gmail.com",
   "contactFirstName": "Graham",
   "contactLastName": "Otte",
@@ -105,6 +105,6 @@
     },
     "android": {}
   },
-  "version": "1.18.0",
-  "whatsNew": "Redesigned media details with artwork galleries and improved layouts. Improved playback reliability, library refreshes, and portrait artwork display."
+  "version": "1.19.0",
+  "whatsNew": "Added manual library refresh. Home shelves now follow each library's saved filter and sort, with more reliable background updates and artwork loading."
 }
