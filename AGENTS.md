@@ -86,6 +86,6 @@ Freya Player is a native Apple client for personal Plex and Jellyfin servers. It
 ### Apple Workflow
 
 - Use the root `mise` tasks for Apple work.
-- `mise test` runs the repository suite, including the portable Apple logic tests. It does not compile every platform-specific Swift file; for changes to app shell, UI, playback, or connectors, also build the relevant target with `mise simulate <iphone|ipad|macos|tv>` when practical.
+- `mise test` runs the repository suite, including the portable Apple logic tests. It does not compile every platform-specific Swift file. Do not run `mise simulate` unless the user explicitly requests it; the user will normally perform simulator validation.
 - Use `mise xcode` to open the project and `$publish` for the release workflow.
 - Keep documentation short and practical.
