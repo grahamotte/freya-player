@@ -1,5 +1,5 @@
 {
-  "build": "1.19.6",
+  "build": "1.19.7",
   "contactEmail": "graham.otte@gmail.com",
   "contactFirstName": "Graham",
   "contactLastName": "Otte",
@@ -105,6 +105,6 @@
     },
     "android": {}
   },
-  "version": "1.19.6",
-  "whatsNew": "Improved TV library sorting reliability, series quick play, episode auto-scrolling, playback progress reporting, and tvOS focus visibility, with clearer Seen labels and transcoding status."
+  "version": "1.19.7",
+  "whatsNew": "Faster startup with cached libraries, clearer cancellable refresh progress, and improved library refresh reliability, sorting, series quick play, episode auto-scrolling, playback progress reporting, tvOS focus visibility, Seen labels, and transcoding status."
 }
