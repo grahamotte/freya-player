@@ -1,5 +1,5 @@
 {
-  "build": "1.19.3",
+  "build": "1.19.4",
   "contactEmail": "graham.otte@gmail.com",
   "contactFirstName": "Graham",
   "contactLastName": "Otte",
@@ -105,6 +105,6 @@
     },
     "android": {}
   },
-  "version": "1.19.3",
-  "whatsNew": "Fixed playback progress reporting, prevented More Details from becoming unresponsive on some devices, and improved Refresh button spacing."
+  "version": "1.19.4",
+  "whatsNew": "Improved TV series quick play, fixed episode auto-scrolling and tvOS focus visibility, and made playback progress updates more reliable."
 }
