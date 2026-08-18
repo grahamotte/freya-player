@@ -44,7 +44,6 @@ struct MediaView<Content: View>: View {
     @ObservedObject var model: AppModel
     let data: MediaViewData
     let content: Content
-    @State private var isShowingFullText = false
     @State private var isShowingDetails = false
     @State private var detailScrollOffset: CGFloat = 0
 
@@ -70,10 +69,6 @@ struct MediaView<Content: View>: View {
         }
         .background {
             MediaBackdropView(artworkURL: data.artworkURL, backdropURL: data.backdropURL)
-        }
-        .fullScreenCover(isPresented: $isShowingFullText) {
-            FullItemTextView(title: data.title, synopsis: data.synopsis)
-                .presentationBackground(.clear)
         }
         .fullScreenCover(isPresented: $isShowingDetails) {
             FullItemDetailsView(
@@ -203,9 +198,7 @@ struct MediaView<Content: View>: View {
     @ViewBuilder
     private func detailsContent(synopsisWidth: CGFloat, metrics: MediaViewMetrics) -> some View {
         VStack(alignment: .leading, spacing: metrics.contentSpacing) {
-            Button {
-                isShowingFullText = true
-            } label: {
+            Button {} label: {
                 Text(data.title)
                     .font(.system(size: metrics.titleFontSize, weight: .bold))
                     .lineLimit(3)
@@ -251,7 +244,9 @@ struct MediaView<Content: View>: View {
             }
 
             Button {
-                isShowingFullText = true
+                if PlatformMetadata.isTV {
+                    isShowingDetails = true
+                }
             } label: {
                 Text(data.synopsis)
                     .font(.body)
@@ -747,54 +742,6 @@ private struct MediaDetailTileStyle: ButtonStyle {
                     .fill(isFocused ? AppTheme.primaryText.opacity(0.16) : AppTheme.surfaceFill.opacity(0.55))
             }
             .scaleEffect(configuration.isPressed ? 0.98 : 1)
-    }
-}
-
-private struct FullItemTextView: View {
-    let title: String
-    let synopsis: String
-    @Environment(\.dismiss) private var dismiss
-
-    var body: some View {
-        GeometryReader { proxy in
-            let layout = FullScreenLayout(size: proxy.size)
-
-            ZStack {
-                Color.black.opacity(0.88)
-                    .ignoresSafeArea()
-
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 24) {
-                        closeButton
-
-                        Text(title)
-                            .font(.largeTitle.bold())
-
-                        Text(synopsis)
-                            .font(.body)
-                            .foregroundStyle(AppTheme.secondaryText)
-                    }
-                    .frame(width: layout.contentWidth(maximum: 860), alignment: .leading)
-                    .padding(.top, layout.controlTopPadding)
-                    .padding(.bottom, layout.contentBottomPadding)
-                    .frame(maxWidth: .infinity, alignment: .center)
-                }
-            }
-            .frame(width: proxy.size.width, height: proxy.size.height)
-        }
-        .tvExitCommand { dismiss() }
-    }
-
-    private var closeButton: some View {
-        Button { dismiss() } label: {
-            Label("Close", systemImage: "xmark")
-        }
-        .buttonStyle(
-            MediaGlassButtonStyle(
-                horizontalPadding: PlatformMetadata.isTV ? 22 : 20,
-                verticalPadding: PlatformMetadata.isTV ? 14 : 10
-            )
-        )
     }
 }
 
