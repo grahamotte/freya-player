@@ -1,5 +1,16 @@
 import SwiftUI
 
+private struct MediaViewScrollActionKey: EnvironmentKey {
+    static let defaultValue: (String) -> Void = { _ in }
+}
+
+extension EnvironmentValues {
+    var mediaViewScrollTo: (String) -> Void {
+        get { self[MediaViewScrollActionKey.self] }
+        set { self[MediaViewScrollActionKey.self] = newValue }
+    }
+}
+
 struct MediaViewData {
     let title: String
     let metadata: [Metadata]
@@ -165,23 +176,28 @@ struct MediaView<Content: View>: View {
         metrics: MediaViewMetrics,
         tracksOffset: Bool
     ) -> some View {
-        ScrollView {
-            detailsContent(synopsisWidth: synopsisWidth, metrics: metrics)
+        ScrollViewReader { scrollProxy in
+            ScrollView {
+                detailsContent(synopsisWidth: synopsisWidth, metrics: metrics)
+            }
+            .environment(\.mediaViewScrollTo) { targetID in
+                scrollProxy.scrollTo(targetID, anchor: .center)
+            }
+            .onScrollGeometryChange(for: CGFloat.self) { geometry in
+                guard tracksOffset else { return 0 }
+                return max(geometry.contentOffset.y + geometry.contentInsets.top, 0)
+            } action: { _, offset in
+                detailScrollOffset = offset
+            }
+            .padding(.leading, metrics.panelLeadingPadding)
+            .padding(.trailing, metrics.panelTrailingPadding)
+            .padding(.vertical, metrics.panelVerticalPadding)
+            .frame(width: width, alignment: .leading)
+            .frame(maxHeight: .infinity, alignment: .leading)
+            .scrollIndicators(.hidden)
+            .scrollBounceBehavior(.basedOnSize, axes: .vertical)
+            .scrollClipDisabled()
         }
-        .onScrollGeometryChange(for: CGFloat.self) { geometry in
-            guard tracksOffset else { return 0 }
-            return max(geometry.contentOffset.y + geometry.contentInsets.top, 0)
-        } action: { _, offset in
-            detailScrollOffset = offset
-        }
-        .padding(.leading, metrics.panelLeadingPadding)
-        .padding(.trailing, metrics.panelTrailingPadding)
-        .padding(.vertical, metrics.panelVerticalPadding)
-        .frame(width: width, alignment: .leading)
-        .frame(maxHeight: .infinity, alignment: .leading)
-        .scrollIndicators(.hidden)
-        .scrollBounceBehavior(.basedOnSize, axes: .vertical)
-        .scrollClipDisabled()
     }
 
     @ViewBuilder

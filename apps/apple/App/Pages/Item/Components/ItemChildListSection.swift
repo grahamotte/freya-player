@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct ItemChildListSection: View {
+    @Environment(\.mediaViewScrollTo) private var scrollTo
     @ObservedObject var model: AppModel
     @ObservedObject var cache: LibraryCache
     @ObservedObject var refreshTracker: RefreshTracker
@@ -77,6 +78,7 @@ struct ItemChildListSection: View {
                         .buttonStyle(.bordered)
                         .buttonBorderShape(.roundedRectangle(radius: 18))
                         .controlSize(.large)
+                        .id(child.id)
                         .focused($focusedChildID, equals: child.id)
                         .platformHover { hoveredChildID = $0 ? child.id : nil }
                     }
@@ -102,6 +104,9 @@ struct ItemChildListSection: View {
         Task {
             await Task.yield()
             focusedChildID = nextID
+            if !PlatformMetadata.isTV {
+                scrollTo(nextID)
+            }
         }
     }
 
@@ -129,4 +134,3 @@ extension ItemChildListSection {
         case numbered
     }
 }
-
