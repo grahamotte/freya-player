@@ -22,8 +22,7 @@ struct PlayableMediaItemView: View {
                     MediaPlayButton(
                         model: model,
                         item: item,
-                        id: playbackID,
-                        onPlaybackDismissed: refreshItem
+                        id: playbackID
                     )
                 }
 

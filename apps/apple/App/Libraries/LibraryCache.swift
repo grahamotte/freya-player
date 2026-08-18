@@ -277,6 +277,16 @@ final class LibraryCache: ObservableObject {
         commit(next, publishImmediately: true)
     }
 
+    func updatePlaybackProgress(for itemID: String, time: Int, duration: Int?) {
+        guard let item = snapshot.itemsByID[itemID] else { return }
+        let updated = item.applyingPlaybackProgress(time: time, duration: duration)
+        guard updated != item else { return }
+
+        var next = snapshot
+        next.itemsByID[itemID] = updated
+        commit(next, publishImmediately: true)
+    }
+
     // MARK: - Persistence
 
     private func commit(

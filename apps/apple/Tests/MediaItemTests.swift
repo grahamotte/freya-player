@@ -31,6 +31,33 @@ final class MediaItemTests: XCTestCase {
         XCTAssertEqual(stats.progress, 0.75)
     }
 
+    func testApplyingPlaybackProgressUpdatesResumeState() {
+        let item = makeMediaItem(
+            durationMilliseconds: 100_000,
+            progress: 0.1,
+            resumeOffsetMilliseconds: 10_000
+        )
+        let updated = item.applyingPlaybackProgress(time: 45_000, duration: 90_000)
+
+        XCTAssertFalse(updated.isWatched)
+        XCTAssertEqual(updated.progress, 0.5)
+        XCTAssertEqual(updated.resumeOffsetMilliseconds, 45_000)
+    }
+
+    func testApplyingPlaybackProgressUsesItemDurationAndPreservesWatchedState() {
+        let item = makeMediaItem(durationMilliseconds: 100_000)
+        let updated = item.applyingPlaybackProgress(time: 25_000, duration: nil)
+        let watched = item.settingWatchStatus(true)
+        let reset = makeMediaItem(progress: 0.5, resumeOffsetMilliseconds: 50_000)
+            .applyingPlaybackProgress(time: 0, duration: 100_000)
+
+        XCTAssertEqual(updated.progress, 0.25)
+        XCTAssertEqual(updated.resumeOffsetMilliseconds, 25_000)
+        XCTAssertEqual(watched.applyingPlaybackProgress(time: 25_000, duration: 100_000), watched)
+        XCTAssertNil(reset.progress)
+        XCTAssertNil(reset.resumeOffsetMilliseconds)
+    }
+
     func testLatestAddedAtUsesNewestEpisode() {
         let show = makeMediaItem(kind: .series, addedAt: 50)
         let episodes = [

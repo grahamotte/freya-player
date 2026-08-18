@@ -122,6 +122,23 @@ struct MediaItem: Hashable, Identifiable, Codable {
         applyingWatchStats(isWatched: isWatched, progress: isWatched ? 1 : nil, resumeOffsetMilliseconds: nil)
     }
 
+    func applyingPlaybackProgress(time: Int, duration: Int?) -> MediaItem {
+        guard kind.isPlayable, !isWatched, time >= 0 else { return self }
+
+        let playbackDuration = (duration ?? 0) > 0 ? duration : durationMilliseconds
+        let playbackProgress = time == 0
+            ? nil
+            : playbackDuration.flatMap {
+                $0 > 0 ? min(max(Double(time) / Double($0), 0), 1) : nil
+            } ?? progress
+
+        return applyingWatchStats(
+            isWatched: false,
+            progress: playbackProgress,
+            resumeOffsetMilliseconds: time > 0 ? time : nil
+        )
+    }
+
     func applyingWatchStats(
         isWatched: Bool,
         progress: Double?,

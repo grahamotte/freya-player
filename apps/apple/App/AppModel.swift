@@ -348,6 +348,11 @@ final class AppModel: ObservableObject {
         duration: Int?,
         sessionID: String
     ) {
+        libraryCache.updatePlaybackProgress(
+            for: id.itemID,
+            time: time,
+            duration: duration
+        )
         let connector = connector(for: id.providerID)
         playbackReportQueue.enqueue(
             for: PlaybackReportKey(id: id, sessionID: sessionID),
