@@ -292,10 +292,6 @@ private struct FullScreenLayout {
         PlatformMetadata.isTV ? 32 : 16
     }
 
-    var controlBottomPadding: CGFloat {
-        PlatformMetadata.isTV ? 20 : 8
-    }
-
     var contentBottomPadding: CGFloat {
         PlatformMetadata.isTV ? 64 : 32
     }
@@ -326,39 +322,31 @@ private struct FullItemDetailsView: View {
                 Color.black.opacity(0.4)
                     .ignoresSafeArea()
 
-                VStack(spacing: 0) {
-                    HStack {
-                        Spacer(minLength: 0)
+                ScrollView {
+                    VStack(alignment: .leading, spacing: contentSpacing) {
                         closeButton
-                    }
-                    .padding(.horizontal, layout.horizontalPadding)
-                    .padding(.top, layout.controlTopPadding)
-                    .padding(.bottom, layout.controlBottomPadding)
+                        header
+                        descriptionSection
 
-                    ScrollView {
-                        VStack(alignment: .leading, spacing: contentSpacing) {
-                            header
-                            descriptionSection
+                        if !artwork.isEmpty {
+                            artworkGallery(availableWidth: contentWidth)
+                        }
 
-                            if !artwork.isEmpty {
-                                artworkGallery(availableWidth: contentWidth)
-                            }
-
-                            LazyVStack(alignment: .leading, spacing: sectionSpacing) {
-                                ForEach(sections) { section in
-                                    if !section.rows.isEmpty {
-                                        detailSection(section, availableWidth: contentWidth)
-                                    }
+                        LazyVStack(alignment: .leading, spacing: sectionSpacing) {
+                            ForEach(sections) { section in
+                                if !section.rows.isEmpty {
+                                    detailSection(section, availableWidth: contentWidth)
                                 }
                             }
                         }
-                        .frame(width: contentWidth, alignment: .leading)
-                        .padding(.bottom, layout.contentBottomPadding)
-                        .frame(maxWidth: .infinity, alignment: .center)
-                        .tvOSFocusSection()
                     }
-                    .scrollIndicators(.hidden)
+                    .frame(width: contentWidth, alignment: .leading)
+                    .padding(.top, layout.controlTopPadding)
+                    .padding(.bottom, layout.contentBottomPadding)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .tvOSFocusSection()
                 }
+                .scrollIndicators(.hidden)
             }
             .frame(width: proxy.size.width, height: proxy.size.height)
         }
@@ -759,28 +747,21 @@ private struct FullItemTextView: View {
                 Color.black.opacity(0.88)
                     .ignoresSafeArea()
 
-                VStack(spacing: 0) {
-                    HStack {
-                        Spacer(minLength: 0)
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 24) {
                         closeButton
+
+                        Text(title)
+                            .font(.largeTitle.bold())
+
+                        Text(synopsis)
+                            .font(.body)
+                            .foregroundStyle(AppTheme.secondaryText)
                     }
-                    .padding(.horizontal, layout.horizontalPadding)
+                    .frame(width: layout.contentWidth(maximum: 860), alignment: .leading)
                     .padding(.top, layout.controlTopPadding)
-                    .padding(.bottom, layout.controlBottomPadding)
-
-                    ScrollView {
-                        VStack(alignment: .leading, spacing: 24) {
-                            Text(title)
-                                .font(.largeTitle.bold())
-
-                            Text(synopsis)
-                                .font(.body)
-                                .foregroundStyle(AppTheme.secondaryText)
-                        }
-                        .frame(width: layout.contentWidth(maximum: 860), alignment: .leading)
-                        .padding(.bottom, layout.contentBottomPadding)
-                        .frame(maxWidth: .infinity, alignment: .center)
-                    }
+                    .padding(.bottom, layout.contentBottomPadding)
+                    .frame(maxWidth: .infinity, alignment: .center)
                 }
             }
             .frame(width: proxy.size.width, height: proxy.size.height)
