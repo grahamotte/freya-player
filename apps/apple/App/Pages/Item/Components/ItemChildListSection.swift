@@ -55,6 +55,8 @@ struct ItemChildListSection: View {
             } else {
                 VStack(alignment: .leading, spacing: 16) {
                     ForEach(Array(children.enumerated()), id: \.element.id) { position, child in
+                        let usesFocusedForeground = PlatformMetadata.isTV && focusedChildID == child.id
+
                         NavigationLink(value: destination(child)) {
                             HStack(spacing: 18) {
                                 MarqueeText(
@@ -71,9 +73,12 @@ struct ItemChildListSection: View {
                                 }
 
                                 Image(systemName: "chevron.right")
-                                    .foregroundStyle(AppTheme.secondaryText)
+                                    .foregroundStyle(
+                                        usesFocusedForeground ? AppTheme.inverseText.opacity(0.72) : AppTheme.secondaryText
+                                    )
                             }
                             .frame(maxWidth: .infinity, alignment: .leading)
+                            .foregroundStyle(usesFocusedForeground ? AppTheme.inverseText : AppTheme.primaryText)
                         }
                         .buttonStyle(.bordered)
                         .buttonBorderShape(.roundedRectangle(radius: 18))
