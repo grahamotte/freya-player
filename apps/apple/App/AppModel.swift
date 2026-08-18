@@ -428,6 +428,23 @@ final class AppModel: ObservableObject {
         )
     }
 
+    func cachedQuickPlayItem(for item: MediaItem) -> MediaItem? {
+        let currentItem = libraryCache.item(item.id) ?? item
+        return currentItem.quickPlayItem(from: libraryCache.leaves(under: currentItem.id))
+    }
+
+    func quickPlayItem(for item: MediaItem) async -> MediaItem? {
+        let currentItem = libraryCache.item(item.id) ?? item
+        guard !currentItem.kind.isPlayable else { return cachedQuickPlayItem(for: currentItem) }
+        guard currentItem.kind == .series else { return nil }
+
+        await refreshTracker.run(.children(currentItem.id)) { [weak self] in
+            await self?._refreshChildrenWork(of: currentItem, recursive: true)
+        }.value
+
+        return cachedQuickPlayItem(for: currentItem)
+    }
+
     // MARK: - Internal implementations
 
     private func _refreshConnection() async {

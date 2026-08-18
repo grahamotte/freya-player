@@ -111,6 +111,19 @@ struct MediaItem: Hashable, Identifiable, Codable {
         return "Resume at \(timestamp)"
     }
 
+    var quickPlayButtonTitle: String {
+        hasResume ? "Resume Now" : "Play Now"
+    }
+
+    func quickPlayItem(from orderedDescendants: [MediaItem]) -> MediaItem? {
+        if kind.isPlayable {
+            return self
+        }
+
+        guard kind == .series else { return nil }
+        return orderedDescendants.first { $0.kind == .episode && !$0.isWatched }
+    }
+
     private static let dateFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.dateStyle = .long

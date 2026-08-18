@@ -9,6 +9,7 @@ final class MediaItemTests: XCTestCase {
         XCTAssertEqual(item.runtimeText, "1h 30m")
         XCTAssertTrue(item.hasResume)
         XCTAssertEqual(item.playButtonTitle, "Resume at 0:12")
+        XCTAssertEqual(item.quickPlayButtonTitle, "Resume Now")
         XCTAssertEqual(item.playbackID?.itemID, item.id)
         XCTAssertEqual(item.artworkURL, item.artwork.posterURL)
         XCTAssertEqual(MediaItemKind.episode.artworkStyle, .landscape)
@@ -17,6 +18,7 @@ final class MediaItemTests: XCTestCase {
             makeMediaItem(resumeOffsetMilliseconds: 3_723_000).playButtonTitle,
             "Resume at 1:02:03"
         )
+        XCTAssertEqual(makeMediaItem().quickPlayButtonTitle, "Play Now")
     }
 
     func testWatchStatusAndDerivedProgress() {
@@ -77,6 +79,32 @@ final class MediaItemTests: XCTestCase {
 
         XCTAssertEqual(refreshed.preservingNewerSeriesAddedAt(from: cached).addedAt, 300)
         XCTAssertEqual(movie.preservingNewerSeriesAddedAt(from: cached).addedAt, 50)
+    }
+
+    func testQuickPlaySelectsFirstPartiallyPlayedOrUnplayedEpisodeInOrder() {
+        let series = makeMediaItem(kind: .series)
+        let episodes = [
+            makeMediaItem(id: "watched", kind: .episode, isWatched: true),
+            makeMediaItem(
+                id: "partial",
+                kind: .episode,
+                progress: 0.5,
+                resumeOffsetMilliseconds: 30_000
+            ),
+            makeMediaItem(id: "unplayed", kind: .episode),
+        ]
+
+        XCTAssertEqual(series.quickPlayItem(from: episodes)?.id, "partial")
+        XCTAssertEqual(series.quickPlayItem(from: episodes)?.quickPlayButtonTitle, "Resume Now")
+    }
+
+    func testQuickPlaySupportsPlayableItemsAndRejectsOtherContainers() {
+        let movie = makeMediaItem(kind: .movie)
+        let watchedEpisode = makeMediaItem(kind: .episode, isWatched: true)
+
+        XCTAssertEqual(movie.quickPlayItem(from: []), movie)
+        XCTAssertNil(makeMediaItem(kind: .series).quickPlayItem(from: [watchedEpisode]))
+        XCTAssertNil(makeMediaItem(kind: .season).quickPlayItem(from: []))
     }
 }
 

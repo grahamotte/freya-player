@@ -64,8 +64,10 @@ final class MediaItemQuickActionHandler {
         didHandleLongPress = true
 
         let alert = UIAlertController(title: item.title, message: nil, preferredStyle: .alert)
+        let quickPlayTitle = model.cachedQuickPlayItem(for: item)?.quickPlayButtonTitle
+            ?? item.quickPlayButtonTitle
 
-        alert.addAction(UIAlertAction(title: "Play Now", style: .default) { [weak self] _ in
+        alert.addAction(UIAlertAction(title: quickPlayTitle, style: .default) { [weak self] _ in
             Task { await self?.playNow(item) }
         })
         alert.addAction(UIAlertAction(title: "Mark Watched", style: .default) { [weak self] _ in
@@ -78,8 +80,11 @@ final class MediaItemQuickActionHandler {
         presenter.present(alert, animated: true)
     }
 
-    private func playNow(_ item: MediaItem) async {
-        guard let presenter, let playbackID = item.playbackID else { return }
+    private func playNow(_ selectedItem: MediaItem) async {
+        guard let item = await model.quickPlayItem(for: selectedItem),
+              let playbackID = item.playbackID,
+              let presenter,
+              presenter.presentedViewController == nil else { return }
 
         do {
             let sessionID = UUID().uuidString
@@ -249,11 +254,11 @@ private struct MediaItemQuickActionsModifier: ViewModifier {
     func body(content: Content) -> some View {
         content
             .contextMenu {
-                if item.playbackID != nil {
+                if item.playbackID != nil || item.kind == .series {
                     Button {
                         Task { await startPlayback() }
                     } label: {
-                        Label(item.hasResume ? "Resume" : "Play", systemImage: "play.fill")
+                        Label(quickPlayTitle, systemImage: "play.fill")
                     }
                 }
 
@@ -272,7 +277,6 @@ private struct MediaItemQuickActionsModifier: ViewModifier {
             .fullScreenCover(item: $pendingPlayback) { request in
                 QuickPlaybackPresenter(
                     request: request,
-                    item: item,
                     model: model,
                     onPlayerDismissed: { pendingPlayback = nil },
                     onPlaybackFailed: { playbackFailure = PlaybackFailure($0) }
@@ -288,8 +292,14 @@ private struct MediaItemQuickActionsModifier: ViewModifier {
             }
     }
 
+    private var quickPlayTitle: String {
+        model.cachedQuickPlayItem(for: item)?.quickPlayButtonTitle
+            ?? item.quickPlayButtonTitle
+    }
+
     private func startPlayback() async {
-        guard let playbackID = item.playbackID else { return }
+        guard let item = await model.quickPlayItem(for: item),
+              let playbackID = item.playbackID else { return }
 
         do {
             let sessionID = UUID().uuidString
@@ -301,7 +311,8 @@ private struct MediaItemQuickActionsModifier: ViewModifier {
             pendingPlayback = QuickPlayRequest(
                 resource: resource,
                 sessionID: sessionID,
-                playbackID: playbackID
+                playbackID: playbackID,
+                item: item
             )
         } catch {
             playbackFailure = PlaybackFailure(error)
@@ -314,11 +325,11 @@ private struct QuickPlayRequest: Identifiable {
     let resource: MediaPlaybackResource
     let sessionID: String
     let playbackID: MediaPlaybackID
+    let item: MediaItem
 }
 
 private struct QuickPlaybackPresenter: UIViewControllerRepresentable {
     let request: QuickPlayRequest
-    let item: MediaItem
     let model: AppModel
     let onPlayerDismissed: () -> Void
     let onPlaybackFailed: (Error) -> Void
@@ -360,7 +371,7 @@ private struct QuickPlaybackPresenter: UIViewControllerRepresentable {
                 model.stopPlaybackSession(for: request.playbackID, sessionID: previousSessionID)
             }
             playbackController.load(
-                item: MediaPlayerItemFactory.item(resource: resource, mediaItem: item),
+                item: MediaPlayerItemFactory.item(resource: resource, mediaItem: request.item),
                 startOffsetMilliseconds: resource.localStartOffsetMilliseconds,
                 refreshesAfterLongPause: resource.remoteSessionID != nil,
                 onTimelineEvent: { state, time, duration in
@@ -393,7 +404,7 @@ private struct QuickPlaybackPresenter: UIViewControllerRepresentable {
                     }
                     recoveryTask?.cancel()
                     recoveryTask = Task {
-                        let resumeOffset = max(savedTime, item.resumeOffsetMilliseconds ?? 0)
+                        let resumeOffset = max(savedTime, request.item.resumeOffsetMilliseconds ?? 0)
                         do {
                             let newSessionID = UUID().uuidString
                             let newResource = try await model.playbackURL(
