@@ -3,7 +3,8 @@ import SwiftUI
 struct LibrariesPage: View {
     @ObservedObject var model: AppModel
     @ObservedObject private var cache: LibraryCache
-    @State private var isRefreshing: Bool
+    @State private var refreshProgress: RefreshProgress?
+    @State private var isHoveringRefresh = false
     @State private var preferenceRevision = 0
     let server: ConnectedServer
     @Binding var path: [AppRoute]
@@ -20,7 +21,7 @@ struct LibrariesPage: View {
     init(model: AppModel, server: ConnectedServer, path: Binding<[AppRoute]>) {
         self.model = model
         self.cache = model.libraryCache
-        _isRefreshing = State(initialValue: model.isRefreshingAllLibraries(server))
+        _refreshProgress = State(initialValue: model.libraryRefreshProgress)
         self.server = server
         _path = path
     }
@@ -75,13 +76,19 @@ struct LibrariesPage: View {
 
                 HStack(spacing: 16) {
                     Button {
-                        model.refreshAllLibraries(server)
+                        if refreshProgress != nil {
+                            model.cancelLibraryRefresh()
+                        } else {
+                            model.refreshAllLibraries(server)
+                        }
                     } label: {
-                        if isRefreshing {
+                        if isHoveringRefresh, refreshProgress != nil {
+                            Text("Cancel")
+                        } else if let refreshProgress {
                             HStack(spacing: 8) {
                                 ProgressView()
                                     .controlSize(.small)
-                                Text("Refreshing...")
+                                Text("(\(refreshProgress.completed)/\(refreshProgress.total))")
                                     .lineLimit(1)
                                     .minimumScaleFactor(0.75)
                             }
@@ -90,7 +97,8 @@ struct LibrariesPage: View {
                         }
                     }
                     .buttonStyle(actionButtonStyle)
-                    .disabled(isRefreshing)
+                    .platformHover { isHoveringRefresh = $0 }
+                    .help(refreshProgress == nil ? "Refresh" : "Cancel")
 
                     NavigationLink(value: projection.manageRoute) {
                         Text("Manage")
@@ -109,10 +117,11 @@ struct LibrariesPage: View {
         }
         .scrollIndicators(.hidden)
         .background(LibrariesAmbientBackground())
-        .onReceive(model.refreshTracker.$inFlight) { _ in
-            let nextIsRefreshing = model.isRefreshingAllLibraries(server)
-            guard isRefreshing != nextIsRefreshing else { return }
-            isRefreshing = nextIsRefreshing
+        .onReceive(model.refreshTracker.$progress) { progress in
+            refreshProgress = progress
+            if progress == nil {
+                isHoveringRefresh = false
+            }
         }
         .onReceive(defaultsDidChange) { _ in
             preferenceRevision &+= 1

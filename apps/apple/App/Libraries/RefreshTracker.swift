@@ -5,10 +5,16 @@ import Foundation
 /// stringly-typed keys and lets views ask `isRefreshing(.children(itemID))`
 /// directly.
 enum RefreshKey: Hashable, Sendable {
+    case allLibraries
     case connection
     case library(String)
     case children(String)
     case item(String)
+}
+
+struct RefreshProgress: Equatable {
+    let completed: Int
+    let total: Int
 }
 
 /// Tracks the set of background refreshes currently in flight and dedups
@@ -28,8 +34,36 @@ enum RefreshKey: Hashable, Sendable {
 @MainActor
 final class RefreshTracker: ObservableObject {
     @Published private(set) var inFlight: Set<RefreshKey> = []
+    @Published private(set) var progress: RefreshProgress?
     private var tasks: [RefreshKey: Task<Void, Never>] = [:]
     private var tokens: [RefreshKey: UUID] = [:]
+    private var refreshID: UUID?
+
+    func beginRefresh() -> UUID? {
+        guard refreshID == nil else { return nil }
+
+        let id = UUID()
+        refreshID = id
+        progress = RefreshProgress(completed: 0, total: 0)
+        return id
+    }
+
+    func registerRequest(for id: UUID?) -> Bool {
+        guard let id, refreshID == id, let progress else { return false }
+        self.progress = RefreshProgress(completed: progress.completed, total: progress.total + 1)
+        return true
+    }
+
+    func completeRequest(for id: UUID?) {
+        guard let id, refreshID == id, let progress else { return }
+        self.progress = RefreshProgress(completed: progress.completed + 1, total: progress.total)
+    }
+
+    func finishRefresh(_ id: UUID) {
+        guard refreshID == id else { return }
+        refreshID = nil
+        progress = nil
+    }
 
     @discardableResult
     func run(_ key: RefreshKey, _ work: @escaping @Sendable () async -> Void) -> Task<Void, Never> {
@@ -58,6 +92,8 @@ final class RefreshTracker: ObservableObject {
         tasks.removeAll()
         tokens.removeAll()
         inFlight.removeAll()
+        refreshID = nil
+        progress = nil
     }
 
     func isRefreshing(_ key: RefreshKey) -> Bool {

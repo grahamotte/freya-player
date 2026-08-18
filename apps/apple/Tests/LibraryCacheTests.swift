@@ -54,10 +54,61 @@ final class LibraryCacheTests: XCTestCase {
         )
 
         cache.install(server: server)
+        let installedData = try JSONEncoder().encode(cache.snapshot)
+        let installedSnapshot = try JSONDecoder().decode(LibraryCacheSnapshot.self, from: installedData)
 
         XCTAssertEqual(cache.libraryItems(for: library.id).first?.addedAt, 300)
         XCTAssertEqual(savedSnapshot?.itemsByID["series"]?.addedAt, 300)
         XCTAssertEqual(savedSnapshot?.derivedSeriesAddedAtVersion, 1)
+        XCTAssertEqual(installedSnapshot.serverMetadata?.serverName, "Server")
+        XCTAssertEqual(installedSnapshot.serverMetadata?.serverURL, "https://example.com")
+    }
+
+    @MainActor
+    func testLoadedLegacyCacheBuildsBrowsableServerWithChildren() throws {
+        let series = makeMediaItem(id: "series", kind: .series)
+        let season = makeMediaItem(id: "season", kind: .season)
+        let episode = makeMediaItem(id: "episode", kind: .episode)
+        let library = makeLibraryShelf(items: [series])
+        let snapshot = LibraryCacheSnapshot(
+            serverKey: "plex:server",
+            libraries: [
+                library.id: CachedLibrary(reference: library.reference, isHidden: false),
+            ],
+            libraryOrder: [library.id],
+            itemsByID: [
+                series.id: series,
+                season.id: season,
+                episode.id: episode,
+            ],
+            libraryItemIDs: [library.id: [series.id]],
+            childItemIDs: [
+                series.id: [season.id],
+                season.id: [episode.id],
+            ]
+        )
+        let data = try JSONEncoder().encode(snapshot)
+        var object = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        object["serverMetadata"] = nil
+        let legacyData = try JSONSerialization.data(withJSONObject: object)
+        let legacySnapshot = try JSONDecoder().decode(LibraryCacheSnapshot.self, from: legacyData)
+        let cache = LibraryCache(
+            storage: LibraryCacheStorage(
+                load: { legacySnapshot },
+                save: { _ in },
+                clear: {},
+                sizeBytes: { Int64(legacyData.count) }
+            )
+        )
+
+        let server = try XCTUnwrap(cache.cachedServer())
+
+        XCTAssertEqual(server.providerID, .plex)
+        XCTAssertEqual(server.serverID, "server")
+        XCTAssertEqual(server.serverName, "Plex")
+        XCTAssertEqual(server.libraries.map(\.id), [library.id])
+        XCTAssertEqual(cache.children(of: series.id).map(\.id), [season.id])
+        XCTAssertEqual(cache.children(of: season.id).map(\.id), [episode.id])
     }
 
     @MainActor

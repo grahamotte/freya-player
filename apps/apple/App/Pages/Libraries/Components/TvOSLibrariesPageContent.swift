@@ -52,6 +52,7 @@ private final class LibrariesCollectionViewController: UIViewController, UIColle
     private var defaultsSubscription: AnyCancellable?
     private var refreshSubscription: AnyCancellable?
     private var isRefreshing = false
+    private var refreshProgress: RefreshProgress?
     private lazy var quickActionHandler = MediaItemQuickActionHandler(
         presenter: self,
         model: model,
@@ -71,7 +72,8 @@ private final class LibrariesCollectionViewController: UIViewController, UIColle
         self.model = model
         self.server = server
         self.onSelectRoute = onSelectRoute
-        self.isRefreshing = model.isRefreshingAllLibraries(server)
+        self.refreshProgress = model.libraryRefreshProgress
+        self.isRefreshing = refreshProgress != nil
         super.init(nibName: nil, bundle: nil)
         sections = makeSections(from: server)
         selectedTitles = makeSelectedTitles(from: sections)
@@ -87,13 +89,12 @@ private final class LibrariesCollectionViewController: UIViewController, UIColle
                 self?.rebuildSectionsPreservingScrollPosition()
             }
 
-        refreshSubscription = model.refreshTracker.$inFlight
-            .sink { [weak self] inFlight in
+        refreshSubscription = model.refreshTracker.$progress
+            .sink { [weak self] progress in
                 guard let self else { return }
-                let nextIsRefreshing = inFlight.contains(.connection)
-                    || self.server.libraries.contains { inFlight.contains(.library($0.id)) }
-                guard self.isRefreshing != nextIsRefreshing else { return }
-                self.isRefreshing = nextIsRefreshing
+                guard self.refreshProgress != progress else { return }
+                self.refreshProgress = progress
+                self.isRefreshing = progress != nil
                 self.rebuildSectionsPreservingScrollPosition()
             }
     }
@@ -153,7 +154,8 @@ private final class LibrariesCollectionViewController: UIViewController, UIColle
         guard self.server != server else { return }
         let shouldPreserveScrollPosition = self.server.id == server.id
         self.server = server
-        isRefreshing = model.isRefreshingAllLibraries(server)
+        refreshProgress = model.libraryRefreshProgress
+        isRefreshing = refreshProgress != nil
         sections = makeSections(from: server)
         selectedTitles = makeSelectedTitles(from: sections)
 
@@ -238,7 +240,7 @@ private final class LibrariesCollectionViewController: UIViewController, UIColle
     }
 
     func collectionView(_ collectionView: UICollectionView, canFocusItemAt indexPath: IndexPath) -> Bool {
-        sections[indexPath.section].items[indexPath.item].kind != .refresh(isRefreshing: true)
+        true
     }
 
     func indexPathForPreferredFocusedView(in collectionView: UICollectionView) -> IndexPath? {
@@ -437,7 +439,7 @@ private final class LibrariesCollectionViewController: UIViewController, UIColle
             items: [
                 LibrariesItem(
                     id: "refresh",
-                    title: isRefreshing ? "Refreshing..." : "Refresh",
+                    title: refreshProgress.map { "(\($0.completed)/\($0.total))" } ?? "Refresh",
                     artworkURL: nil,
                     progress: nil,
                     isWatched: false,
@@ -545,8 +547,12 @@ private final class LibrariesCollectionViewController: UIViewController, UIColle
     }
 
     private func handlePrimaryAction(for item: LibrariesItem) {
-        if item.kind == .refresh(isRefreshing: false) {
-            model.refreshAllLibraries(server)
+        if case .refresh(let isRefreshing) = item.kind {
+            if isRefreshing {
+                model.cancelLibraryRefresh()
+            } else {
+                model.refreshAllLibraries(server)
+            }
             return
         }
 
@@ -827,6 +833,7 @@ private final class LibrariesActionCell: UICollectionViewListCell {
     private let titleLabel = UILabel()
     private let stackView = UIStackView()
     private var isRefreshing = false
+    private var title = ""
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -861,7 +868,7 @@ private final class LibrariesActionCell: UICollectionViewListCell {
     }
 
     func configure(title: String, isRefreshing: Bool) {
-        titleLabel.text = title
+        self.title = title
         self.isRefreshing = isRefreshing
         if isRefreshing {
             activityIndicator.startAnimating()
@@ -874,7 +881,8 @@ private final class LibrariesActionCell: UICollectionViewListCell {
     override func updateConfiguration(using state: UICellConfigurationState) {
         super.updateConfiguration(using: state)
 
-        let isFocused = state.isFocused && !isRefreshing
+        let isFocused = state.isFocused
+        titleLabel.text = isFocused && isRefreshing ? "Cancel" : title
         let foregroundColor = isFocused
             ? AppTheme.uiInverseText
             : isRefreshing ? AppTheme.uiSecondaryText : AppTheme.uiPrimaryText

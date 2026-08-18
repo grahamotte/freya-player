@@ -21,7 +21,7 @@ struct ServerManagementPanel: View {
                         server: server,
                         cacheSizeText: cache.formattedStorageSize,
                         onClearCache: {
-                            model.clearCacheAndResync()
+                            model.clearCache()
                         },
                         onDeactivate: {
                             isShowingDeactivateAlert = true

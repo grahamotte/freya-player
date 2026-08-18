@@ -27,7 +27,6 @@ let package = Package(
                 "Libraries/PlatformMetadata.swift",
                 "Libraries/PlaybackAudioSession.swift",
                 "Libraries/PollingLoop.swift",
-                "Libraries/RefreshTracker.swift",
                 "Pages",
             ],
             swiftSettings: [.swiftLanguageMode(.v5)],

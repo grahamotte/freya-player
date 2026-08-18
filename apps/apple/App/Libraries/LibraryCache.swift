@@ -40,6 +40,30 @@ final class LibraryCache: ObservableObject {
         Self.formattedStorageSize(bytes: snapshot.isEmpty ? 0 : storageSizeBytes)
     }
 
+    func cachedServer() -> ConnectedServer? {
+        let libraries = snapshot.libraryOrder.compactMap { libraryID -> LibraryShelf? in
+            guard let library = snapshot.libraries[libraryID] else { return nil }
+            return LibraryShelf(
+                id: libraryID,
+                title: library.reference.title,
+                reference: library.reference,
+                items: [],
+                isHidden: library.isHidden
+            )
+        }
+        guard let reference = libraries.first?.reference else { return nil }
+
+        let metadata = snapshot.serverMetadata
+        return ConnectedServer(
+            providerID: metadata?.providerID ?? reference.providerID,
+            serverID: metadata?.serverID ?? reference.serverID,
+            serverName: metadata?.serverName ?? reference.providerID.title,
+            serverURL: metadata?.serverURL ?? "",
+            accountName: metadata?.accountName ?? "",
+            libraries: libraries
+        )
+    }
+
     // MARK: - Server lifecycle
 
     func install(server: ConnectedServer) {
@@ -49,6 +73,7 @@ final class LibraryCache: ObservableObject {
         var next = isCurrentServer ? current : LibraryCacheSnapshot(serverKey: key)
 
         next.serverKey = key
+        next.serverMetadata = CachedServerMetadata(server: server)
 
         var nextLibraries: [String: CachedLibrary] = [:]
         var libraryOrder: [String] = []
@@ -400,8 +425,25 @@ struct CachedLibrary: Codable, Equatable {
     var isHidden: Bool
 }
 
+struct CachedServerMetadata: Codable, Equatable {
+    let providerID: MediaProviderID
+    let serverID: String
+    let serverName: String
+    let serverURL: String
+    let accountName: String
+
+    init(server: ConnectedServer) {
+        providerID = server.providerID
+        serverID = server.serverID
+        serverName = server.serverName
+        serverURL = server.serverURL
+        accountName = server.accountName
+    }
+}
+
 struct LibraryCacheSnapshot: Codable, Equatable {
     var serverKey: String?
+    var serverMetadata: CachedServerMetadata?
     var libraries: [String: CachedLibrary]
     var libraryOrder: [String]
     var itemsByID: [String: MediaItem]
@@ -411,6 +453,7 @@ struct LibraryCacheSnapshot: Codable, Equatable {
 
     init(
         serverKey: String? = nil,
+        serverMetadata: CachedServerMetadata? = nil,
         libraries: [String: CachedLibrary] = [:],
         libraryOrder: [String] = [],
         itemsByID: [String: MediaItem] = [:],
@@ -419,6 +462,7 @@ struct LibraryCacheSnapshot: Codable, Equatable {
         derivedSeriesAddedAtVersion: Int? = 1
     ) {
         self.serverKey = serverKey
+        self.serverMetadata = serverMetadata
         self.libraries = libraries
         self.libraryOrder = libraryOrder
         self.itemsByID = itemsByID
@@ -429,6 +473,7 @@ struct LibraryCacheSnapshot: Codable, Equatable {
 
     var isEmpty: Bool {
         serverKey == nil
+            && serverMetadata == nil
             && libraries.isEmpty
             && libraryOrder.isEmpty
             && itemsByID.isEmpty
