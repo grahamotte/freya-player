@@ -9,7 +9,7 @@ enum LibraryPageFilter: Int, CaseIterable {
         case .all:
             return "All"
         case .unwatched:
-            return "Unwatched"
+            return "Unseen"
         }
     }
 
@@ -29,7 +29,7 @@ enum LibraryPageFilter: Int, CaseIterable {
         case .all:
             return "No \(plural)."
         case .unwatched:
-            return "No unwatched \(plural)."
+            return "No unseen \(plural)."
         }
     }
 }

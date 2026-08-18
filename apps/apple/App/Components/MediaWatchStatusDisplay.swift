@@ -5,6 +5,8 @@ enum MediaWatchStatusDisplay {
     static let uiColor = UIColor.systemYellow
     static let color = Color(uiColor: uiColor)
     static let iconName = "eye.fill"
+    static let markSeenTitle = "Mark Seen"
+    static let markUnseenTitle = "Mark Unseen"
 
     static func buttonColor(progress: Double?, isWatched: Bool) -> Color {
         Color(uiColor: blendedUIColor(progress: progress, isWatched: isWatched))
@@ -12,11 +14,11 @@ enum MediaWatchStatusDisplay {
 
     static func title(progress: Double?, isWatched: Bool) -> String {
         if isWatched {
-            return "Watched"
+            return "Seen"
         }
 
         let percent = progressPercent(progress)
-        return percent == 0 ? "Unwatched" : "\(percent)%"
+        return percent == 0 ? "Unseen" : "\(percent)%"
     }
 
     private static func progressPercent(_ progress: Double?) -> Int {

@@ -39,7 +39,7 @@ Depending on the feature you use, these requests may include:
 - your chosen server address
 - client or device identifiers and app version information
 - media browsing requests
-- playback state and progress, including resume position and watched or unwatched status
+- playback state and progress, including resume position and seen or unseen status
 - stream selection information such as audio and subtitle choices
 
 Freya Player uses this information only to provide browsing, playback, resume, and watch-status features. The developer does not receive this data on separate developer-operated servers.

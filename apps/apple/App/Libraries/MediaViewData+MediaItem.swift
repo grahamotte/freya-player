@@ -23,7 +23,7 @@ extension MediaItem {
                         durationMilliseconds.map { .init(label: "Duration", value: "\($0) ms") },
                         releasedAtFormatted.map { .init(label: "Released", value: $0) },
                         addedAtFormatted.map { .init(label: "Added", value: $0) },
-                        .init(label: "Watched", value: isWatched ? "Yes" : "No"),
+                        .init(label: "Seen", value: isWatched ? "Yes" : "No"),
                         progress.map { .init(label: "Progress", value: $0.formatted(.percent.precision(.fractionLength(0)))) },
                         resumeOffsetMilliseconds.map { .init(label: "Resume Offset", value: "\($0) ms") },
                         .init(label: "Item ID", value: id),

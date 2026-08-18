@@ -29,6 +29,11 @@ final class LibraryPreferencesTests: XCTestCase {
         XCTAssertEqual(store.librarySort(for: library), .title)
         XCTAssertEqual(store.librarySortOrder(for: library, sort: .title), .descending)
     }
+
+    func testLibraryFilterUsesSeenTerminology() {
+        XCTAssertEqual(LibraryPageFilter.unwatched.title, "Unseen")
+        XCTAssertEqual(LibraryPageFilter.unwatched.emptyStateText(for: "Movie"), "No unseen Movies.")
+    }
 }
 
 private final class LibraryPreferencesMemoryDefaultsStore: DefaultsStore {

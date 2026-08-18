@@ -70,10 +70,10 @@ final class MediaItemQuickActionHandler {
         alert.addAction(UIAlertAction(title: quickPlayTitle, style: .default) { [weak self] _ in
             Task { await self?.playNow(item) }
         })
-        alert.addAction(UIAlertAction(title: "Mark Watched", style: .default) { [weak self] _ in
+        alert.addAction(UIAlertAction(title: MediaWatchStatusDisplay.markSeenTitle, style: .default) { [weak self] _ in
             self?.model.setWatchStatus(for: item, isWatched: true)
         })
-        alert.addAction(UIAlertAction(title: "Mark Unwatched", style: .default) { [weak self] _ in
+        alert.addAction(UIAlertAction(title: MediaWatchStatusDisplay.markUnseenTitle, style: .default) { [weak self] _ in
             self?.model.setWatchStatus(for: item, isWatched: false)
         })
         alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
@@ -265,13 +265,13 @@ private struct MediaItemQuickActionsModifier: ViewModifier {
                 Button {
                     model.setWatchStatus(for: item, isWatched: true)
                 } label: {
-                    Label("Mark Watched", systemImage: "checkmark.circle.fill")
+                    Label(MediaWatchStatusDisplay.markSeenTitle, systemImage: "checkmark.circle.fill")
                 }
 
                 Button {
                     model.setWatchStatus(for: item, isWatched: false)
                 } label: {
-                    Label("Mark Unwatched", systemImage: "circle")
+                    Label(MediaWatchStatusDisplay.markUnseenTitle, systemImage: "circle")
                 }
             }
             .fullScreenCover(item: $pendingPlayback) { request in

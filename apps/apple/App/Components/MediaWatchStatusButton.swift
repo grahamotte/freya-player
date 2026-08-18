@@ -91,8 +91,8 @@ private struct MediaWatchStatusMenu: View {
 
     var body: some View {
         Menu {
-            Button("Mark Watched", action: onMarkWatched)
-            Button("Mark Unwatched", action: onMarkUnwatched)
+            Button(MediaWatchStatusDisplay.markSeenTitle, action: onMarkWatched)
+            Button(MediaWatchStatusDisplay.markUnseenTitle, action: onMarkUnwatched)
         } label: {
             Label(title, systemImage: MediaWatchStatusDisplay.iconName)
         }
