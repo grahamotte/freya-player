@@ -13,6 +13,9 @@ struct LibrariesPage: View {
     private var sectionSpacing: CGFloat { PlatformMetadata.isPhone ? 20 : 32 }
     private var shelfSpacing: CGFloat { PlatformMetadata.isPhone ? 12 : 16 }
     private var cardSpacing: CGFloat { PlatformMetadata.isPhone ? 10 : 16 }
+    private var actionButtonStyle: MediaGlassButtonStyle {
+        MediaGlassButtonStyle(horizontalPadding: PlatformMetadata.isPhone ? 16 : 28)
+    }
 
     init(model: AppModel, server: ConnectedServer, path: Binding<[AppRoute]>) {
         self.model = model
@@ -79,23 +82,25 @@ struct LibrariesPage: View {
                                 ProgressView()
                                     .controlSize(.small)
                                 Text("Refreshing...")
+                                    .lineLimit(1)
+                                    .minimumScaleFactor(0.75)
                             }
                         } else {
                             Text("Refresh")
                         }
                     }
-                    .buttonStyle(MediaGlassButtonStyle())
+                    .buttonStyle(actionButtonStyle)
                     .disabled(isRefreshing)
 
                     NavigationLink(value: projection.manageRoute) {
                         Text("Manage")
                     }
-                    .buttonStyle(MediaGlassButtonStyle())
+                    .buttonStyle(actionButtonStyle)
 
                     NavigationLink(value: AppRoute.about) {
                         Text("About")
                     }
-                    .buttonStyle(MediaGlassButtonStyle())
+                    .buttonStyle(actionButtonStyle)
                 }
                 .padding(.horizontal, pagePadding)
                 .padding(.top, 8)
