@@ -469,21 +469,24 @@ final class AppModel: ObservableObject {
     private func _resyncLibrary(_ library: LibraryReference) async {
         libraryCache.beginBatchUpdates()
         defer { libraryCache.endBatchUpdates() }
-        await _refreshLibrary(library)
-        await _warmLibraryChildren(library)
+        let refreshedItems = await _refreshLibrary(library)
+        await _warmLibraryChildren(library, refreshedItems: refreshedItems)
     }
 
-    private func _refreshLibrary(_ library: LibraryReference) async {
+    private func _refreshLibrary(_ library: LibraryReference) async -> [MediaItem]? {
         let generation = cacheGeneration
-        guard isCurrentServer(providerID: library.providerID, serverID: library.serverID) else { return }
+        guard isCurrentServer(providerID: library.providerID, serverID: library.serverID) else { return nil }
 
         let connector = connector(for: library.providerID)
         do {
             let items = try await connector.loadLibraryItems(for: library)
             guard generation == cacheGeneration,
-                  isCurrentServer(providerID: library.providerID, serverID: library.serverID) else { return }
+                  isCurrentServer(providerID: library.providerID, serverID: library.serverID) else { return nil }
             libraryCache.ingest(items: items, asTopLevelOf: library.id)
-        } catch {}
+            return items
+        } catch {
+            return nil
+        }
     }
 
     private func _refreshItem(_ item: MediaItem) async {
@@ -533,15 +536,15 @@ final class AppModel: ObservableObject {
         }
     }
 
-    private func _warmLibraryChildren(_ library: LibraryReference) async {
+    private func _warmLibraryChildren(
+        _ library: LibraryReference,
+        refreshedItems: [MediaItem]?
+    ) async {
         let generation = cacheGeneration
         guard isCurrentServer(providerID: library.providerID, serverID: library.serverID) else { return }
         guard library.defaultItemKind == .series else { return }
 
-        if libraryCache.libraryItems(for: library.id).isEmpty {
-            await _refreshLibrary(library)
-        }
-        let topLevel = libraryCache.libraryItems(for: library.id)
+        let topLevel = refreshedItems ?? libraryCache.libraryItems(for: library.id)
         guard generation == cacheGeneration else { return }
 
         for item in topLevel where !item.kind.isPlayable {
@@ -550,6 +553,8 @@ final class AppModel: ObservableObject {
                 await self?._refreshChildrenWork(of: item, recursive: true)
             }.value
         }
+
+        libraryCache.cacheLatestEpisodeAddedAt(for: topLevel.map(\.id))
     }
 
     private func _applyAndSyncWatchStatus(for item: MediaItem, isWatched: Bool) async {

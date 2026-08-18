@@ -244,10 +244,13 @@ struct MediaItem: Hashable, Identifiable, Codable {
             .filter { $0.kind == .episode }
             .compactMap(\.addedAt)
             .max()
-        guard let latestAddedAt else { return self }
         return withAddedAt(latestAddedAt)
     }
 
+    func usingCachedSeriesAddedAt(from cachedItem: MediaItem?) -> MediaItem {
+        guard kind == .series else { return self }
+        return withAddedAt(cachedItem?.addedAt)
+    }
 }
 
 struct MediaItemDetailSection: Hashable, Codable, Identifiable {

@@ -70,6 +70,17 @@ final class MediaItemTests: XCTestCase {
         ]
 
         XCTAssertEqual(show.applyingLatestEpisodeAddedAt(from: episodes).addedAt, 300)
+        XCTAssertNil(show.applyingLatestEpisodeAddedAt(from: []).addedAt)
+    }
+
+    func testSeriesUsesCachedDerivedAddedAtInsteadOfProviderDate() {
+        let cached = makeMediaItem(kind: .series, addedAt: 300)
+        let refreshed = makeMediaItem(kind: .series, addedAt: 500)
+        let movie = makeMediaItem(kind: .movie, addedAt: 500)
+
+        XCTAssertEqual(refreshed.usingCachedSeriesAddedAt(from: cached).addedAt, 300)
+        XCTAssertNil(refreshed.usingCachedSeriesAddedAt(from: nil).addedAt)
+        XCTAssertEqual(movie.usingCachedSeriesAddedAt(from: cached).addedAt, 500)
     }
 
     func testQuickPlaySelectsFirstPartiallyPlayedOrUnplayedEpisodeInOrder() {
