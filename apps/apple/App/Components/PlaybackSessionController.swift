@@ -37,7 +37,7 @@ final class PlaybackSessionController {
     init() {
         observePlaybackState()
         timeObserver = player.addPeriodicTimeObserver(
-            forInterval: CMTime(seconds: 10, preferredTimescale: 600),
+            forInterval: CMTime(seconds: 5, preferredTimescale: 600),
             queue: .main
         ) { [weak self] _ in
             self?.sendCurrentTimeline()
