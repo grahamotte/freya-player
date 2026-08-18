@@ -15,9 +15,6 @@ final class MediaSessionStore {
     private let libraryFilterKeyPrefix = "media.library.filter"
     private let librarySortKeyPrefix = "media.library.sort"
     private let librarySortOrderKeyPrefix = "media.library.sort.order"
-    private let defaultLibraryFilterKeyPrefix = "media.server.library.filter.default"
-    private let defaultLibrarySortKeyPrefix = "media.server.library.sort.default"
-    private let defaultLibrarySortOrderKeyPrefix = "media.server.library.sort.order.default"
     private let libraryOrderKeyPrefix = "media.server.library.order"
     private let hiddenLibrariesKeyPrefix = "media.server.library.hidden"
     private let playbackSettingsKeyPrefix = "media.playback.settings"
@@ -60,42 +57,6 @@ final class MediaSessionStore {
 
     func clearLibrarySortOrderRawValue(for library: LibraryReference) {
         defaults.removeObject(forKey: key(prefix: librarySortOrderKeyPrefix, library: library))
-    }
-
-    func defaultLibraryFilterRawValue(providerID: MediaProviderID, serverID: String) -> Int? {
-        defaults.object(forKey: key(prefix: defaultLibraryFilterKeyPrefix, providerID: providerID, serverID: serverID)) as? Int
-    }
-
-    func setDefaultLibraryFilterRawValue(_ rawValue: Int, providerID: MediaProviderID, serverID: String) {
-        defaults.set(rawValue, forKey: key(prefix: defaultLibraryFilterKeyPrefix, providerID: providerID, serverID: serverID))
-    }
-
-    func clearDefaultLibraryFilterRawValue(providerID: MediaProviderID, serverID: String) {
-        defaults.removeObject(forKey: key(prefix: defaultLibraryFilterKeyPrefix, providerID: providerID, serverID: serverID))
-    }
-
-    func defaultLibrarySortRawValue(providerID: MediaProviderID, serverID: String) -> Int? {
-        defaults.object(forKey: key(prefix: defaultLibrarySortKeyPrefix, providerID: providerID, serverID: serverID)) as? Int
-    }
-
-    func setDefaultLibrarySortRawValue(_ rawValue: Int, providerID: MediaProviderID, serverID: String) {
-        defaults.set(rawValue, forKey: key(prefix: defaultLibrarySortKeyPrefix, providerID: providerID, serverID: serverID))
-    }
-
-    func clearDefaultLibrarySortRawValue(providerID: MediaProviderID, serverID: String) {
-        defaults.removeObject(forKey: key(prefix: defaultLibrarySortKeyPrefix, providerID: providerID, serverID: serverID))
-    }
-
-    func defaultLibrarySortOrderRawValue(providerID: MediaProviderID, serverID: String) -> Int? {
-        defaults.object(forKey: key(prefix: defaultLibrarySortOrderKeyPrefix, providerID: providerID, serverID: serverID)) as? Int
-    }
-
-    func setDefaultLibrarySortOrderRawValue(_ rawValue: Int, providerID: MediaProviderID, serverID: String) {
-        defaults.set(rawValue, forKey: key(prefix: defaultLibrarySortOrderKeyPrefix, providerID: providerID, serverID: serverID))
-    }
-
-    func clearDefaultLibrarySortOrderRawValue(providerID: MediaProviderID, serverID: String) {
-        defaults.removeObject(forKey: key(prefix: defaultLibrarySortOrderKeyPrefix, providerID: providerID, serverID: serverID))
     }
 
     func libraryOrder(providerID: MediaProviderID, serverID: String) -> [String] {

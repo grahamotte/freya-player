@@ -133,33 +133,11 @@ extension MediaSessionStore {
             return filter
         }
 
-        guard
-            let rawValue = defaultLibraryFilterRawValue(providerID: library.providerID, serverID: library.serverID),
-            let filter = LibraryPageFilter(rawValue: rawValue)
-        else {
-            return .unwatched
-        }
-
-        return filter
+        return .unwatched
     }
 
     func setLibraryFilter(_ filter: LibraryPageFilter, for library: LibraryReference) {
         setLibraryFilterRawValue(filter.rawValue, for: library)
-    }
-
-    func defaultLibraryFilter(providerID: MediaProviderID, serverID: String) -> LibraryPageFilter {
-        guard
-            let rawValue = defaultLibraryFilterRawValue(providerID: providerID, serverID: serverID),
-            let filter = LibraryPageFilter(rawValue: rawValue)
-        else {
-            return .unwatched
-        }
-
-        return filter
-    }
-
-    func setDefaultLibraryFilter(_ filter: LibraryPageFilter, providerID: MediaProviderID, serverID: String) {
-        setDefaultLibraryFilterRawValue(filter.rawValue, providerID: providerID, serverID: serverID)
     }
 
     func librarySort(for library: LibraryReference) -> LibraryPageSort {
@@ -168,33 +146,11 @@ extension MediaSessionStore {
             return sort
         }
 
-        guard
-            let rawValue = defaultLibrarySortRawValue(providerID: library.providerID, serverID: library.serverID),
-            let sort = LibraryPageSort(rawValue: rawValue)
-        else {
-            return .addedAt
-        }
-
-        return sort
+        return .addedAt
     }
 
     func setLibrarySort(_ sort: LibraryPageSort, for library: LibraryReference) {
         setLibrarySortRawValue(sort.rawValue, for: library)
-    }
-
-    func defaultLibrarySort(providerID: MediaProviderID, serverID: String) -> LibraryPageSort {
-        guard
-            let rawValue = defaultLibrarySortRawValue(providerID: providerID, serverID: serverID),
-            let sort = LibraryPageSort(rawValue: rawValue)
-        else {
-            return .addedAt
-        }
-
-        return sort
-    }
-
-    func setDefaultLibrarySort(_ sort: LibraryPageSort, providerID: MediaProviderID, serverID: String) {
-        setDefaultLibrarySortRawValue(sort.rawValue, providerID: providerID, serverID: serverID)
     }
 
     func librarySortOrder(for library: LibraryReference, sort: LibraryPageSort) -> LibraryPageSortOrder {
@@ -203,71 +159,14 @@ extension MediaSessionStore {
             return order
         }
 
-        if librarySortRawValue(for: library) != nil {
-            return sort.defaultOrder
-        }
-
-        guard
-            let rawValue = defaultLibrarySortOrderRawValue(providerID: library.providerID, serverID: library.serverID),
-            let order = LibraryPageSortOrder(rawValue: rawValue)
-        else {
-            return sort.defaultOrder
-        }
-
-        return order
+        return sort.defaultOrder
     }
 
     func setLibrarySortOrder(_ order: LibraryPageSortOrder, for library: LibraryReference) {
         setLibrarySortOrderRawValue(order.rawValue, for: library)
     }
 
-    func defaultLibrarySortOrder(
-        providerID: MediaProviderID,
-        serverID: String,
-        sort: LibraryPageSort
-    ) -> LibraryPageSortOrder {
-        guard
-            let rawValue = defaultLibrarySortOrderRawValue(providerID: providerID, serverID: serverID),
-            let order = LibraryPageSortOrder(rawValue: rawValue)
-        else {
-            return sort.defaultOrder
-        }
-
-        return order
-    }
-
-    func setDefaultLibrarySortOrder(
-        _ order: LibraryPageSortOrder,
-        providerID: MediaProviderID,
-        serverID: String,
-        sort: LibraryPageSort
-    ) {
-        if order == sort.defaultOrder {
-            clearDefaultLibrarySortOrderRawValue(providerID: providerID, serverID: serverID)
-            return
-        }
-
-        setDefaultLibrarySortOrderRawValue(order.rawValue, providerID: providerID, serverID: serverID)
-    }
-
     func hasSavedLibrarySortOrder(for library: LibraryReference) -> Bool {
         librarySortOrderRawValue(for: library) != nil
-    }
-
-    func hasSavedDefaultLibrarySortOrder(providerID: MediaProviderID, serverID: String) -> Bool {
-        defaultLibrarySortOrderRawValue(providerID: providerID, serverID: serverID) != nil
-    }
-
-    func clearLibraryFilterOverrides(for libraries: [LibraryReference]) {
-        for library in libraries {
-            clearLibraryFilterRawValue(for: library)
-        }
-    }
-
-    func clearLibrarySortOverrides(for libraries: [LibraryReference]) {
-        for library in libraries {
-            clearLibrarySortRawValue(for: library)
-            clearLibrarySortOrderRawValue(for: library)
-        }
     }
 }

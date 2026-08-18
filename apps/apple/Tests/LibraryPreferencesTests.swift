@@ -3,7 +3,11 @@ import XCTest
 
 final class LibraryPreferencesTests: XCTestCase {
     func testBuiltInDefaultsAreUnwatchedAndAddedAtDescending() {
-        let store = MediaSessionStore(defaults: LibraryPreferencesMemoryDefaultsStore())
+        let defaults = LibraryPreferencesMemoryDefaultsStore()
+        defaults.set(LibraryPageFilter.all.rawValue, forKey: "media.server.library.filter.default.plex.server")
+        defaults.set(LibraryPageSort.title.rawValue, forKey: "media.server.library.sort.default.plex.server")
+        defaults.set(LibraryPageSortOrder.ascending.rawValue, forKey: "media.server.library.sort.order.default.plex.server")
+        let store = MediaSessionStore(defaults: defaults)
         let library = makeLibraryReference()
 
         let sort = store.librarySort(for: library)
@@ -11,16 +15,12 @@ final class LibraryPreferencesTests: XCTestCase {
         XCTAssertEqual(store.libraryFilter(for: library), .unwatched)
         XCTAssertEqual(sort, .addedAt)
         XCTAssertEqual(store.librarySortOrder(for: library, sort: sort), .descending)
-        XCTAssertEqual(store.defaultLibraryFilter(providerID: .plex, serverID: "server"), .unwatched)
-        XCTAssertEqual(store.defaultLibrarySort(providerID: .plex, serverID: "server"), .addedAt)
     }
 
-    func testLibraryPreferencesOverrideServerDefaults() {
+    func testLibraryPreferencesOverrideBuiltInDefaults() {
         let store = MediaSessionStore(defaults: LibraryPreferencesMemoryDefaultsStore())
         let library = makeLibraryReference()
 
-        store.setDefaultLibraryFilter(.unwatched, providerID: .plex, serverID: "server")
-        store.setDefaultLibrarySort(.addedAt, providerID: .plex, serverID: "server")
         store.setLibraryFilter(.all, for: library)
         store.setLibrarySort(.title, for: library)
         store.setLibrarySortOrder(.descending, for: library)
