@@ -9,16 +9,16 @@ enum MediaPlayerItemFactory {
     static func item(resource: MediaPlaybackResource, mediaItem: MediaItem) -> AVPlayerItem {
         let item = AVPlayerItem(url: resource.url)
         item.canUseNetworkResourcesForLiveStreamingWhilePaused = true
-        item.externalMetadata = metadata(for: mediaItem, descriptionPrefix: resource.descriptionPrefix)
+        item.externalMetadata = metadata(for: mediaItem, descriptionSuffix: resource.descriptionSuffix)
         return item
     }
 
-    private static func metadata(for item: MediaItem, descriptionPrefix: String?) -> [AVMetadataItem] {
+    private static func metadata(for item: MediaItem, descriptionSuffix: String?) -> [AVMetadataItem] {
         [
             metadata(.commonIdentifierTitle, value: item.title),
             metadata(
                 .commonIdentifierDescription,
-                value: [descriptionPrefix, item.synopsis].compactMap { $0 }.joined(separator: "\n")
+                value: [item.synopsis, descriptionSuffix].compactMap { $0 }.joined(separator: "\n")
             ),
             artworkMetadata(for: item)
         ]

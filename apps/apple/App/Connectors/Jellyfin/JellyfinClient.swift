@@ -198,7 +198,7 @@ final class JellyfinClient {
                 MediaPlaybackResource(
                     url: url,
                     localStartOffsetMilliseconds: offsetMilliseconds,
-                    descriptionPrefix: "Transcoding: H.264 video • AAC audio"
+                    descriptionSuffix: "Transcoding: H.264 video • AAC audio"
                 ),
                 .transcode,
                 mediaSource.id
@@ -237,7 +237,7 @@ final class JellyfinClient {
         let method: JellyfinPlaybackMethod = requiresTranscodedAudio || !mediaSource.supportsDirectStream
             ? .transcode
             : .directStream
-        let descriptionPrefix: String? = if requiresTranscodedAudio {
+        let descriptionSuffix: String? = if requiresTranscodedAudio {
             "Transcoding: AAC audio"
         } else if method == .transcode {
             "Transcoding: H.264 video • AAC audio"
@@ -248,7 +248,7 @@ final class JellyfinClient {
             MediaPlaybackResource(
                 url: url,
                 localStartOffsetMilliseconds: offsetMilliseconds,
-                descriptionPrefix: descriptionPrefix
+                descriptionSuffix: descriptionSuffix
             ),
             method,
             mediaSource.id

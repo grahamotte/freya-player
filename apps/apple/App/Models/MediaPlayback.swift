@@ -10,7 +10,7 @@ struct MediaPlaybackResource {
     let localStartOffsetMilliseconds: Int?
     var reloadsForSeek = false
     var remoteSessionID: String? = nil
-    var descriptionPrefix: String? = nil
+    var descriptionSuffix: String? = nil
 }
 
 struct MediaPlaybackOptions: Equatable {

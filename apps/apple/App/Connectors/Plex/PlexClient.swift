@@ -137,7 +137,7 @@ final class PlexClient {
                 url: url,
                 localStartOffsetMilliseconds: nil,
                 remoteSessionID: sessionID,
-                descriptionPrefix: metadata.transcodingDescription(
+                descriptionSuffix: metadata.transcodingDescription(
                     quality: selection.quality,
                     directStreamAudio: directStreamAudio,
                     hasSubtitles: selection.subtitleID != nil
@@ -183,7 +183,7 @@ final class PlexClient {
             url: url,
             localStartOffsetMilliseconds: nil,
             remoteSessionID: sessionID,
-            descriptionPrefix: metadata.transcodingDescription(
+            descriptionSuffix: metadata.transcodingDescription(
                 quality: quality,
                 maxVideoBitrate: quality.maxVideoBitrate ?? connection.automaticVideoBitrateLimit,
                 directStreamAudio: directStreamAudio,
