@@ -23,7 +23,6 @@ let package = Package(
                 "Connectors/Plex/PlexSessionStore.swift",
                 "FreyaPlayerApp.swift",
                 "Libraries/KeychainStore.swift",
-                "Libraries/LibraryCache.swift",
                 "Libraries/MediaViewData+MediaItem.swift",
                 "Libraries/PlatformMetadata.swift",
                 "Libraries/PlaybackAudioSession.swift",

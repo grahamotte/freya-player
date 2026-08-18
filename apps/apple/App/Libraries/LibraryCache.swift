@@ -58,9 +58,7 @@ final class LibraryCache: ObservableObject {
                 next.libraryItemIDs[shelf.id] = incomingIDs
             }
             for item in shelf.items {
-                next.itemsByID[item.id] = item.preservingNewerSeriesAddedAt(
-                    from: next.itemsByID[item.id]
-                )
+                next.itemsByID[item.id] = item
             }
         }
 
@@ -132,7 +130,7 @@ final class LibraryCache: ObservableObject {
         guard !itemLeaves.isEmpty else { return item }
 
         let stats = MediaItem.derivedWatchStats(fromLeaves: itemLeaves)
-        return item.applyingWatchStats(
+        return item.applyingLatestEpisodeAddedAt(from: itemLeaves).applyingWatchStats(
             isWatched: stats.isWatched,
             progress: stats.progress,
             resumeOffsetMilliseconds: nil
@@ -175,18 +173,15 @@ final class LibraryCache: ObservableObject {
     // MARK: - Ingest (writes from connector responses)
 
     func ingest(items: [MediaItem], asTopLevelOf libraryID: String) {
-        let resolvedItems = items.map {
-            $0.preservingNewerSeriesAddedAt(from: snapshot.itemsByID[$0.id])
-        }
-        let itemIDs = resolvedItems.map(\.id)
+        let itemIDs = items.map(\.id)
         if snapshot.libraryItemIDs[libraryID] == itemIDs,
-           resolvedItems.allSatisfy({ snapshot.itemsByID[$0.id] == $0 }) {
+           items.allSatisfy({ snapshot.itemsByID[$0.id] == $0 }) {
             return
         }
 
         var next = snapshot
         next.libraryItemIDs[libraryID] = itemIDs
-        for item in resolvedItems {
+        for item in items {
             next.itemsByID[item.id] = item
         }
         if batchDepth == 0 {
@@ -214,27 +209,10 @@ final class LibraryCache: ObservableObject {
     }
 
     func ingest(item: MediaItem) {
-        let item = item.preservingNewerSeriesAddedAt(from: snapshot.itemsByID[item.id])
         guard snapshot.itemsByID[item.id] != item else { return }
 
         var next = snapshot
         next.itemsByID[item.id] = item
-        commit(next)
-    }
-
-    func cacheLatestEpisodeAddedAt(for seriesIDs: [String]) {
-        var next = snapshot
-        var didChange = false
-
-        for seriesID in seriesIDs {
-            guard let series = next.itemsByID[seriesID] else { continue }
-            let updated = series.applyingLatestEpisodeAddedAt(from: leaves(under: seriesID))
-            guard updated != series else { continue }
-            next.itemsByID[seriesID] = updated
-            didChange = true
-        }
-
-        guard didChange else { return }
         commit(next)
     }
 

@@ -550,8 +550,6 @@ final class AppModel: ObservableObject {
                 await self?._refreshChildrenWork(of: item, recursive: true)
             }.value
         }
-
-        libraryCache.cacheLatestEpisodeAddedAt(for: topLevel.map(\.id))
     }
 
     private func _applyAndSyncWatchStatus(for item: MediaItem, isWatched: Bool) async {
