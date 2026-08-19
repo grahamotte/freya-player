@@ -104,6 +104,8 @@ final class MediaItemQuickActionHandler {
             var seekTask: Task<Void, Never>?
             var recoveryTask: Task<Void, Never>?
             var didCompletePlayback = false
+            var lastPlaybackTime = item.resumeOffsetMilliseconds ?? 0
+            var lastPlaybackDuration: Int?
             let playbackController = PlaybackSessionController()
             let controller = StockPlayerViewController(
                 playbackController: playbackController,
@@ -113,8 +115,8 @@ final class MediaItemQuickActionHandler {
                     seekTask?.cancel()
                     recoveryTask?.cancel()
                     self.presentedPlayerController = nil
-                    let time = playbackController?.currentTimeMilliseconds ?? 0
-                    let duration = playbackController?.durationMilliseconds
+                    let time = max(playbackController?.currentTimeMilliseconds ?? 0, lastPlaybackTime)
+                    let duration = playbackController?.durationMilliseconds ?? lastPlaybackDuration
 
                     if !didCompletePlayback {
                         self.model.reportPlaybackTimeline(
@@ -138,8 +140,9 @@ final class MediaItemQuickActionHandler {
                 playbackController.load(
                     item: MediaPlayerItemFactory.item(resource: resource, mediaItem: item),
                     startOffsetMilliseconds: resource.localStartOffsetMilliseconds,
-                    refreshesAfterLongPause: resource.remoteSessionID != nil,
                     onTimelineEvent: { [weak self] state, time, duration in
+                        lastPlaybackTime = time
+                        lastPlaybackDuration = duration
                         self?.model.reportPlaybackTimeline(
                             for: playbackID,
                             state: state,
@@ -172,9 +175,20 @@ final class MediaItemQuickActionHandler {
                             }
                             return
                         }
+                        lastPlaybackTime = max(savedTime, item.resumeOffsetMilliseconds ?? 0)
+                        let previousSessionID = activeRemoteSessionID
+                        activeRemoteSessionID = nil
+                        playbackController.prepareForRecovery()
+                        self.model.stopPlaybackSession(
+                            for: playbackID,
+                            sessionID: previousSessionID
+                        )
+                        controller.setLoading(true)
                         recoveryTask?.cancel()
                         recoveryTask = Task {
                             let offset = max(savedTime, item.resumeOffsetMilliseconds ?? 0)
+                            guard !Task.isCancelled else { return }
+
                             do {
                                 let newSessionID = UUID().uuidString
                                 let newResource = try await self.model.playbackURL(
@@ -188,6 +202,7 @@ final class MediaItemQuickActionHandler {
                                 }
                                 activeSessionID = newSessionID
                                 load(newResource, canRecover: false)
+                                controller.setLoading(false)
                             } catch {
                                 controller.dismiss(animated: true) {
                                     self.presentPlaybackFailure(PlaybackFailure(
@@ -349,6 +364,8 @@ private struct QuickPlaybackPresenter: UIViewControllerRepresentable {
         var seekTask: Task<Void, Never>?
         var recoveryTask: Task<Void, Never>?
         var didCompletePlayback = false
+        var lastPlaybackTime = request.item.resumeOffsetMilliseconds ?? 0
+        var lastPlaybackDuration: Int?
         let playbackController = PlaybackSessionController()
         let controller = StockPlayerViewController(
             playbackController: playbackController,
@@ -356,8 +373,8 @@ private struct QuickPlaybackPresenter: UIViewControllerRepresentable {
             onDismiss: {
                 seekTask?.cancel()
                 recoveryTask?.cancel()
-                let time = playbackController.currentTimeMilliseconds
-                let duration = playbackController.durationMilliseconds
+                let time = max(playbackController.currentTimeMilliseconds, lastPlaybackTime)
+                let duration = playbackController.durationMilliseconds ?? lastPlaybackDuration
                 if !didCompletePlayback {
                     model.reportPlaybackTimeline(
                         for: request.playbackID,
@@ -382,8 +399,9 @@ private struct QuickPlaybackPresenter: UIViewControllerRepresentable {
             playbackController.load(
                 item: MediaPlayerItemFactory.item(resource: resource, mediaItem: request.item),
                 startOffsetMilliseconds: resource.localStartOffsetMilliseconds,
-                refreshesAfterLongPause: resource.remoteSessionID != nil,
                 onTimelineEvent: { state, time, duration in
+                    lastPlaybackTime = time
+                    lastPlaybackDuration = duration
                     model.reportPlaybackTimeline(
                         for: request.playbackID,
                         state: state,
@@ -411,9 +429,20 @@ private struct QuickPlaybackPresenter: UIViewControllerRepresentable {
                         }
                         return
                     }
+                    lastPlaybackTime = max(savedTime, request.item.resumeOffsetMilliseconds ?? 0)
+                    let previousSessionID = activeRemoteSessionID
+                    activeRemoteSessionID = nil
+                    playbackController.prepareForRecovery()
+                    model.stopPlaybackSession(
+                        for: request.playbackID,
+                        sessionID: previousSessionID
+                    )
+                    controller.setLoading(true)
                     recoveryTask?.cancel()
                     recoveryTask = Task {
                         let resumeOffset = max(savedTime, request.item.resumeOffsetMilliseconds ?? 0)
+                        guard !Task.isCancelled else { return }
+
                         do {
                             let newSessionID = UUID().uuidString
                             let newResource = try await model.playbackURL(
@@ -427,6 +456,7 @@ private struct QuickPlaybackPresenter: UIViewControllerRepresentable {
                             }
                             activeSessionID = newSessionID
                             load(newResource, canRecover: false)
+                            controller.setLoading(false)
                         } catch {
                             controller.dismiss(animated: true) { onPlaybackFailed(error) }
                         }

@@ -251,7 +251,6 @@ struct MediaPlayButton: View {
             item: MediaPlayerItemFactory.item(resource: resource, mediaItem: item),
             startOffsetMilliseconds: resource.localStartOffsetMilliseconds,
             enableSubtitles: activeSelection?.subtitleID != nil,
-            refreshesAfterLongPause: resource.remoteSessionID != nil,
             autoplay: autoplay,
             onTimelineEvent: reportTimeline(state:time:duration:),
             onPlaybackEnded: playbackEnded(time:duration:),
@@ -393,7 +392,7 @@ struct MediaPlayButton: View {
         let controller = playbackController
         presentedPlayerController = nil
 
-        let time = controller?.currentTimeMilliseconds ?? 0
+        let time = max(controller?.currentTimeMilliseconds ?? 0, currentResumeOffset ?? 0)
         let duration = controller?.durationMilliseconds
 
         if !didCompletePlayback {
@@ -420,13 +419,22 @@ struct MediaPlayButton: View {
         }
         didRetryPlayback = true
 
+        let resumeOffset = savedTime > 0
+            ? savedTime
+            : currentResumeOffset ?? item.resumeOffsetMilliseconds ?? 0
+        guard let previousController = playbackController else { return }
+        let previousSessionID = activeRemoteSessionID
+        currentResumeOffset = resumeOffset
+        activeRemoteSessionID = nil
+        previousController.prepareForRecovery()
+        model.stopPlaybackSession(for: id, sessionID: previousSessionID)
+        presentedPlayerController?.setLoading(true)
         recoveryTask?.cancel()
         recoveryTask = Task {
             isLoading = true
             defer { isLoading = false }
-            let resumeOffset = savedTime > 0
-                ? savedTime
-                : currentResumeOffset ?? item.resumeOffsetMilliseconds ?? 0
+
+            guard !Task.isCancelled, playbackController === previousController else { return }
 
             do {
                 let newSessionID = UUID().uuidString
@@ -436,16 +444,14 @@ struct MediaPlayButton: View {
                     sessionID: newSessionID,
                     offsetMilliseconds: resumeOffset
                 )
-                guard !Task.isCancelled else {
+                guard !Task.isCancelled, playbackController === previousController else {
                     model.stopPlaybackSession(for: id, sessionID: resource.remoteSessionID)
                     return
                 }
                 playbackSessionID = newSessionID
                 currentResumeOffset = resumeOffset
-                let controller = playbackController ?? PlaybackSessionController()
-                playbackController = controller
-                load(controller, resource: resource)
-                presentPlayerViewController(controller)
+                load(previousController, resource: resource)
+                presentPlayerViewController(previousController)
             } catch {
                 guard !Task.isCancelled else { return }
                 playbackFailure = PlaybackFailure(error, summary: "Freya couldn't restart playback.")
@@ -483,6 +489,9 @@ struct MediaPlayButton: View {
     }
 
     private func reportTimeline(state: MediaPlaybackTimelineState, time: Int, duration: Int?) {
+        if state == .playing {
+            currentResumeOffset = nil
+        }
         model.reportPlaybackTimeline(
             for: id,
             state: state,

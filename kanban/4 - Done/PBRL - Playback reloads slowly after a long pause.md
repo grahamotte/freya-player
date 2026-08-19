@@ -20,3 +20,10 @@ The desired outcome is for playback after a long pause to recover and continue w
 - Reproduction: play media, pause for approximately two or more minutes, resume playback, and wait for the existing buffer to run out.
 - The initial resume is immediate; the excessive delay occurs when playback needs additional media data.
 - Backing out and selecting resume is a useful baseline because it typically starts again within a few seconds.
+- Clarification: playback does attempt to reload, but that reload is much slower than closing the player and starting a fresh resume at the same position.
+- After any pause, playback records the end of the current loaded range and continues using the existing item and its buffered media.
+- If that loaded range extends or playback crosses its former boundary, the existing item is considered resumable and is kept.
+- If playback remains at the exhausted buffer boundary without loading more media for three seconds, recovery detaches the stale item, stops its remote session, and loads a replacement item into the existing `AVPlayer` at the saved position.
+- A quick pause and resume only records the buffer boundary. It does not create a new item or make a network request unless playback later exhausts that buffer and fails the grace-period check.
+- The resume check applies to every provider and resource type because a direct stream can become stale as well as a remote transcoding session.
+- The tvOS application builds successfully with `xcodebuild`, and `mise test` passes.

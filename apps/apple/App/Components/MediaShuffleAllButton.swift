@@ -147,7 +147,7 @@ struct MediaPlayAllButton: View {
         model.reportPlaybackTimeline(
             for: id,
             state: .stopped,
-            time: playbackController?.currentTimeMilliseconds ?? 0,
+            time: max(playbackController?.currentTimeMilliseconds ?? 0, resumeOffset ?? 0),
             duration: playbackController?.durationMilliseconds,
             sessionID: sessionID
         )
@@ -193,6 +193,12 @@ struct MediaPlayAllButton: View {
         resumeOffset = savedTime > 0
             ? savedTime
             : max(playbackController.currentTimeMilliseconds, currentItem?.resumeOffsetMilliseconds ?? 0)
+        let previousSessionID = activeRemoteSessionID
+        activeRemoteSessionID = nil
+        playbackController.prepareForRecovery()
+        if let id = currentItem?.playbackID {
+            model.stopPlaybackSession(for: id, sessionID: previousSessionID)
+        }
         await loadCurrent()
     }
 
@@ -244,7 +250,6 @@ struct MediaPlayAllButton: View {
         controller.load(
             item: MediaPlayerItemFactory.item(resource: resource, mediaItem: mediaItem),
             startOffsetMilliseconds: resource.localStartOffsetMilliseconds,
-            refreshesAfterLongPause: resource.remoteSessionID != nil,
             onTimelineEvent: reportTimeline(state:time:duration:),
             onPlaybackEnded: playbackEnded(time:duration:),
             onRecoveryNeeded: { savedTime, _ in

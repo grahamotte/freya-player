@@ -14,13 +14,13 @@ final class PlaybackSessionController {
     private var timelineTimer: Timer?
     private var navigationTimer: Timer?
     private var stallTimer: Timer?
+    private var resumeProbeTimer: Timer?
     private var onTimelineEvent: ((MediaPlaybackTimelineState, Int, Int?) -> Void)?
     private var onPlaybackEnded: ((Int, Int?) -> Void)?
     private var onRecoveryNeeded: ((Int, Error?) -> Void)?
     private var onNavigationNeeded: ((Int) -> Void)?
     private var lastState: MediaPlaybackTimelineState?
     private var startOffsetMilliseconds: Int?
-    private var refreshesAfterLongPause = false
     private var enableSubtitles = false
     private var shouldPlayWhenReady = false
     private var didPrepareCurrentItem = false
@@ -28,7 +28,8 @@ final class PlaybackSessionController {
     private var didRequestRecovery = false
     private var recoveryOffsetMilliseconds = 0
     private var pendingNavigationOffsetMilliseconds: Int?
-    private var pausedAt: Date?
+    private var didObservePause = false
+    private var resumeProbe: PlaybackResumeProbe?
     private let logger = Logger(
         subsystem: Bundle.main.bundleIdentifier ?? "FreyaPlayer",
         category: "Playback"
@@ -52,7 +53,6 @@ final class PlaybackSessionController {
         item: AVPlayerItem,
         startOffsetMilliseconds: Int? = nil,
         enableSubtitles: Bool = false,
-        refreshesAfterLongPause: Bool = false,
         autoplay: Bool = true,
         onTimelineEvent: @escaping (MediaPlaybackTimelineState, Int, Int?) -> Void,
         onPlaybackEnded: @escaping (Int, Int?) -> Void,
@@ -64,7 +64,6 @@ final class PlaybackSessionController {
 
         self.startOffsetMilliseconds = startOffsetMilliseconds.flatMap { $0 > 0 ? $0 : nil }
         self.enableSubtitles = enableSubtitles
-        self.refreshesAfterLongPause = refreshesAfterLongPause
         self.shouldPlayWhenReady = autoplay
         self.onTimelineEvent = onTimelineEvent
         self.onPlaybackEnded = onPlaybackEnded
@@ -75,7 +74,8 @@ final class PlaybackSessionController {
         didRequestRecovery = false
         recoveryOffsetMilliseconds = self.startOffsetMilliseconds ?? 0
         pendingNavigationOffsetMilliseconds = nil
-        pausedAt = nil
+        didObservePause = false
+        resumeProbe = nil
         lastState = nil
 
         player.replaceCurrentItem(with: item)
@@ -101,6 +101,15 @@ final class PlaybackSessionController {
         pause()
         teardown()
         PlaybackAudioSession.deactivate()
+    }
+
+    func prepareForRecovery() {
+        rememberCurrentTime()
+        shouldPlayWhenReady = false
+        unbindCurrentItem()
+        player.replaceCurrentItem(with: nil)
+        didPrepareCurrentItem = false
+        canSendTimelineEvents = false
     }
 
     func teardown() {
@@ -165,9 +174,11 @@ final class PlaybackSessionController {
         timelineTimer?.invalidate()
         navigationTimer?.invalidate()
         stallTimer?.invalidate()
+        resumeProbeTimer?.invalidate()
         timelineTimer = nil
         navigationTimer = nil
         stallTimer = nil
+        resumeProbeTimer = nil
     }
 
     private func observeItemStatus(_ item: AVPlayerItem) {
@@ -278,7 +289,9 @@ final class PlaybackSessionController {
     private func sendCurrentTimeline() {
         guard canSendTimelineEvents else { return }
         rememberCurrentTime()
-        onTimelineEvent?(state(), currentTimeMilliseconds, durationMilliseconds)
+        let state = state()
+        if shouldRestartAfterResume(state) { return }
+        onTimelineEvent?(state, currentTimeMilliseconds, durationMilliseconds)
     }
 
     private func sendState() {
@@ -288,10 +301,12 @@ final class PlaybackSessionController {
             pendingNavigationOffsetMilliseconds = nil
         }
         if state != .paused { rememberCurrentTime() }
-        if shouldRefreshAfterLongPause(state) {
-            requestRecovery()
-            return
+        if didResumeAfterPause(state) {
+            resumeProbe = PlaybackResumeProbe(
+                initialBufferedThroughMilliseconds: bufferedThroughMilliseconds
+            )
         }
+        if shouldRestartAfterResume(state) { return }
         updateTimelineTimer(for: state)
         updateStallTimer(for: state)
         guard state != lastState else { return }
@@ -302,16 +317,81 @@ final class PlaybackSessionController {
         onTimelineEvent?(state, currentTimeMilliseconds, durationMilliseconds)
     }
 
-    private func shouldRefreshAfterLongPause(_ state: MediaPlaybackTimelineState) -> Bool {
-        guard refreshesAfterLongPause else { return false }
+    private func didResumeAfterPause(_ state: MediaPlaybackTimelineState) -> Bool {
         guard state != .paused else {
-            pausedAt = pausedAt ?? Date()
+            didObservePause = true
+            resumeProbe = nil
+            resumeProbeTimer?.invalidate()
+            resumeProbeTimer = nil
             return false
         }
 
-        defer { pausedAt = nil }
-        guard let pausedAt else { return false }
-        return Date().timeIntervalSince(pausedAt) > 5 * 60
+        defer { didObservePause = false }
+        return didObservePause
+    }
+
+    private func shouldRestartAfterResume(_ state: MediaPlaybackTimelineState) -> Bool {
+        guard var resumeProbe else { return false }
+        let decision = resumeProbe.decision(
+            state: state,
+            currentTimeMilliseconds: currentTimeMilliseconds,
+            bufferedThroughMilliseconds: bufferedThroughMilliseconds
+        )
+        self.resumeProbe = resumeProbe
+        switch decision {
+        case .monitoring:
+            resumeProbeTimer?.invalidate()
+            resumeProbeTimer = nil
+            return false
+        case .recovered:
+            finishResumeProbe()
+            return false
+        case .waitingAtBufferEdge:
+            scheduleResumeProbeTimer()
+            return false
+        case .restart:
+            finishResumeProbe()
+            requestRecovery()
+            return true
+        }
+    }
+
+    private func scheduleResumeProbeTimer() {
+        guard resumeProbeTimer == nil else { return }
+        let timer = Timer(
+            timeInterval: PlaybackResumeProbe.bufferEdgeGraceInterval,
+            repeats: false
+        ) { [weak self] _ in
+            self?.resumeProbeTimer = nil
+            self?.sendState()
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        resumeProbeTimer = timer
+    }
+
+    private func finishResumeProbe() {
+        resumeProbeTimer?.invalidate()
+        resumeProbeTimer = nil
+        resumeProbe = nil
+    }
+
+    private var bufferedThroughMilliseconds: Int? {
+        guard let item = player.currentItem else { return nil }
+        let currentTime = player.currentTime().seconds
+        guard currentTime.isFinite else { return nil }
+
+        return item.loadedTimeRanges
+            .map(\.timeRangeValue)
+            .filter { range in
+                let start = range.start.seconds
+                let end = CMTimeRangeGetEnd(range).seconds
+                return start.isFinite
+                    && end.isFinite
+                    && start <= currentTime + 0.5
+                    && end >= currentTime - 0.5
+            }
+            .compactMap { CMTimeRangeGetEnd($0).milliseconds }
+            .max()
     }
 
     private func requestRecovery(error: Error? = nil) {
