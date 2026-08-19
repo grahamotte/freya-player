@@ -1,5 +1,5 @@
 {
-  "build": "1.19.7",
+  "build": "1.20.0",
   "contactEmail": "graham.otte@gmail.com",
   "contactFirstName": "Graham",
   "contactLastName": "Otte",
@@ -105,6 +105,6 @@
     },
     "android": {}
   },
-  "version": "1.19.7",
-  "whatsNew": "Faster startup with cached libraries, clearer cancellable refresh progress, and improved library refresh reliability, sorting, series quick play, episode auto-scrolling, playback progress reporting, tvOS focus visibility, Seen labels, and transcoding status."
+  "version": "1.20.0",
+  "whatsNew": "Faster startup with cached libraries, improved offline behavior, clearer cancellable refresh progress, and more reliable library refreshes and sorting. Also improves series quick play, episode auto-scrolling, playback progress reporting, tvOS focus visibility, Seen labels, transcoding status, and adds cache diagnostics in Settings."
 }
