@@ -41,6 +41,12 @@ The "Repo Specific" section blow contains rules specific to this repo only.
 - After every code change, run the whole suite with `mise test`.
 - Do not write integration tests.
 
+## Kanban
+
+- `kanban/` is the repository's local work board. When using it, read and follow `kanban/README.md`.
+- Only use the Kanban board when the user asks to create or manage cards, or asks for work on an existing card. Other work does not require a card.
+- Never create a card unless the user explicitly instructs you to do so.
+
 ## File Structure
 
 - `.agents/skills/` - Project-specific agent skills.
@@ -54,6 +60,7 @@ The "Repo Specific" section blow contains rules specific to this repo only.
 - `frontend/` - React website.
 - `frontend/subdomains.json` - Website subdomain configuration.
 - `gems/` - Shared Ruby gems.
+- `kanban/` - Repository-local work board and workflow instructions.
 - `scripts/` - General-purpose scripts.
 - `mise.toml` - Project tooling and task definitions.
 
