@@ -46,6 +46,7 @@ The "Repo Specific" section blow contains rules specific to this repo only.
 - `kanban/` is the repository's local work board. When using it, read and follow `kanban/README.md`.
 - Only use the Kanban board when the user asks to create or manage cards, or asks for work on an existing card. Other work does not require a card.
 - Never create a card unless the user explicitly instructs you to do so.
+- When the user requests standalone card management, commit only the requested card changes immediately without asking for confirmation.
 
 ## File Structure
 

@@ -44,6 +44,14 @@ Keep useful problem and review context in the card so another agent chat can con
 
 Refer to a card by its code, title, or filename. Preserve its filename while moving it between columns.
 
+## Card Management Commits
+
+When the user asks only to create, edit, or move a card, make the requested change and commit it immediately without asking for confirmation. This includes changes to cards in `1 - Problems to Solve/` and moves to `5 - Won't Do/`.
+
+Commit only the card files changed by the request. Never include unrelated working-tree changes in a card management commit.
+
+These immediate commits apply to standalone card management. Card moves and edits made as part of implementation work follow the review workflow below and are committed with the implementation when the user approves it.
+
 ## Workflow
 
 1. When the user instructs you to create a card, create it in `1 - Problems to Solve/`.
