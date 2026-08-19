@@ -22,6 +22,7 @@ struct MediaWatchStatusButton: View {
                 onMarkWatched: { model.setWatchStatus(for: item, isWatched: true) },
                 onMarkUnwatched: { model.setWatchStatus(for: item, isWatched: false) }
             )
+            .disabled(model.isOffline)
         }
     }
 }
@@ -54,6 +55,7 @@ struct MediaCollectionWatchStatusButton: View {
             onMarkWatched: { applyWatchStatus(true) },
             onMarkUnwatched: { applyWatchStatus(false) }
         )
+        .disabled(model.isOffline)
     }
 
     private func currentDisplayItem() -> MediaItem {

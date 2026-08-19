@@ -39,7 +39,7 @@ struct MediaPlayAllButton: View {
         }
         .buttonStyle(MediaGlassButtonStyle())
         .focused($isPlayFocused)
-        .disabled(isLoading || orderedPlayableItems.isEmpty)
+        .disabled(model.isOffline || isLoading || orderedPlayableItems.isEmpty)
         .fixedSize(horizontal: true, vertical: false)
         .task {
             isPlayFocused = true

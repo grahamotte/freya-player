@@ -32,7 +32,7 @@ private struct LibrariesCollectionView: UIViewControllerRepresentable {
     }
 
     func updateUIViewController(_ viewController: LibrariesCollectionViewController, context: Context) {
-        viewController.update(server: server)
+        viewController.update(server: server, isOffline: model.isOffline)
     }
 }
 
@@ -52,6 +52,7 @@ private final class LibrariesCollectionViewController: UIViewController, UIColle
     private var defaultsSubscription: AnyCancellable?
     private var refreshSubscription: AnyCancellable?
     private var isRefreshing = false
+    private var isOffline: Bool
     private var refreshProgress: RefreshProgress?
     private lazy var quickActionHandler = MediaItemQuickActionHandler(
         presenter: self,
@@ -74,6 +75,7 @@ private final class LibrariesCollectionViewController: UIViewController, UIColle
         self.onSelectRoute = onSelectRoute
         self.refreshProgress = model.libraryRefreshProgress
         self.isRefreshing = refreshProgress != nil
+        self.isOffline = model.isOffline
         super.init(nibName: nil, bundle: nil)
         sections = makeSections(from: server)
         selectedTitles = makeSelectedTitles(from: sections)
@@ -150,10 +152,11 @@ private final class LibrariesCollectionViewController: UIViewController, UIColle
         ])
     }
 
-    func update(server: ConnectedServer) {
-        guard self.server != server else { return }
+    func update(server: ConnectedServer, isOffline: Bool) {
+        guard self.server != server || self.isOffline != isOffline else { return }
         let shouldPreserveScrollPosition = self.server.id == server.id
         self.server = server
+        self.isOffline = isOffline
         refreshProgress = model.libraryRefreshProgress
         isRefreshing = refreshProgress != nil
         sections = makeSections(from: server)
@@ -183,7 +186,8 @@ private final class LibrariesCollectionViewController: UIViewController, UIColle
             ) as! LibrariesActionCell
             cell.configure(
                 title: item.title,
-                isRefreshing: item.kind == .refresh(isRefreshing: true)
+                isRefreshing: item.kind == .refresh(isRefreshing: true),
+                isEnabled: isEnabled(item)
             )
             return cell
 
@@ -240,7 +244,7 @@ private final class LibrariesCollectionViewController: UIViewController, UIColle
     }
 
     func collectionView(_ collectionView: UICollectionView, canFocusItemAt indexPath: IndexPath) -> Bool {
-        true
+        isEnabled(sections[indexPath.section].items[indexPath.item])
     }
 
     func indexPathForPreferredFocusedView(in collectionView: UICollectionView) -> IndexPath? {
@@ -547,6 +551,7 @@ private final class LibrariesCollectionViewController: UIViewController, UIColle
     }
 
     private func handlePrimaryAction(for item: LibrariesItem) {
+        guard isEnabled(item) else { return }
         if case .refresh(let isRefreshing) = item.kind {
             if isRefreshing {
                 model.cancelLibraryRefresh()
@@ -570,6 +575,13 @@ private final class LibrariesCollectionViewController: UIViewController, UIColle
         let item = sections[indexPath.section].items[indexPath.item]
         guard case .media = item.kind else { return nil }
         return item.mediaItem
+    }
+
+    private func isEnabled(_ item: LibrariesItem) -> Bool {
+        if case .refresh = item.kind {
+            return !isOffline
+        }
+        return true
     }
 
     private func rebuildSectionsPreservingScrollPosition(preferredFocusItemID: String? = nil) {
@@ -615,7 +627,8 @@ private final class LibrariesCollectionViewController: UIViewController, UIColle
             case let cell as LibrariesActionCell:
                 cell.configure(
                     title: item.title,
-                    isRefreshing: item.kind == .refresh(isRefreshing: true)
+                    isRefreshing: item.kind == .refresh(isRefreshing: true),
+                    isEnabled: isEnabled(item)
                 )
             default:
                 continue
@@ -833,6 +846,7 @@ private final class LibrariesActionCell: UICollectionViewListCell {
     private let titleLabel = UILabel()
     private let stackView = UIStackView()
     private var isRefreshing = false
+    private var isEnabled = true
     private var title = ""
 
     override init(frame: CGRect) {
@@ -867,9 +881,10 @@ private final class LibrariesActionCell: UICollectionViewListCell {
         fatalError("init(coder:) has not been implemented")
     }
 
-    func configure(title: String, isRefreshing: Bool) {
+    func configure(title: String, isRefreshing: Bool, isEnabled: Bool) {
         self.title = title
         self.isRefreshing = isRefreshing
+        self.isEnabled = isEnabled
         if isRefreshing {
             activityIndicator.startAnimating()
         } else {
@@ -883,7 +898,9 @@ private final class LibrariesActionCell: UICollectionViewListCell {
 
         let isFocused = state.isFocused
         titleLabel.text = isFocused && isRefreshing ? "Cancel" : title
-        let foregroundColor = isFocused
+        let foregroundColor = !isEnabled
+            ? AppTheme.uiSecondaryText.withAlphaComponent(0.45)
+            : isFocused
             ? AppTheme.uiInverseText
             : isRefreshing ? AppTheme.uiSecondaryText : AppTheme.uiPrimaryText
         titleLabel.textColor = foregroundColor
@@ -892,7 +909,9 @@ private final class LibrariesActionCell: UICollectionViewListCell {
         var background = UIBackgroundConfiguration.clear().updated(for: state)
         background.cornerRadius = 36
         background.backgroundColor = isFocused ? AppTheme.uiPrimaryText : AppTheme.uiSurfaceBorder
-        background.strokeColor = isFocused ? .clear : AppTheme.uiPrimaryText.withAlphaComponent(isRefreshing ? 0.14 : 0.28)
+        background.strokeColor = isFocused
+            ? .clear
+            : AppTheme.uiPrimaryText.withAlphaComponent(isEnabled ? (isRefreshing ? 0.14 : 0.28) : 0.1)
         background.strokeWidth = isFocused ? 0 : 1
         backgroundConfiguration = background
     }

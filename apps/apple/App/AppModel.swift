@@ -17,10 +17,12 @@ final class AppModel: ObservableObject {
 
     @Published var connectionState: ConnectionState = .checking
     @Published var plexLinkCode: String?
+    @Published private(set) var isOffline = false
 
     let libraryCache: LibraryCache
     let refreshTracker = RefreshTracker()
 
+    private let networkMonitor = NetworkMonitor()
     private let plexConnector: any PlexConnecting
     private let jellyfinConnector: any JellyfinConnecting
     private var activeConnector: (any MediaConnector)?
@@ -67,6 +69,18 @@ final class AppModel: ObservableObject {
             .throttle(for: .milliseconds(250), scheduler: DispatchQueue.main, latest: true)
             .sink { [weak self] _ in
                 self?.objectWillChange.send()
+            }
+            .store(in: &cancellables)
+
+        networkMonitor.$isOffline
+            .removeDuplicates()
+            .sink { [weak self] isOffline in
+                guard let self else { return }
+                self.isOffline = isOffline
+                if isOffline {
+                    self.invalidateCacheGeneration()
+                    self.refreshTracker.cancelAll()
+                }
             }
             .store(in: &cancellables)
 
@@ -300,12 +314,14 @@ final class AppModel: ObservableObject {
 
     /// Schedule a refresh of the active server's metadata in the background.
     func refreshConnection() {
+        guard !isOffline else { return }
         refreshTracker.run(.connection) { [weak self] in
             await self?._refreshConnection()
         }
     }
 
     func refreshAllLibraries(_ server: ConnectedServer) {
+        guard !isOffline else { return }
         guard let refreshID = refreshTracker.beginRefresh() else { return }
 
         refreshTracker.run(.allLibraries) { [weak self] in
@@ -325,6 +341,7 @@ final class AppModel: ObservableObject {
 
     /// Schedule a full recursive refresh of `library` in the background.
     func refreshLibrary(_ library: LibraryReference) {
+        guard !isOffline else { return }
         refreshTracker.run(.library(library.id)) { [weak self] in
             await self?._resyncLibrary(library)
         }
@@ -332,6 +349,7 @@ final class AppModel: ObservableObject {
 
     /// Schedule a recursive refresh of `item`'s children in the background.
     func refreshChildren(of item: MediaItem) {
+        guard !isOffline else { return }
         refreshTracker.run(.children(item.id)) { [weak self] in
             await self?._refreshChildrenWork(of: item, recursive: true)
         }
@@ -339,6 +357,7 @@ final class AppModel: ObservableObject {
 
     /// Schedule a refresh of a single item in the background.
     func refreshItem(_ item: MediaItem) {
+        guard !isOffline else { return }
         refreshTracker.run(.item(item.id)) { [weak self] in
             await self?._refreshItem(item)
         }
@@ -348,6 +367,7 @@ final class AppModel: ObservableObject {
     /// in the background. Reverts the cache on network failure. Never throws:
     /// the cache is the source of truth views observe.
     func setWatchStatus(for item: MediaItem, isWatched: Bool) {
+        guard !isOffline else { return }
         if libraryCache.item(item.id) == nil {
             libraryCache.ingest(item: item)
         }
@@ -417,7 +437,8 @@ final class AppModel: ObservableObject {
     /// Resolve playback options for `id`. The user is initiating playback, so
     /// the caller genuinely needs the response back.
     func playbackOptions(for id: MediaPlaybackID) async throws -> MediaPlaybackOptions? {
-        try await connector(for: id.providerID).playbackOptions(for: id)
+        guard !isOffline else { throw URLError(.notConnectedToInternet) }
+        return try await connector(for: id.providerID).playbackOptions(for: id)
     }
 
     func playbackSettings(for id: MediaPlaybackID) -> MediaPlaybackSettings? {
@@ -437,7 +458,8 @@ final class AppModel: ObservableObject {
         sessionID: String,
         offsetMilliseconds: Int? = nil
     ) async throws -> MediaPlaybackResource {
-        try await connector(for: id.providerID).playbackURL(
+        guard !isOffline else { throw URLError(.notConnectedToInternet) }
+        return try await connector(for: id.providerID).playbackURL(
             for: id,
             selection: selection,
             sessionID: sessionID,
@@ -454,6 +476,7 @@ final class AppModel: ObservableObject {
         let currentItem = libraryCache.item(item.id) ?? item
         guard !currentItem.kind.isPlayable else { return cachedQuickPlayItem(for: currentItem) }
         guard currentItem.kind == .series else { return nil }
+        guard !isOffline else { return cachedQuickPlayItem(for: currentItem) }
 
         await refreshTracker.run(.children(currentItem.id)) { [weak self] in
             await self?._refreshChildrenWork(of: currentItem, recursive: true)

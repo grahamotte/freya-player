@@ -59,7 +59,7 @@ struct MediaPlayButton: View {
             }
             .buttonStyle(MediaGlassButtonStyle())
             .focused($isPlayFocused)
-            .disabled(isLoading || isLoadingOptions)
+            .disabled(model.isOffline || isLoading || isLoadingOptions)
             .simultaneousGesture(
                 LongPressGesture(minimumDuration: 0.5)
                     .onEnded { _ in
@@ -82,6 +82,7 @@ struct MediaPlayButton: View {
         .modifier(PlaybackDialogModifier(
             isPresented: $isShowingPlaybackDialog,
             isLoading: isLoading,
+            isOffline: model.isOffline,
             error: playbackDialogError,
             qualityOptions: qualityOptions,
             defaultResolutionTitle: defaultResolutionTitle,
@@ -514,6 +515,7 @@ struct MediaPlayButton: View {
 private struct PlaybackDialogModifier: ViewModifier {
     @Binding var isPresented: Bool
     let isLoading: Bool
+    let isOffline: Bool
     let error: String?
     let qualityOptions: [MediaPlaybackQuality]
     let defaultResolutionTitle: String
@@ -556,6 +558,7 @@ private struct PlaybackDialogModifier: ViewModifier {
     private var playbackDialog: some View {
         PlaybackOptionsDialog(
             isLoading: isLoading,
+            isOffline: isOffline,
             error: error,
             qualityOptions: qualityOptions,
             defaultResolutionTitle: defaultResolutionTitle,
@@ -577,6 +580,7 @@ private struct PlaybackDialogModifier: ViewModifier {
 
 private struct PlaybackOptionsDialog: View {
     let isLoading: Bool
+    let isOffline: Bool
     let error: String?
     let qualityOptions: [MediaPlaybackQuality]
     let defaultResolutionTitle: String
@@ -680,7 +684,7 @@ private struct PlaybackOptionsDialog: View {
                 }
                 .buttonStyle(MediaGlassButtonStyle(horizontalPadding: 24, verticalPadding: 16))
                 .focused($isPlayFocused)
-                .disabled(isLoading)
+                .disabled(isOffline || isLoading)
 
                 Button(role: .cancel, action: cancel) {
                     Text("Cancel")

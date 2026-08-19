@@ -97,6 +97,7 @@ struct LibrariesPage: View {
                         }
                     }
                     .buttonStyle(actionButtonStyle)
+                    .disabled(model.isOffline)
                     .platformHover { isHoveringRefresh = $0 }
                     .help(refreshProgress == nil ? "Refresh" : "Cancel")
 

@@ -67,15 +67,21 @@ final class MediaItemQuickActionHandler {
         let quickPlayTitle = model.cachedQuickPlayItem(for: item)?.quickPlayButtonTitle
             ?? item.quickPlayButtonTitle
 
-        alert.addAction(UIAlertAction(title: quickPlayTitle, style: .default) { [weak self] _ in
+        let playAction = UIAlertAction(title: quickPlayTitle, style: .default) { [weak self] _ in
             Task { await self?.playNow(item) }
-        })
-        alert.addAction(UIAlertAction(title: MediaWatchStatusDisplay.markSeenTitle, style: .default) { [weak self] _ in
+        }
+        playAction.isEnabled = !model.isOffline
+        alert.addAction(playAction)
+        let markSeenAction = UIAlertAction(title: MediaWatchStatusDisplay.markSeenTitle, style: .default) { [weak self] _ in
             self?.model.setWatchStatus(for: item, isWatched: true)
-        })
-        alert.addAction(UIAlertAction(title: MediaWatchStatusDisplay.markUnseenTitle, style: .default) { [weak self] _ in
+        }
+        markSeenAction.isEnabled = !model.isOffline
+        alert.addAction(markSeenAction)
+        let markUnseenAction = UIAlertAction(title: MediaWatchStatusDisplay.markUnseenTitle, style: .default) { [weak self] _ in
             self?.model.setWatchStatus(for: item, isWatched: false)
-        })
+        }
+        markUnseenAction.isEnabled = !model.isOffline
+        alert.addAction(markUnseenAction)
         alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
         presenter.present(alert, animated: true)
     }
@@ -260,6 +266,7 @@ private struct MediaItemQuickActionsModifier: ViewModifier {
                     } label: {
                         Label(quickPlayTitle, systemImage: "play.fill")
                     }
+                    .disabled(model.isOffline)
                 }
 
                 Button {
@@ -267,12 +274,14 @@ private struct MediaItemQuickActionsModifier: ViewModifier {
                 } label: {
                     Label(MediaWatchStatusDisplay.markSeenTitle, systemImage: "checkmark.circle.fill")
                 }
+                .disabled(model.isOffline)
 
                 Button {
                     model.setWatchStatus(for: item, isWatched: false)
                 } label: {
                     Label(MediaWatchStatusDisplay.markUnseenTitle, systemImage: "circle")
                 }
+                .disabled(model.isOffline)
             }
             .fullScreenCover(item: $pendingPlayback) { request in
                 QuickPlaybackPresenter(
