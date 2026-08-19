@@ -4,64 +4,112 @@ import XCTest
 
 final class LibraryCacheTests: XCTestCase {
     @MainActor
-    func testLoadedCacheDerivesAndKeepsSeriesAddedAt() throws {
-        let cachedSeries = makeMediaItem(id: "series", kind: .series, addedAt: 500)
-        let library = makeLibraryShelf(items: [cachedSeries])
-        let season = makeMediaItem(id: "season", kind: .season, addedAt: 50)
-        let episodes = [
-            makeMediaItem(id: "older", kind: .episode, addedAt: 100),
-            makeMediaItem(id: "newer", kind: .episode, addedAt: 300),
-        ]
-        let snapshot = LibraryCacheSnapshot(
+    func testLoadedCacheWithoutCurrentVersionIsCleared() {
+        for cacheVersion in [nil, 0] as [Int?] {
+            let series = makeMediaItem(id: "series", kind: .series)
+            let library = makeLibraryShelf(items: [series])
+            let snapshot = LibraryCacheSnapshot(
+                cacheVersion: cacheVersion,
+                serverKey: "plex:server",
+                libraries: [
+                    library.id: CachedLibrary(reference: library.reference, isHidden: false),
+                ],
+                libraryOrder: [library.id],
+                itemsByID: [series.id: series],
+                libraryItemIDs: [library.id: [series.id]]
+            )
+            var didClear = false
+            let cache = LibraryCache(
+                storage: LibraryCacheStorage(
+                    load: { snapshot },
+                    save: { _ in },
+                    clear: { didClear = true },
+                    sizeBytes: { 0 }
+                )
+            )
+
+            XCTAssertTrue(didClear)
+            XCTAssertTrue(cache.snapshot.isEmpty)
+            XCTAssertEqual(cache.snapshot.cacheVersion, LibraryCacheSnapshot.currentVersion)
+            XCTAssertNil(cache.cachedServer())
+        }
+    }
+
+    @MainActor
+    func testLoadedSeriesOrderStaysStableAfterRefresh() {
+        let olderSeries = makeMediaItem(id: "older-series", title: "Older", kind: .series, addedAt: 100)
+        let newerSeries = makeMediaItem(id: "newer-series", title: "Newer", kind: .series, addedAt: 300)
+        let olderSeason = makeMediaItem(id: "older-season", kind: .season)
+        let newerSeason = makeMediaItem(id: "newer-season", kind: .season)
+        let olderEpisode = makeMediaItem(id: "older-episode", kind: .episode, addedAt: 100)
+        let newerEpisode = makeMediaItem(id: "newer-episode", kind: .episode, addedAt: 300)
+        let library = makeLibraryShelf(items: [olderSeries, newerSeries])
+        let storedSnapshot = LibraryCacheSnapshot(
             serverKey: "plex:server",
             libraries: [
                 library.id: CachedLibrary(reference: library.reference, isHidden: false),
             ],
             libraryOrder: [library.id],
             itemsByID: [
-                "series": cachedSeries,
-                "season": season,
-                "older": episodes[0],
-                "newer": episodes[1],
+                olderSeries.id: olderSeries,
+                newerSeries.id: newerSeries,
+                olderSeason.id: olderSeason,
+                newerSeason.id: newerSeason,
+                olderEpisode.id: olderEpisode,
+                newerEpisode.id: newerEpisode,
             ],
-            libraryItemIDs: [library.id: ["series"]],
+            libraryItemIDs: [library.id: [olderSeries.id, newerSeries.id]],
             childItemIDs: [
-                "series": ["season"],
-                "season": ["older", "newer"],
-            ],
-            derivedSeriesAddedAtVersion: nil
+                olderSeries.id: [olderSeason.id],
+                newerSeries.id: [newerSeason.id],
+                olderSeason.id: [olderEpisode.id],
+                newerSeason.id: [newerEpisode.id],
+            ]
         )
-        let storedData = try JSONEncoder().encode(snapshot)
-        let storedSnapshot = try JSONDecoder().decode(LibraryCacheSnapshot.self, from: storedData)
-        var savedSnapshot: LibraryCacheSnapshot?
-        let storage = LibraryCacheStorage(
-            load: { storedSnapshot },
-            save: { savedSnapshot = $0 },
-            clear: {},
-            sizeBytes: { 0 }
+        let cache = LibraryCache(
+            storage: LibraryCacheStorage(
+                load: { storedSnapshot },
+                save: { _ in },
+                clear: {},
+                sizeBytes: { 0 }
+            )
         )
-        let cache = LibraryCache(storage: storage)
-        let refreshedLibrary = library.settingItems([
-            makeMediaItem(id: "series", kind: .series, addedAt: 500),
-        ])
-        let server = ConnectedServer(
-            providerID: .plex,
-            serverID: "server",
-            serverName: "Server",
-            serverURL: "https://example.com",
-            accountName: "Account",
-            libraries: [refreshedLibrary]
+        let refreshedOlderSeries = makeMediaItem(
+            id: olderSeries.id,
+            title: olderSeries.title,
+            kind: .series,
+            addedAt: 500
+        )
+        let refreshedNewerSeries = makeMediaItem(
+            id: newerSeries.id,
+            title: newerSeries.title,
+            kind: .series,
+            addedAt: 400
         )
 
-        cache.install(server: server)
-        let installedData = try JSONEncoder().encode(cache.snapshot)
-        let installedSnapshot = try JSONDecoder().decode(LibraryCacheSnapshot.self, from: installedData)
+        let initialOrder = LibraryPageSort.addedAt.items(
+            from: cache.libraryItems(for: library.id),
+            order: .descending
+        ).map(\.id)
 
-        XCTAssertEqual(cache.libraryItems(for: library.id).first?.addedAt, 300)
-        XCTAssertEqual(savedSnapshot?.itemsByID["series"]?.addedAt, 300)
-        XCTAssertEqual(savedSnapshot?.derivedSeriesAddedAtVersion, 1)
-        XCTAssertEqual(installedSnapshot.serverMetadata?.serverName, "Server")
-        XCTAssertEqual(installedSnapshot.serverMetadata?.serverURL, "https://example.com")
+        cache.beginBatchUpdates()
+        cache.ingest(items: [refreshedOlderSeries, refreshedNewerSeries], asTopLevelOf: library.id)
+        cache.ingest(children: [olderSeason], of: olderSeries.id)
+        cache.ingest(children: [newerSeason], of: newerSeries.id)
+        cache.ingest(children: [olderEpisode], of: olderSeason.id)
+        cache.ingest(children: [newerEpisode], of: newerSeason.id)
+        cache.cacheLatestEpisodeAddedAt(for: [olderSeries.id, newerSeries.id])
+        cache.endBatchUpdates()
+
+        let refreshedOrder = LibraryPageSort.addedAt.items(
+            from: cache.libraryItems(for: library.id),
+            order: .descending
+        ).map(\.id)
+
+        XCTAssertEqual(initialOrder, [newerSeries.id, olderSeries.id])
+        XCTAssertEqual(refreshedOrder, initialOrder)
+        XCTAssertEqual(cache.snapshot.itemsByID[olderSeries.id]?.addedAt, 100)
+        XCTAssertEqual(cache.snapshot.itemsByID[newerSeries.id]?.addedAt, 300)
     }
 
     @MainActor

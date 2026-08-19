@@ -26,12 +26,15 @@ final class LibraryCache: ObservableObject {
 
     init(storage: LibraryCacheStorage) {
         self.storage = storage
-        let loadedSnapshot = storage.load() ?? LibraryCacheSnapshot()
-        var normalizedSnapshot = loadedSnapshot
-        normalizedSnapshot.migrateSeriesAddedAtIfNeeded()
-        self.snapshot = normalizedSnapshot
-        if loadedSnapshot != normalizedSnapshot {
-            storage.save(normalizedSnapshot)
+        let loadedSnapshot = storage.load()
+        if let loadedSnapshot,
+           loadedSnapshot.cacheVersion == LibraryCacheSnapshot.currentVersion {
+            self.snapshot = loadedSnapshot
+        } else {
+            self.snapshot = LibraryCacheSnapshot()
+            if loadedSnapshot != nil {
+                storage.clear()
+            }
         }
         self.storageSizeBytes = storage.sizeBytes()
     }
@@ -442,6 +445,9 @@ struct CachedServerMetadata: Codable, Equatable {
 }
 
 struct LibraryCacheSnapshot: Codable, Equatable {
+    static let currentVersion = 1
+
+    var cacheVersion: Int?
     var serverKey: String?
     var serverMetadata: CachedServerMetadata?
     var libraries: [String: CachedLibrary]
@@ -449,18 +455,18 @@ struct LibraryCacheSnapshot: Codable, Equatable {
     var itemsByID: [String: MediaItem]
     var libraryItemIDs: [String: [String]]
     var childItemIDs: [String: [String]]
-    var derivedSeriesAddedAtVersion: Int?
 
     init(
+        cacheVersion: Int? = LibraryCacheSnapshot.currentVersion,
         serverKey: String? = nil,
         serverMetadata: CachedServerMetadata? = nil,
         libraries: [String: CachedLibrary] = [:],
         libraryOrder: [String] = [],
         itemsByID: [String: MediaItem] = [:],
         libraryItemIDs: [String: [String]] = [:],
-        childItemIDs: [String: [String]] = [:],
-        derivedSeriesAddedAtVersion: Int? = 1
+        childItemIDs: [String: [String]] = [:]
     ) {
+        self.cacheVersion = cacheVersion
         self.serverKey = serverKey
         self.serverMetadata = serverMetadata
         self.libraries = libraries
@@ -468,7 +474,6 @@ struct LibraryCacheSnapshot: Codable, Equatable {
         self.itemsByID = itemsByID
         self.libraryItemIDs = libraryItemIDs
         self.childItemIDs = childItemIDs
-        self.derivedSeriesAddedAtVersion = derivedSeriesAddedAtVersion
     }
 
     var isEmpty: Bool {
@@ -479,27 +484,6 @@ struct LibraryCacheSnapshot: Codable, Equatable {
             && itemsByID.isEmpty
             && libraryItemIDs.isEmpty
             && childItemIDs.isEmpty
-    }
-
-    mutating func migrateSeriesAddedAtIfNeeded() {
-        guard derivedSeriesAddedAtVersion != 1 else { return }
-        let seriesIDs = itemsByID.values.filter { $0.kind == .series }.map(\.id)
-
-        for seriesID in seriesIDs {
-            guard let series = itemsByID[seriesID] else { continue }
-            let latestAddedAt = episodeAddedAtValues(under: seriesID).max()
-            itemsByID[seriesID] = series.withAddedAt(latestAddedAt)
-        }
-
-        derivedSeriesAddedAtVersion = 1
-    }
-
-    private func episodeAddedAtValues(under itemID: String) -> [Int] {
-        guard let item = itemsByID[itemID] else { return [] }
-        if item.kind == .episode {
-            return item.addedAt.map { [$0] } ?? []
-        }
-        return (childItemIDs[itemID] ?? []).flatMap { episodeAddedAtValues(under: $0) }
     }
 
     mutating func pruneUnreachableItems() {
