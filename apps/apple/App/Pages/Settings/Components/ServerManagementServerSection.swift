@@ -2,8 +2,6 @@ import SwiftUI
 
 struct ServerManagementServerSection: View {
     let server: ConnectedServer
-    let cacheSizeText: String
-    let onClearCache: () -> Void
     let onDeactivate: () -> Void
 
     var body: some View {
@@ -30,11 +28,6 @@ struct ServerManagementServerSection: View {
 
     private var actionButtons: some View {
         Group {
-            Button("Clear Cache (\(cacheSizeText))") {
-                onClearCache()
-            }
-            .buttonStyle(MediaGlassButtonStyle())
-
             Button("Deactivate") {
                 onDeactivate()
             }

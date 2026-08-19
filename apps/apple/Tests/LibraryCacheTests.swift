@@ -19,17 +19,23 @@ final class LibraryCacheTests: XCTestCase {
                 libraryItemIDs: [library.id: [series.id]]
             )
             var didClear = false
+            var storedSnapshot: LibraryCacheSnapshot? = snapshot
             let cache = LibraryCache(
                 storage: LibraryCacheStorage(
-                    load: { snapshot },
+                    load: { storedSnapshot },
                     save: { _ in },
-                    clear: { didClear = true },
+                    clear: {
+                        didClear = true
+                        storedSnapshot = nil
+                    },
                     sizeBytes: { 0 }
                 )
             )
 
             XCTAssertTrue(didClear)
             XCTAssertTrue(cache.snapshot.isEmpty)
+            XCTAssertEqual(cache.applicationCacheVersion, LibraryCacheSnapshot.currentVersion)
+            XCTAssertNil(cache.fileCacheVersion)
             XCTAssertEqual(cache.snapshot.cacheVersion, LibraryCacheSnapshot.currentVersion)
             XCTAssertNil(cache.cachedServer())
         }
@@ -86,6 +92,9 @@ final class LibraryCacheTests: XCTestCase {
             kind: .series,
             addedAt: 400
         )
+
+        XCTAssertEqual(cache.applicationCacheVersion, LibraryCacheSnapshot.currentVersion)
+        XCTAssertEqual(cache.fileCacheVersion, LibraryCacheSnapshot.currentVersion)
 
         let initialOrder = LibraryPageSort.addedAt.items(
             from: cache.libraryItems(for: library.id),

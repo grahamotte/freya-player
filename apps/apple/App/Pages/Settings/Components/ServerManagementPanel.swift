@@ -19,14 +19,34 @@ struct ServerManagementPanel: View {
                 VStack(alignment: .leading, spacing: 24) {
                     ServerManagementServerSection(
                         server: server,
-                        cacheSizeText: cache.formattedStorageSize,
-                        onClearCache: {
-                            model.clearCache()
-                        },
                         onDeactivate: {
                             isShowingDeactivateAlert = true
                         }
                     )
+
+                    ServerManagementSection("Cache") {
+                        VStack(alignment: .leading, spacing: 14) {
+                            ServerManagementControlRow("Application Cache Version") {
+                                Text(String(cache.applicationCacheVersion))
+                                    .monospacedDigit()
+                            }
+
+                            ServerManagementControlRow("Cache File Version") {
+                                Text(cache.fileCacheVersion.map { String($0) } ?? "Missing")
+                                    .monospacedDigit()
+                            }
+
+                            ServerManagementControlRow("Cache Size") {
+                                Text(cache.formattedStorageSize)
+                                    .monospacedDigit()
+                            }
+
+                            Button("Clear Cache") {
+                                model.clearCache()
+                            }
+                            .buttonStyle(MediaGlassButtonStyle())
+                        }
+                    }
 
                     ServerManagementLibrariesSection(
                         libraries: server.libraries,

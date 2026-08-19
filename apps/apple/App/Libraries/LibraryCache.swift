@@ -43,6 +43,14 @@ final class LibraryCache: ObservableObject {
         Self.formattedStorageSize(bytes: snapshot.isEmpty ? 0 : storageSizeBytes)
     }
 
+    var applicationCacheVersion: Int {
+        LibraryCacheSnapshot.currentVersion
+    }
+
+    var fileCacheVersion: Int? {
+        storage.load()?.cacheVersion
+    }
+
     func cachedServer() -> ConnectedServer? {
         let libraries = snapshot.libraryOrder.compactMap { libraryID -> LibraryShelf? in
             guard let library = snapshot.libraries[libraryID] else { return nil }
