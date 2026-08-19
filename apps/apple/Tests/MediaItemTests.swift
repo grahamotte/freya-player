@@ -60,6 +60,45 @@ final class MediaItemTests: XCTestCase {
         XCTAssertNil(reset.resumeOffsetMilliseconds)
     }
 
+    func testStoppedPlexPlaybackUsesDefaultPlayedThreshold() {
+        let item = makeMediaItem(durationMilliseconds: 100_000)
+        let belowThreshold = item.applyingPlaybackProgress(time: 89_000, duration: nil, isStopped: true)
+        let atThreshold = item.applyingPlaybackProgress(time: 90_000, duration: nil, isStopped: true)
+
+        XCTAssertFalse(belowThreshold.isWatched)
+        XCTAssertEqual(belowThreshold.progress, 0.89)
+        XCTAssertTrue(atThreshold.isWatched)
+        XCTAssertEqual(atThreshold.progress, 1)
+        XCTAssertNil(atThreshold.resumeOffsetMilliseconds)
+    }
+
+    func testStoppedJellyfinPlaybackUsesDefaultResumeThresholds() {
+        let item = makeMediaItem(providerID: .jellyfin, durationMilliseconds: 600_000)
+        let belowThreshold = item.applyingPlaybackProgress(time: 29_000, duration: nil, isStopped: true)
+        let atUpperThreshold = item.applyingPlaybackProgress(time: 540_000, duration: nil, isStopped: true)
+        let aboveUpperThreshold = item.applyingPlaybackProgress(time: 541_000, duration: nil, isStopped: true)
+
+        XCTAssertFalse(belowThreshold.isWatched)
+        XCTAssertNil(belowThreshold.progress)
+        XCTAssertNil(belowThreshold.resumeOffsetMilliseconds)
+        XCTAssertFalse(atUpperThreshold.isWatched)
+        XCTAssertEqual(atUpperThreshold.progress, 0.9)
+        XCTAssertTrue(aboveUpperThreshold.isWatched)
+        XCTAssertEqual(aboveUpperThreshold.progress, 1)
+        XCTAssertNil(aboveUpperThreshold.resumeOffsetMilliseconds)
+    }
+
+    func testStoppedShortJellyfinPlaybackIsWatchedAfterMinimumResumeThreshold() {
+        let item = makeMediaItem(providerID: .jellyfin, durationMilliseconds: 240_000)
+        let belowThreshold = item.applyingPlaybackProgress(time: 11_000, duration: nil, isStopped: true)
+        let atThreshold = item.applyingPlaybackProgress(time: 12_000, duration: nil, isStopped: true)
+
+        XCTAssertFalse(belowThreshold.isWatched)
+        XCTAssertNil(belowThreshold.progress)
+        XCTAssertTrue(atThreshold.isWatched)
+        XCTAssertEqual(atThreshold.progress, 1)
+    }
+
     func testLatestAddedAtUsesNewestEpisode() {
         let show = makeMediaItem(kind: .series, addedAt: 50)
         let episodes = [
@@ -112,6 +151,7 @@ final class MediaItemTests: XCTestCase {
 
 func makeMediaItem(
     id: String = "item",
+    providerID: MediaProviderID = .plex,
     title: String = "Movie",
     kind: MediaItemKind = .movie,
     addedAt: Int? = 100,
@@ -121,7 +161,7 @@ func makeMediaItem(
     resumeOffsetMilliseconds: Int? = nil
 ) -> MediaItem {
     MediaItem(
-        providerID: .plex,
+        providerID: providerID,
         serverID: "server",
         id: id,
         title: title,

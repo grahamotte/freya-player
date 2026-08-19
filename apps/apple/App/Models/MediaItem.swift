@@ -135,7 +135,7 @@ struct MediaItem: Hashable, Identifiable, Codable {
         applyingWatchStats(isWatched: isWatched, progress: isWatched ? 1 : nil, resumeOffsetMilliseconds: nil)
     }
 
-    func applyingPlaybackProgress(time: Int, duration: Int?) -> MediaItem {
+    func applyingPlaybackProgress(time: Int, duration: Int?, isStopped: Bool = false) -> MediaItem {
         guard kind.isPlayable, !isWatched, time >= 0 else { return self }
 
         let playbackDuration = (duration ?? 0) > 0 ? duration : durationMilliseconds
@@ -144,6 +144,21 @@ struct MediaItem: Hashable, Identifiable, Codable {
             : playbackDuration.flatMap {
                 $0 > 0 ? min(max(Double(time) / Double($0), 0), 1) : nil
             } ?? progress
+
+        if isStopped, let playbackDuration, let playbackProgress {
+            switch providerID {
+            case .plex where playbackProgress >= 0.9:
+                return settingWatchStatus(true)
+            case .jellyfin where playbackProgress < 0.05:
+                return settingWatchStatus(false)
+            case .jellyfin where playbackProgress > 0.9
+                || time >= playbackDuration - 1_000
+                || playbackDuration < 300_000:
+                return settingWatchStatus(true)
+            case .plex, .jellyfin:
+                break
+            }
+        }
 
         return applyingWatchStats(
             isWatched: false,

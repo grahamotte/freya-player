@@ -334,15 +334,16 @@ final class LibraryCache: ObservableObject {
         }
     }
 
-    func updatePlaybackProgress(for itemID: String, time: Int, duration: Int?) {
+    func updatePlaybackProgress(for itemID: String, time: Int, duration: Int?, isStopped: Bool) {
         guard let item = snapshot.itemsByID[itemID] else { return }
-        let updated = item.applyingPlaybackProgress(time: time, duration: duration)
+        let updated = item.applyingPlaybackProgress(time: time, duration: duration, isStopped: isStopped)
         guard updated != item else { return }
 
         commitUserMutation { next in
             next.itemsByID[itemID] = next.itemsByID[itemID]?.applyingPlaybackProgress(
                 time: time,
-                duration: duration
+                duration: duration,
+                isStopped: isStopped
             )
         }
     }
