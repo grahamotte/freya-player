@@ -585,8 +585,13 @@ struct LibraryCacheStorage {
 
     private static func fileURL() -> URL? {
         let bundleID = Bundle.main.bundleIdentifier ?? "FreyaPlayer"
+        #if os(tvOS)
+        let directory: FileManager.SearchPathDirectory = .cachesDirectory
+        #else
+        let directory: FileManager.SearchPathDirectory = .applicationSupportDirectory
+        #endif
         return try? FileManager.default
-            .url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
+            .url(for: directory, in: .userDomainMask, appropriateFor: nil, create: true)
             .appendingPathComponent(bundleID, isDirectory: true)
             .appendingPathComponent("library-cache.json", isDirectory: false)
     }
