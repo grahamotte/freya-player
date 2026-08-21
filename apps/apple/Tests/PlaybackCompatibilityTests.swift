@@ -34,6 +34,58 @@ final class PlaybackCompatibilityTests: XCTestCase {
         )
     }
 
+    func testVideoCompatibilityHonorsAnOptionalDisplayResolutionLimit() {
+        let videoCodecs: Set<String> = ["h264", "hevc"]
+
+        XCTAssertTrue(PlaybackCompatibility.canDirectPlayVideo(
+            codec: "hevc",
+            height: 2160,
+            supportedCodecs: videoCodecs,
+            maximumHeight: nil
+        ))
+        XCTAssertTrue(PlaybackCompatibility.canDirectPlayVideo(
+            codec: "h264",
+            height: 1080,
+            supportedCodecs: videoCodecs,
+            maximumHeight: 1080
+        ))
+        XCTAssertFalse(PlaybackCompatibility.canDirectPlayVideo(
+            codec: "h264",
+            height: 2160,
+            supportedCodecs: videoCodecs,
+            maximumHeight: 1080
+        ))
+        XCTAssertFalse(PlaybackCompatibility.canDirectPlayVideo(
+            codec: "h264",
+            height: nil,
+            supportedCodecs: videoCodecs,
+            maximumHeight: 1080
+        ))
+        XCTAssertFalse(PlaybackCompatibility.canDirectPlayVideo(
+            codec: "av1",
+            height: 1080,
+            supportedCodecs: videoCodecs,
+            maximumHeight: 1080
+        ))
+        XCTAssertEqual(
+            PlaybackCompatibility.maximumVideoHeight(deviceIdentifier: "AppleTV5,3"),
+            1080
+        )
+        XCTAssertNil(PlaybackCompatibility.maximumVideoHeight(deviceIdentifier: "AppleTV6,2"))
+        XCTAssertEqual(
+            PlaybackCompatibility.effectiveVideoHeight(sourceHeight: 2160, maximumHeight: 1080),
+            1080
+        )
+        XCTAssertEqual(
+            PlaybackCompatibility.effectiveVideoHeight(sourceHeight: nil, maximumHeight: 1080),
+            1080
+        )
+        XCTAssertEqual(
+            PlaybackCompatibility.effectiveVideoHeight(sourceHeight: 2160, maximumHeight: nil),
+            2160
+        )
+    }
+
     func testRequiresTranscodedAudioForTvOS27PrereleaseBuilds() {
         XCTAssertTrue(
             PlaybackCompatibility.requiresTranscodedAudio(

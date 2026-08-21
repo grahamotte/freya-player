@@ -126,6 +126,22 @@ enum MediaPlaybackQuality: String, CaseIterable, Codable, Identifiable {
             return videoHeight.map { resolutionHeight < $0 } ?? true
         }
     }
+
+    func constrained(toMaximumVideoHeight maximumHeight: Int?, sourceVideoHeight: Int?) -> MediaPlaybackQuality {
+        guard let maximumHeight else { return self }
+        if let resolutionHeight {
+            guard resolutionHeight > maximumHeight else { return self }
+        } else if let sourceVideoHeight, sourceVideoHeight <= maximumHeight {
+            return self
+        }
+        return Self.allCases
+            .compactMap { quality in
+                quality.resolutionHeight.map { (quality, $0) }
+            }
+            .filter { $0.1 <= maximumHeight }
+            .max(by: { $0.1 < $1.1 })?
+            .0 ?? .p240
+    }
 }
 
 struct MediaPlaybackOption: Identifiable, Hashable {

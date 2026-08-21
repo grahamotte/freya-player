@@ -164,10 +164,23 @@ final class JellyfinClient {
 
         let requiresTranscodedAudio = PlatformMetadata.requiresTranscodedPlaybackAudio
         let usesDefaultAudio = selection == nil || selection?.audioID == selection?.defaultAudioID
+        let quality = (selection?.quality ?? .automatic).constrained(
+            toMaximumVideoHeight: PlaybackCompatibility.maximumVideoHeight,
+            sourceVideoHeight: mediaSource.videoHeight
+        )
+        let effectiveSelection = selection.map {
+            MediaPlaybackSelection(
+                quality: quality,
+                audioID: $0.audioID,
+                subtitleID: $0.subtitleID,
+                defaultAudioID: $0.defaultAudioID,
+                defaultSubtitleID: $0.defaultSubtitleID
+            )
+        }
         let playbackPlan = mediaSource
             .playbackOptions(requiresTranscodedAudio: requiresTranscodedAudio)
-            .playbackPlan(for: selection ?? MediaPlaybackSelection(
-                quality: .automatic,
+            .playbackPlan(for: effectiveSelection ?? MediaPlaybackSelection(
+                quality: quality,
                 audioID: mediaSource.defaultAudioStreamIndex.map(String.init),
                 subtitleID: nil,
                 defaultAudioID: mediaSource.defaultAudioStreamIndex.map(String.init),
@@ -209,9 +222,9 @@ final class JellyfinClient {
         components.queryItems = [
             playbackInfo.playSessionId.map { URLQueryItem(name: "playSessionId", value: $0) },
             mediaSource.id.map { URLQueryItem(name: "mediaSourceId", value: $0) },
-            selection?.quality.maxStreamingBitrate.map { URLQueryItem(name: "videoBitRate", value: String($0)) },
-            selection?.quality.jellyfinMaxWidth.map { URLQueryItem(name: "maxWidth", value: $0) },
-            selection?.quality.videoResolution.map { URLQueryItem(name: "maxHeight", value: $0) },
+            quality.maxStreamingBitrate.map { URLQueryItem(name: "videoBitRate", value: String($0)) },
+            quality.jellyfinMaxWidth.map { URLQueryItem(name: "maxWidth", value: $0) },
+            quality.videoResolution.map { URLQueryItem(name: "maxHeight", value: $0) },
             selectedAudioIndex.map { URLQueryItem(name: "audioStreamIndex", value: $0) },
             selectedSubtitleIndex.map { URLQueryItem(name: "subtitleStreamIndex", value: $0) },
             selection?.subtitleID.map { _ in URLQueryItem(name: "subtitleMethod", value: "Hls") },
@@ -232,9 +245,11 @@ final class JellyfinClient {
             throw MediaConnectorError.unavailable
         }
 
-        let method: JellyfinPlaybackMethod = requiresTranscodedAudio || !mediaSource.supportsDirectStream
-            ? .transcode
-            : .directStream
+        let method = JellyfinPlaybackMethod.streaming(
+            supportsDirectStream: mediaSource.supportsDirectStream,
+            canCopyVideo: canCopyVideo,
+            quality: quality
+        )
         let formats = await resolvedHLSPlaybackFormats(
             at: url,
             accessToken: accessToken,
@@ -784,12 +799,6 @@ private struct JellyfinSessionInfoResponse: Decodable {
     private enum CodingKeys: String, CodingKey {
         case id = "Id"
     }
-}
-
-enum JellyfinPlaybackMethod: String {
-    case transcode = "Transcode"
-    case directStream = "DirectStream"
-    case directPlay = "DirectPlay"
 }
 
 private struct JellyfinPlaybackInfoBody: Encodable {

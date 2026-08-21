@@ -99,6 +99,10 @@ final class PlexClient {
         let includesSubtitles = metadata.canStreamSubtitle(selection?.subtitleID)
         let usesCustomAudio = selection.map { $0.audioID != $0.defaultAudioID } == true
         let changesSubtitle = selection.map { $0.subtitleID != $0.defaultSubtitleID } == true
+        let quality = (selection?.quality ?? .automatic).constrained(
+            toMaximumVideoHeight: PlaybackCompatibility.maximumVideoHeight,
+            sourceVideoHeight: metadata.videoHeight
+        )
 
         if let selection,
            (usesCustomAudio || changesSubtitle),
@@ -117,7 +121,7 @@ final class PlexClient {
             let prepared = try await preparePlaybackSession(
                 ratingKey: ratingKey,
                 connection: connection,
-                quality: selection.quality,
+                quality: quality,
                 sessionID: sessionID,
                 offsetMilliseconds: offsetMilliseconds,
                 directStreamAudio: directStreamAudio,
@@ -127,7 +131,7 @@ final class PlexClient {
             guard let url = transcodedMovieStreamURL(
                 for: ratingKey,
                 connection: connection,
-                quality: selection.quality,
+                quality: quality,
                 sessionID: sessionID,
                 offsetMilliseconds: offsetMilliseconds,
                 directStreamAudio: directStreamAudio,
@@ -161,7 +165,7 @@ final class PlexClient {
         let prepared = try await preparePlaybackSession(
             ratingKey: ratingKey,
             connection: connection,
-            quality: selection?.quality ?? .automatic,
+            quality: quality,
             sessionID: sessionID,
             offsetMilliseconds: offsetMilliseconds,
             directStreamAudio: directStreamAudio,
@@ -171,7 +175,7 @@ final class PlexClient {
         guard let url = transcodedMovieStreamURL(
             for: ratingKey,
             connection: connection,
-            quality: selection?.quality ?? .automatic,
+            quality: quality,
             sessionID: sessionID,
             offsetMilliseconds: offsetMilliseconds,
             directStreamAudio: directStreamAudio,
@@ -899,6 +903,10 @@ private struct PlexPlaybackMetadata: Decodable {
         media?.first(where: { $0.parts?.isEmpty == false })?.parts?.first?.id
     }
 
+    var videoHeight: Int? {
+        media?.first(where: { $0.parts?.isEmpty == false })?.playbackVideoHeight
+    }
+
     func canDirectStreamAudio(_ audioID: String?) -> Bool {
         let media = media?.first(where: { $0.parts?.isEmpty == false })
         let streams = media?.parts?.first?.streams
@@ -937,12 +945,15 @@ private struct PlexPlaybackMetadata: Decodable {
             audioOptions.first(where: { $0.id == audioID })?.transcodingTitle
         }
         let exceedsBitrateLimit = maxVideoBitrate.map { (media.bitrate ?? .max) > $0 } == true
-        let videoHeight = media.playbackVideoHeight
+        let sourceVideoHeight = media.playbackVideoHeight
+        let defaultVideoHeight = PlaybackCompatibility.effectiveVideoHeight(
+            sourceHeight: sourceVideoHeight
+        )
         let requiresServerStream = !media.isDirectPlayable || exceedsBitrateLimit
 
         return MediaPlaybackOptions(
-            videoHeight: videoHeight,
-            qualityOptions: MediaPlaybackQuality.transcodingOptions(forVideoHeight: videoHeight),
+            videoHeight: defaultVideoHeight,
+            qualityOptions: MediaPlaybackQuality.transcodingOptions(forVideoHeight: defaultVideoHeight),
             audioOptions: audioOptions,
             subtitleOptions: subtitleOptions,
             selectedAudioID: selectedAudioID,
@@ -1032,19 +1043,19 @@ private struct PlexPlaybackMetadata: Decodable {
         var isDirectPlayable: Bool {
             guard let parts, !parts.isEmpty else { return false }
             return Self.supportedContainers.contains(container?.lowercased() ?? "")
-                && Self.supportedVideoCodecs.contains(videoCodec?.lowercased() ?? "")
+                && PlaybackCompatibility.canDirectPlayVideo(
+                    codec: videoCodec,
+                    height: playbackVideoHeight
+                )
                 && Self.supportedAudioCodecs.contains(audioCodec?.lowercased() ?? "")
                 && parts.allSatisfy(\.canDirectPlay)
         }
 
         var canDirectStreamVideo: Bool {
-            PlaybackCompatibility.streamingVideoCodecs.contains(videoCodec?.lowercased() ?? "")
+            PlaybackCompatibility.canStreamVideo(codec: videoCodec, height: playbackVideoHeight)
         }
 
         private static let supportedContainers = ["mp4", "m4v", "mov"]
-        private static var supportedVideoCodecs: Set<String> {
-            PlaybackCompatibility.directPlayVideoCodecs
-        }
         private static var supportedAudioCodecs: Set<String> {
             PlaybackCompatibility.directPlayAudioCodecs
         }

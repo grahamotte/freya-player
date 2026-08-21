@@ -21,6 +21,44 @@ final class MediaPlaybackTests: XCTestCase {
         )
     }
 
+    func testAutomaticQualityConformsToADeviceResolutionLimit() {
+        XCTAssertEqual(
+            MediaPlaybackQuality.automatic.constrained(
+                toMaximumVideoHeight: 1080,
+                sourceVideoHeight: 2160
+            ),
+            .p1080
+        )
+        XCTAssertEqual(
+            MediaPlaybackQuality.automatic.constrained(
+                toMaximumVideoHeight: 2160,
+                sourceVideoHeight: 2160
+            ),
+            .automatic
+        )
+        XCTAssertEqual(
+            MediaPlaybackQuality.automatic.constrained(
+                toMaximumVideoHeight: 1080,
+                sourceVideoHeight: nil
+            ),
+            .p1080
+        )
+        XCTAssertEqual(
+            MediaPlaybackQuality.p1080.constrained(
+                toMaximumVideoHeight: 720,
+                sourceVideoHeight: 2160
+            ),
+            .p720
+        )
+        XCTAssertEqual(
+            MediaPlaybackQuality.p720.constrained(
+                toMaximumVideoHeight: 1080,
+                sourceVideoHeight: 2160
+            ),
+            .p720
+        )
+    }
+
     func testPlaybackOptionsDescribeDefaultResolution() {
         let options = MediaPlaybackOptions(
             videoHeight: 1440,

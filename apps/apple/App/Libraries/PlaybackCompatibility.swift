@@ -56,6 +56,14 @@ enum PlaybackCompatibility {
         directPlayAudioCodecs.intersection(hlsAudioCodecs)
     }
 
+    static var maximumVideoHeight: Int? {
+        #if os(tvOS)
+        return maximumVideoHeight(deviceIdentifier: deviceIdentifier)
+        #else
+        return nil
+        #endif
+    }
+
     static var deviceCapabilities: [PlaybackCapability] {
         capabilities(
             isPlayable: AVURLAsset.isPlayableExtendedMIMEType,
@@ -94,6 +102,37 @@ enum PlaybackCompatibility {
             codecs.formUnion(aliases)
         }
         return codecs
+    }
+
+    static func canDirectPlayVideo(
+        codec: String?,
+        height: Int?,
+        supportedCodecs: Set<String>? = nil,
+        maximumHeight: Int? = maximumVideoHeight
+    ) -> Bool {
+        let codecs = supportedCodecs ?? directPlayVideoCodecs
+        return codecs.contains(codec?.lowercased() ?? "")
+            && supportsVideoHeight(height, maximumHeight: maximumHeight)
+    }
+
+    static func canStreamVideo(
+        codec: String?,
+        height: Int?,
+        supportedCodecs: Set<String>? = nil,
+        maximumHeight: Int? = maximumVideoHeight
+    ) -> Bool {
+        let codecs = supportedCodecs ?? streamingVideoCodecs
+        return codecs.contains(codec?.lowercased() ?? "")
+            && supportsVideoHeight(height, maximumHeight: maximumHeight)
+    }
+
+    static func maximumVideoHeight(deviceIdentifier: String) -> Int? {
+        deviceIdentifier == "AppleTV5,3" ? 1080 : nil
+    }
+
+    static func effectiveVideoHeight(sourceHeight: Int?, maximumHeight: Int? = maximumVideoHeight) -> Int? {
+        guard let maximumHeight else { return sourceHeight }
+        return min(sourceHeight ?? maximumHeight, maximumHeight)
     }
 
     static func requiresTranscodedAudio(
@@ -271,6 +310,20 @@ enum PlaybackCompatibility {
                 ? "Recognized by AVFoundation; delivery support varies by container."
                 : "Not reported by AVFoundation."
         )
+    }
+
+    private static func supportsVideoHeight(_ height: Int?, maximumHeight: Int?) -> Bool {
+        guard let maximumHeight else { return true }
+        guard let height else { return false }
+        return height <= maximumHeight
+    }
+
+    private static var deviceIdentifier: String {
+        var systemInfo = utsname()
+        uname(&systemInfo)
+        return withUnsafeBytes(of: &systemInfo.machine) { bytes in
+            String(decoding: bytes.prefix { $0 != 0 }, as: UTF8.self)
+        }
     }
 
     private static let h264MIMEType = "video/mp4; codecs=\"avc1.640028\""
