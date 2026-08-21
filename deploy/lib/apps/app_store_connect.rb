@@ -41,6 +41,8 @@ module Apps
     end
 
     def submit(target)
+      return :skipped unless Apps.submit_for_review?
+
       apps = get("/v1/apps", params: { "filter[bundleId]" => target.fetch(:bundleIdentifier) }).fetch(:data)
       raise "Expected one App Store app for #{target.fetch(:bundleIdentifier)}" unless apps.length == 1
 
@@ -58,7 +60,7 @@ module Apps
       )
 
       submission = prepare_submission(app.fetch(:id), version.fetch(:id), target.fetch(:platform))
-      if !Apps.submit_for_review? || target.fetch(:bundleIdentifier).include?("codemoto")
+      if target.fetch(:bundleIdentifier).include?("codemoto")
         puts "Skipping actual submission for #{target.fetch(:bundleIdentifier)}."
         return :prepared
       end

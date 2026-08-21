@@ -264,7 +264,7 @@ run = "set -o pipefail && set -a && source .env.production && cd deploy && ruby 
 [tasks."deploy:publish"]
 alias = ["publish"]
 depends = ["deploy:push"]
-usage = 'flag "--no-review" help="Prepare App Store versions without submitting them for review"'
+usage = 'flag "--no-review" help="Upload App Store builds for TestFlight without changing or submitting App Store versions"'
 run = """
 set -o pipefail
 set -a

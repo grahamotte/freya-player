@@ -1,6 +1,14 @@
 require_relative "../../test_helper"
 
 class AppsAppStoreConnectTest < Minitest::Test
+  def test_skips_app_store_changes_without_review
+    Apps.submit_for_review = false
+
+    status = Apps::AppStoreConnect.new.submit(Apps.targets.fetch(0))
+
+    assert_equal :skipped, status
+  end
+
   def test_generates_signed_token
     token = Apps::AppStoreConnect.new.send(:token)
     header, payload, signature = token.split(".")

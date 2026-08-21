@@ -1,7 +1,7 @@
 module Apps
   class SubmitPatch < BasePatch
     class << self
-      def needed? = !Apps.skip_app_stores?
+      def needed? = !Apps.skip_app_stores? && Apps.submit_for_review?
 
       def apply
         client = AppStoreConnect.new
