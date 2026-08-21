@@ -172,7 +172,6 @@ struct JellyfinMediaSource: Decodable, Hashable {
     let supportsDirectPlay: Bool
     let supportsDirectStream: Bool
     let supportsTranscoding: Bool
-    let transcodingURL: String?
     let mediaStreams: [JellyfinMediaStream]?
     let defaultAudioStreamIndex: Int?
     let defaultSubtitleStreamIndex: Int?
@@ -184,11 +183,11 @@ struct JellyfinMediaSource: Decodable, Hashable {
     var isDirectPlayable: Bool {
         guard directPlayContainer != nil,
               let video = mediaStreams?.first(where: { $0.type == "Video" }),
-              ["h264", "hevc", "h265"].contains(video.codec?.lowercased() ?? ""),
+              PlaybackCompatibility.directPlayVideoCodecs.contains(video.codec?.lowercased() ?? ""),
               let audio = mediaStreams?.first(where: {
                   $0.type == "Audio" && $0.index == defaultAudioStreamIndex
               }) ?? mediaStreams?.first(where: { $0.type == "Audio" }) else { return false }
-        return ["aac", "mp3"].contains(audio.codec?.lowercased() ?? "")
+        return PlaybackCompatibility.directPlayAudioCodecs.contains(audio.codec?.lowercased() ?? "")
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -203,7 +202,6 @@ struct JellyfinMediaSource: Decodable, Hashable {
         case supportsDirectPlay = "SupportsDirectPlay"
         case supportsDirectStream = "SupportsDirectStream"
         case supportsTranscoding = "SupportsTranscoding"
-        case transcodingURL = "TranscodingUrl"
         case mediaStreams = "MediaStreams"
         case defaultAudioStreamIndex = "DefaultAudioStreamIndex"
         case defaultSubtitleStreamIndex = "DefaultSubtitleStreamIndex"
@@ -272,12 +270,16 @@ extension JellyfinMediaSource {
         let video = streams.first(where: { $0.type == "Video" })
         let videoHeight = video?.height
         let transcodesBoth = !supportsDirectPlay && !supportsDirectStream
-        let canDirectStreamVideo = ["h264", "avc", "avc1"].contains(video?.codec?.lowercased() ?? "")
+        let canDirectStreamVideo = PlaybackCompatibility.streamingVideoCodecs.contains(
+            video?.codec?.lowercased() ?? ""
+        )
         let transcodesAudio = requiresTranscodedAudio || transcodesBoth
         let audioOptions = streams
             .filter { $0.type == "Audio" }
             .map { stream in
-                let canDirectStream = ["aac", "mp3"].contains(stream.codec?.lowercased() ?? "")
+                let canDirectStream = PlaybackCompatibility.streamingAudioCodecs.contains(
+                    stream.codec?.lowercased() ?? ""
+                )
                 return MediaPlaybackOption(
                     id: String(stream.index),
                     title: stream.displayTitle ?? stream.language ?? "Audio \(stream.index)",
@@ -363,12 +365,12 @@ extension JellyfinMediaSource {
 
     var canCopyVideo: Bool {
         let video = mediaStreams?.first(where: { $0.type == "Video" })
-        return ["avc", "avc1", "h264"].contains(video?.codec?.lowercased() ?? "")
+        return PlaybackCompatibility.streamingVideoCodecs.contains(video?.codec?.lowercased() ?? "")
     }
 
     func canCopyAudio(selection: MediaPlaybackSelection?) -> Bool {
         let audio = selectedAudioStream(selection: selection)
-        return ["aac", "mp3"].contains(audio?.codec?.lowercased() ?? "")
+        return PlaybackCompatibility.streamingAudioCodecs.contains(audio?.codec?.lowercased() ?? "")
     }
 
     private func selectedAudioStream(selection: MediaPlaybackSelection?) -> JellyfinMediaStream? {

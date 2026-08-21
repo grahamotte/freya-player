@@ -17,3 +17,19 @@ The desired outcome is for Freya to direct play or preserve each Apple-native me
 - Freya's product goal is excellent native Apple playback rather than a custom general-purpose codec engine.
 - Capability claims and provider negotiation must remain device-aware and must not promise support merely because a source label names a premium format.
 - This work should build on the visibility and capability infrastructure tracked separately rather than mixing behavior changes with diagnostic presentation.
+- Scope for this card is capability-gated direct play of MP4-family H.264, HEVC, hardware-decoded AV1, AAC, MP3, AC-3, E-AC-3, ALAC, and FLAC, plus HLS stream copy of detected H.264, AAC, MP3, AC-3, and E-AC-3.
+- Advanced HEVC and AV1 profiles plus HDR variants during direct or server-streamed playback are tracked by VREM and excluded from this card.
+- Lossless and spatial audio preservation beyond the safe HLS codecs is tracked by AUDP and excluded from this card.
+- In review: Plex and Jellyfin now use the AVFoundation capability checks introduced by FMTV for direct-play codec decisions instead of fixed codec assumptions.
+- In review: Compatible AC-3 and E-AC-3 tracks are copied through provider HLS streams instead of always being converted to AAC, while the tvOS prerelease audio workaround still forces conversion where needed.
+- Verified with `mise test` and unsigned generic tvOS, iOS, and Mac Catalyst builds.
+
+## Prompts
+
+ok lets do NATP, or at least the low hanging fruit of it. we just did FMTV, so we should have some tools we can use. if you consider any formats not low hanging fruit, then exclude them from NATP and add new card(s) for those
+
+Moved NATP into progress, used FMTV's AVFoundation detection in both providers' playback decisions, enabled device-supported direct formats and safe HLS AC-3/E-AC-3 copying, and split harder video-remux and advanced-audio cases into VREM and AUDP.
+
+NATP looks good - commit it
+
+Moved the approved NATP work to Done and committed the capability-gated playback changes with the VREM and AUDP follow-up cards.

@@ -37,6 +37,25 @@ struct PlaybackCapability: Equatable, Identifiable {
 }
 
 enum PlaybackCompatibility {
+    static var directPlayVideoCodecs: Set<String> {
+        directPlayVideoCodecs(
+            isPlayable: AVURLAsset.isPlayableExtendedMIMEType,
+            hasHardwareAV1Decoder: VTIsHardwareDecodeSupported(kCMVideoCodecType_AV1)
+        )
+    }
+
+    static var directPlayAudioCodecs: Set<String> {
+        directPlayAudioCodecs(isPlayable: AVURLAsset.isPlayableExtendedMIMEType)
+    }
+
+    static var streamingVideoCodecs: Set<String> {
+        directPlayVideoCodecs.intersection(h264Codecs)
+    }
+
+    static var streamingAudioCodecs: Set<String> {
+        directPlayAudioCodecs.intersection(hlsAudioCodecs)
+    }
+
     static var deviceCapabilities: [PlaybackCapability] {
         capabilities(
             isPlayable: AVURLAsset.isPlayableExtendedMIMEType,
@@ -56,6 +75,25 @@ enum PlaybackCompatibility {
         #else
         return false
         #endif
+    }
+
+    static func directPlayVideoCodecs(
+        isPlayable: (String) -> Bool,
+        hasHardwareAV1Decoder: Bool
+    ) -> Set<String> {
+        var codecs: Set<String> = []
+        if isPlayable(h264MIMEType) { codecs.formUnion(h264Codecs) }
+        if isPlayable(hevcMIMEType) { codecs.formUnion(hevcCodecs) }
+        if isPlayable(av1MIMEType) && hasHardwareAV1Decoder { codecs.formUnion(av1Codecs) }
+        return codecs
+    }
+
+    static func directPlayAudioCodecs(isPlayable: (String) -> Bool) -> Set<String> {
+        var codecs: Set<String> = []
+        for (mimeType, aliases) in audioCodecAliases where isPlayable(mimeType) {
+            codecs.formUnion(aliases)
+        }
+        return codecs
     }
 
     static func requiresTranscodedAudio(
@@ -79,7 +117,7 @@ enum PlaybackCompatibility {
         hasHardwareAV1Decoder: Bool,
         isHDREligible: Bool
     ) -> [PlaybackCapability] {
-        let av1Playable = isPlayable("video/mp4; codecs=\"av01.0.08M.08\"")
+        let av1Playable = isPlayable(av1MIMEType)
         let av1Detail: String
         if av1Playable && hasHardwareAV1Decoder {
             av1Detail = "Native playback and hardware decode detected."
@@ -107,13 +145,13 @@ enum PlaybackCompatibility {
             codecCapability(
                 category: .video,
                 name: "H.264",
-                mimeType: "video/mp4; codecs=\"avc1.640028\"",
+                mimeType: h264MIMEType,
                 isPlayable: isPlayable
             ),
             codecCapability(
                 category: .video,
                 name: "HEVC",
-                mimeType: "video/mp4; codecs=\"hvc1.1.6.L120.B0\"",
+                mimeType: hevcMIMEType,
                 isPlayable: isPlayable
             ),
             PlaybackCapability(
@@ -135,39 +173,39 @@ enum PlaybackCompatibility {
             codecCapability(
                 category: .audio,
                 name: "AAC",
-                mimeType: "audio/mp4; codecs=\"mp4a.40.2\"",
+                mimeType: aacMIMEType,
                 isPlayable: isPlayable
             ),
             codecCapability(
                 category: .audio,
                 name: "MP3",
-                mimeType: "audio/mpeg; codecs=\"mp3\"",
+                mimeType: mp3MIMEType,
                 isPlayable: isPlayable
             ),
             codecCapability(
                 category: .audio,
                 name: "AC-3",
-                mimeType: "audio/mp4; codecs=\"ac-3\"",
+                mimeType: ac3MIMEType,
                 isPlayable: isPlayable,
                 detail: "Decode support; channel output depends on the current audio route."
             ),
             codecCapability(
                 category: .audio,
                 name: "E-AC-3",
-                mimeType: "audio/mp4; codecs=\"ec-3\"",
+                mimeType: eac3MIMEType,
                 isPlayable: isPlayable,
                 detail: "Decode support; channel output depends on the current audio route."
             ),
             codecCapability(
                 category: .audio,
                 name: "ALAC",
-                mimeType: "audio/mp4; codecs=\"alac\"",
+                mimeType: alacMIMEType,
                 isPlayable: isPlayable
             ),
             codecCapability(
                 category: .audio,
                 name: "FLAC",
-                mimeType: "audio/mp4; codecs=\"fLaC\"",
+                mimeType: flacMIMEType,
                 isPlayable: isPlayable
             ),
             PlaybackCapability(
@@ -234,4 +272,28 @@ enum PlaybackCompatibility {
                 : "Not reported by AVFoundation."
         )
     }
+
+    private static let h264MIMEType = "video/mp4; codecs=\"avc1.640028\""
+    private static let hevcMIMEType = "video/mp4; codecs=\"hvc1.1.6.L120.B0\""
+    private static let av1MIMEType = "video/mp4; codecs=\"av01.0.08M.08\""
+    private static let aacMIMEType = "audio/mp4; codecs=\"mp4a.40.2\""
+    private static let mp3MIMEType = "audio/mpeg; codecs=\"mp3\""
+    private static let ac3MIMEType = "audio/mp4; codecs=\"ac-3\""
+    private static let eac3MIMEType = "audio/mp4; codecs=\"ec-3\""
+    private static let alacMIMEType = "audio/mp4; codecs=\"alac\""
+    private static let flacMIMEType = "audio/mp4; codecs=\"fLaC\""
+    private static let h264Codecs: Set<String> = ["h264", "avc", "avc1"]
+    private static let hevcCodecs: Set<String> = ["hevc", "h265", "hvc1"]
+    private static let av1Codecs: Set<String> = ["av1", "av01"]
+    private static let hlsAudioCodecs: Set<String> = [
+        "aac", "mp4a", "mp3", "ac3", "ac-3", "eac3", "eac-3", "ec-3",
+    ]
+    private static let audioCodecAliases: [(String, Set<String>)] = [
+        (aacMIMEType, ["aac", "mp4a"]),
+        (mp3MIMEType, ["mp3"]),
+        (ac3MIMEType, ["ac3", "ac-3"]),
+        (eac3MIMEType, ["eac3", "eac-3", "ec-3"]),
+        (alacMIMEType, ["alac"]),
+        (flacMIMEType, ["flac"]),
+    ]
 }

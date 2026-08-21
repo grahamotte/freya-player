@@ -2,6 +2,38 @@ import XCTest
 @testable import FreyaPlayerCore
 
 final class PlaybackCompatibilityTests: XCTestCase {
+    func testDirectPlayCodecsIncludeOnlyDetectedNativeFormats() {
+        let playableTypes: Set<String> = [
+            "video/mp4; codecs=\"avc1.640028\"",
+            "video/mp4; codecs=\"hvc1.1.6.L120.B0\"",
+            "video/mp4; codecs=\"av01.0.08M.08\"",
+            "audio/mp4; codecs=\"mp4a.40.2\"",
+            "audio/mp4; codecs=\"ac-3\"",
+            "audio/mp4; codecs=\"ec-3\"",
+            "audio/mp4; codecs=\"fLaC\"",
+        ]
+        let isPlayable: (String) -> Bool = { playableTypes.contains($0) }
+
+        XCTAssertEqual(
+            PlaybackCompatibility.directPlayVideoCodecs(
+                isPlayable: isPlayable,
+                hasHardwareAV1Decoder: true
+            ),
+            ["h264", "avc", "avc1", "hevc", "h265", "hvc1", "av1", "av01"]
+        )
+        XCTAssertEqual(
+            PlaybackCompatibility.directPlayVideoCodecs(
+                isPlayable: isPlayable,
+                hasHardwareAV1Decoder: false
+            ),
+            ["h264", "avc", "avc1", "hevc", "h265", "hvc1"]
+        )
+        XCTAssertEqual(
+            PlaybackCompatibility.directPlayAudioCodecs(isPlayable: isPlayable),
+            ["aac", "mp4a", "ac3", "ac-3", "eac3", "eac-3", "ec-3", "flac"]
+        )
+    }
+
     func testRequiresTranscodedAudioForTvOS27PrereleaseBuilds() {
         XCTAssertTrue(
             PlaybackCompatibility.requiresTranscodedAudio(

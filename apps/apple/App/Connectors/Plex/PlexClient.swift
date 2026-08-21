@@ -900,16 +900,15 @@ private struct PlexPlaybackMetadata: Decodable {
     }
 
     func canDirectStreamAudio(_ audioID: String?) -> Bool {
-        guard !PlatformMetadata.prefersAACPlaybackAudio else {
-            let media = media?.first(where: { $0.parts?.isEmpty == false })
-            let streams = media?.parts?.first?.streams
-            let stream = streams?.first { stream in
-                guard stream.streamType == 2 else { return false }
-                return audioID.map { $0 == stream.id } ?? stream.selected == true
-            }
-            return ["aac", "mp3"].contains((stream?.codec ?? media?.audioCodec)?.lowercased())
+        let media = media?.first(where: { $0.parts?.isEmpty == false })
+        let streams = media?.parts?.first?.streams
+        let stream = streams?.first { stream in
+            guard stream.streamType == 2 else { return false }
+            return audioID.map { $0 == stream.id } ?? stream.selected == true
         }
-        return true
+        return PlaybackCompatibility.streamingAudioCodecs.contains(
+            (stream?.codec ?? media?.audioCodec)?.lowercased() ?? ""
+        )
     }
 
     func canStreamSubtitle(_ subtitleID: String?) -> Bool {
@@ -1039,13 +1038,15 @@ private struct PlexPlaybackMetadata: Decodable {
         }
 
         var canDirectStreamVideo: Bool {
-            ["h264", "avc", "avc1"].contains(videoCodec?.lowercased() ?? "")
+            PlaybackCompatibility.streamingVideoCodecs.contains(videoCodec?.lowercased() ?? "")
         }
 
         private static let supportedContainers = ["mp4", "m4v", "mov"]
-        private static let supportedVideoCodecs = ["h264", "avc", "avc1", "hevc", "h265", "hvc1"]
-        private static var supportedAudioCodecs: [String] {
-            PlatformMetadata.prefersAACPlaybackAudio ? ["aac", "mp3"] : ["aac", "ac3", "eac3", "mp3"]
+        private static var supportedVideoCodecs: Set<String> {
+            PlaybackCompatibility.directPlayVideoCodecs
+        }
+        private static var supportedAudioCodecs: Set<String> {
+            PlaybackCompatibility.directPlayAudioCodecs
         }
 
         private enum CodingKeys: String, CodingKey {
@@ -1072,8 +1073,9 @@ private struct PlexPlaybackMetadata: Decodable {
                 .filter { $0.streamType == 2 }
                 .compactMap { stream in
                     guard let id = stream.id else { return nil }
-                    let canDirectStream = !PlatformMetadata.prefersAACPlaybackAudio
-                        || ["aac", "mp3"].contains(stream.codec?.lowercased() ?? "")
+                    let canDirectStream = PlaybackCompatibility.streamingAudioCodecs.contains(
+                        stream.codec?.lowercased() ?? ""
+                    )
                     return MediaPlaybackOption(
                         id: id,
                         title: stream.displayName,

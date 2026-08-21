@@ -52,10 +52,6 @@ enum PlatformMetadata {
         isTV || isMac
     }
 
-    static var prefersAACPlaybackAudio: Bool {
-        true
-    }
-
     static var requiresTranscodedPlaybackAudio: Bool {
         PlaybackCompatibility.requiresTranscodedAudio
     }

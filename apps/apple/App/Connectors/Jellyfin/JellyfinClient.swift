@@ -197,32 +197,6 @@ final class JellyfinClient {
             )
         }
 
-        if !PlatformMetadata.prefersAACPlaybackAudio,
-           let transcodingURL = mediaSource.transcodingURL,
-           var components = URLComponents(string: normalize(serverURL: serverURL) + transcodingURL) {
-            var queryItems = components.queryItems ?? []
-            queryItems.removeAll { $0.name.caseInsensitiveCompare("startTimeTicks") == .orderedSame }
-            queryItems.append(URLQueryItem(name: "api_key", value: accessToken))
-            components.queryItems = queryItems
-            guard let url = components.url else {
-                throw MediaConnectorError.unavailable
-            }
-            let formats = await resolvedHLSPlaybackFormats(
-                at: url,
-                accessToken: accessToken,
-                fallback: playbackPlan.playbackFormats
-            )
-            return (
-                MediaPlaybackResource(
-                    url: url,
-                    localStartOffsetMilliseconds: offsetMilliseconds,
-                    descriptionSuffix: formats.playerDescription
-                ),
-                .transcode,
-                mediaSource.id
-            )
-        }
-
         guard var components = URLComponents(string: "\(normalize(serverURL: serverURL))/Videos/\(itemID)/master.m3u8") else {
             throw MediaConnectorError.unavailable
         }
@@ -766,7 +740,8 @@ final class JellyfinClient {
     private let supportedCollectionTypes: Set<String> = ["movies", "tvshows", "homevideos", "folders"]
 
     private static var playbackAudioCodecs: String {
-        PlatformMetadata.prefersAACPlaybackAudio ? "aac" : "aac,ac3,eac3"
+        let codecs = ["aac", "ac3", "eac3"].filter(PlaybackCompatibility.streamingAudioCodecs.contains)
+        return codecs.isEmpty ? "aac" : codecs.joined(separator: ",")
     }
 }
 
