@@ -29,7 +29,9 @@ final class PlaybackSessionController {
     private var recoveryOffsetMilliseconds = 0
     private var pendingNavigationOffsetMilliseconds: Int?
     private var didObservePause = false
+    private var didObservePlaying = false
     private var resumeProbe: PlaybackResumeProbe?
+    private var resumeProbeFollowsNavigation = false
     private let logger = Logger(
         subsystem: Bundle.main.bundleIdentifier ?? "FreyaPlayer",
         category: "Playback"
@@ -75,7 +77,9 @@ final class PlaybackSessionController {
         recoveryOffsetMilliseconds = self.startOffsetMilliseconds ?? 0
         pendingNavigationOffsetMilliseconds = nil
         didObservePause = false
+        didObservePlaying = false
         resumeProbe = nil
+        resumeProbeFollowsNavigation = false
         lastState = nil
 
         player.replaceCurrentItem(with: item)
@@ -141,7 +145,20 @@ final class PlaybackSessionController {
     func userNavigated(to time: CMTime) {
         guard let offset = time.milliseconds else { return }
         pendingNavigationOffsetMilliseconds = offset
-        guard onNavigationNeeded != nil else { return }
+        guard onNavigationNeeded != nil else {
+            let bufferedThroughMilliseconds = bufferedThroughMilliseconds(at: offset)
+            resumeProbeTimer?.invalidate()
+            resumeProbeTimer = nil
+            resumeProbe = PlaybackResumeProbe(
+                initialBufferedThroughMilliseconds: bufferedThroughMilliseconds,
+                startsAtBufferEdge: bufferedThroughMilliseconds == nil
+            )
+            resumeProbeFollowsNavigation = true
+            if bufferedThroughMilliseconds == nil {
+                scheduleResumeProbeTimer()
+            }
+            return
+        }
 
         navigationTimer?.invalidate()
         let timer = Timer(timeInterval: 0.5, repeats: false) { [weak self] _ in
@@ -297,16 +314,27 @@ final class PlaybackSessionController {
     private func sendState() {
         guard canSendTimelineEvents else { return }
         let state = state()
-        if state == .playing, onNavigationNeeded == nil {
-            pendingNavigationOffsetMilliseconds = nil
-        }
         if state != .paused { rememberCurrentTime() }
-        if didResumeAfterPause(state) {
+        if didResumeAfterPause(state), !resumeProbeFollowsNavigation {
+            resumeProbe = PlaybackResumeProbe(
+                initialBufferedThroughMilliseconds: bufferedThroughMilliseconds
+            )
+        }
+        if state == .buffering,
+           shouldPlayWhenReady,
+           didObservePlaying,
+           resumeProbe == nil {
             resumeProbe = PlaybackResumeProbe(
                 initialBufferedThroughMilliseconds: bufferedThroughMilliseconds
             )
         }
         if shouldRestartAfterResume(state) { return }
+        if state == .playing {
+            didObservePlaying = true
+        }
+        if state == .playing, onNavigationNeeded == nil {
+            pendingNavigationOffsetMilliseconds = nil
+        }
         updateTimelineTimer(for: state)
         updateStallTimer(for: state)
         guard state != lastState else { return }
@@ -320,9 +348,9 @@ final class PlaybackSessionController {
     private func didResumeAfterPause(_ state: MediaPlaybackTimelineState) -> Bool {
         guard state != .paused else {
             didObservePause = true
-            resumeProbe = nil
-            resumeProbeTimer?.invalidate()
-            resumeProbeTimer = nil
+            if !resumeProbeFollowsNavigation {
+                finishResumeProbe()
+            }
             return false
         }
 
@@ -332,14 +360,26 @@ final class PlaybackSessionController {
 
     private func shouldRestartAfterResume(_ state: MediaPlaybackTimelineState) -> Bool {
         guard var resumeProbe else { return false }
+        let probeTimeMilliseconds = resumeProbeFollowsNavigation
+            ? pendingNavigationOffsetMilliseconds ?? currentTimeMilliseconds
+            : currentTimeMilliseconds
+        let bufferedThroughMilliseconds = resumeProbeFollowsNavigation
+            ? bufferedThroughMilliseconds(at: probeTimeMilliseconds)
+            : bufferedThroughMilliseconds
         let decision = resumeProbe.decision(
             state: state,
-            currentTimeMilliseconds: currentTimeMilliseconds,
+            currentTimeMilliseconds: probeTimeMilliseconds,
             bufferedThroughMilliseconds: bufferedThroughMilliseconds
         )
         self.resumeProbe = resumeProbe
         switch decision {
         case .monitoring:
+            if resumeProbeFollowsNavigation,
+               state == .playing,
+               bufferedThroughMilliseconds != nil {
+                resumeProbeFollowsNavigation = false
+            }
+            guard !resumeProbeFollowsNavigation else { return false }
             resumeProbeTimer?.invalidate()
             resumeProbeTimer = nil
             return false
@@ -373,12 +413,16 @@ final class PlaybackSessionController {
         resumeProbeTimer?.invalidate()
         resumeProbeTimer = nil
         resumeProbe = nil
+        resumeProbeFollowsNavigation = false
     }
 
     private var bufferedThroughMilliseconds: Int? {
+        bufferedThroughMilliseconds(at: currentTimeMilliseconds)
+    }
+
+    private func bufferedThroughMilliseconds(at timeMilliseconds: Int) -> Int? {
         guard let item = player.currentItem else { return nil }
-        let currentTime = player.currentTime().seconds
-        guard currentTime.isFinite else { return nil }
+        let time = Double(timeMilliseconds) / 1_000
 
         return item.loadedTimeRanges
             .map(\.timeRangeValue)
@@ -387,8 +431,8 @@ final class PlaybackSessionController {
                 let end = CMTimeRangeGetEnd(range).seconds
                 return start.isFinite
                     && end.isFinite
-                    && start <= currentTime + 0.5
-                    && end >= currentTime - 0.5
+                    && start <= time + 0.5
+                    && end >= time - 0.5
             }
             .compactMap { CMTimeRangeGetEnd($0).milliseconds }
             .max()

@@ -67,6 +67,57 @@ final class PlaybackResumeProbeTests: XCTestCase {
         )
     }
 
+    func testRestartsAfterTheGracePeriodWhenNavigationStartsBeyondTheBuffer() {
+        let navigationTime = Date(timeIntervalSince1970: 1_000)
+        var probe = PlaybackResumeProbe(
+            initialBufferedThroughMilliseconds: nil,
+            startsAtBufferEdge: true,
+            at: navigationTime
+        )
+
+        XCTAssertEqual(
+            probe.decision(
+                state: .buffering,
+                currentTimeMilliseconds: 150_000,
+                bufferedThroughMilliseconds: nil,
+                at: navigationTime.addingTimeInterval(
+                    PlaybackResumeProbe.bufferEdgeGraceInterval
+                )
+            ),
+            .restart
+        )
+    }
+
+    func testNavigationGracePeriodSurvivesASeekPause() {
+        let navigationTime = Date(timeIntervalSince1970: 1_000)
+        var probe = PlaybackResumeProbe(
+            initialBufferedThroughMilliseconds: nil,
+            startsAtBufferEdge: true,
+            at: navigationTime
+        )
+
+        XCTAssertEqual(
+            probe.decision(
+                state: .paused,
+                currentTimeMilliseconds: 100_000,
+                bufferedThroughMilliseconds: nil,
+                at: navigationTime.addingTimeInterval(1)
+            ),
+            .monitoring
+        )
+        XCTAssertEqual(
+            probe.decision(
+                state: .buffering,
+                currentTimeMilliseconds: 150_000,
+                bufferedThroughMilliseconds: nil,
+                at: navigationTime.addingTimeInterval(
+                    PlaybackResumeProbe.bufferEdgeGraceInterval
+                )
+            ),
+            .restart
+        )
+    }
+
     func testWaitsWhenBufferingStartsWithMediaStillAvailable() {
         var probe = PlaybackResumeProbe(initialBufferedThroughMilliseconds: 120_000)
 

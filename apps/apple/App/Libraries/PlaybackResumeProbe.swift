@@ -14,10 +14,17 @@ struct PlaybackResumeProbe {
     private static let exhaustedBufferMilliseconds = 1_000
 
     let initialBufferedThroughMilliseconds: Int?
+    private let startsAtBufferEdge: Bool
     private var bufferEdgeReachedAt: Date?
 
-    init(initialBufferedThroughMilliseconds: Int?) {
+    init(
+        initialBufferedThroughMilliseconds: Int?,
+        startsAtBufferEdge: Bool = false,
+        at date: Date = Date()
+    ) {
         self.initialBufferedThroughMilliseconds = initialBufferedThroughMilliseconds
+        self.startsAtBufferEdge = startsAtBufferEdge
+        bufferEdgeReachedAt = startsAtBufferEdge ? date : nil
     }
 
     mutating func decision(
@@ -39,7 +46,9 @@ struct PlaybackResumeProbe {
         }
 
         guard state == .buffering else {
-            bufferEdgeReachedAt = nil
+            if !startsAtBufferEdge {
+                bufferEdgeReachedAt = nil
+            }
             return .monitoring
         }
         let bufferedTimeRemaining = bufferedThroughMilliseconds.map {
