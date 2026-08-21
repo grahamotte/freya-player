@@ -53,14 +53,12 @@ final class MediaTranscodingTests: XCTestCase {
         XCTAssertEqual(
             plan.conversions.map(\.description),
             [
-                "MP4 → HLS",
+                "MP4 → MPEG-TS",
                 "HEVC • 4K • HDR10 → H.264 • 1080p",
                 "E-AC-3 • 5.1 → AAC",
                 "SRT • External → WebVTT",
             ]
         )
-        XCTAssertFalse(plan.playerDescription.contains("Expected playback"))
-        XCTAssertTrue(plan.playerDescription.contains("Video: HEVC • 4K • HDR10 → H.264 • 1080p"))
     }
 
     func testContainerOnlyChangeIsARemux() {
@@ -85,9 +83,57 @@ final class MediaTranscodingTests: XCTestCase {
         ))
 
         XCTAssertEqual(plan.path, .remux)
-        XCTAssertEqual(plan.conversions.first?.description, "Matroska → HLS")
+        XCTAssertEqual(plan.conversions.first?.description, "Matroska → MPEG-TS")
         XCTAssertEqual(plan.conversions.count, 4)
         XCTAssertEqual(plan.conversions.last?.description, "None")
+    }
+
+    func testPlayingFormatsAlwaysDescribeFourResolvedValuesWithoutSources() {
+        let formats = MediaPlaybackFormats(
+            container: MediaTranscoding.container("mpegts"),
+            video: MediaTranscoding.video(codec: "h264", height: 1080),
+            audio: MediaTranscoding.audio(codec: "aac", channels: 6),
+            subtitles: nil
+        )
+
+        XCTAssertEqual(
+            formats.playerDescription,
+            """
+            Container: MPEG-TS
+            Video: H.264 • 1080p
+            Audio: AAC • 5.1
+            Subtitles: None
+            """
+        )
+    }
+
+    func testHLSManifestDescribesActualOutputFormats() {
+        let manifest = """
+        #EXTM3U
+        #EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID="subs",NAME="English",URI="subtitles.m3u8"
+        #EXT-X-STREAM-INF:BANDWIDTH=8000000,RESOLUTION=1920x1080,CODECS="avc1.640028,mp4a.40.2",SUBTITLES="subs"
+        main.m3u8
+        """
+
+        XCTAssertEqual(
+            MediaTranscoding.hlsPlaybackFormats(
+                manifest: manifest,
+                subtitles: MediaTranscoding.subtitles(codec: "webvtt")
+            ),
+            MediaPlaybackFormats(
+                container: MediaTranscoding.container("mpegts"),
+                video: MediaTranscoding.video(codec: "h264", height: 1080),
+                audio: MediaTranscoding.audio(codec: "aac"),
+                subtitles: MediaTranscoding.subtitles(codec: "webvtt")
+            )
+        )
+    }
+
+    func testOnlyTextSubtitlesCanBeStreamedWithoutBurnIn() {
+        XCTAssertTrue(MediaTranscoding.canStreamSubtitle(codec: "srt"))
+        XCTAssertTrue(MediaTranscoding.canStreamSubtitle(codec: "ass"))
+        XCTAssertFalse(MediaTranscoding.canStreamSubtitle(codec: "pgs"))
+        XCTAssertFalse(MediaTranscoding.canStreamSubtitle(codec: "dvd_subtitle"))
     }
 
     func testStreamingPathCanConvertVideoThatDirectPlayPreserves() {

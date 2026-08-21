@@ -171,7 +171,7 @@ final class JellyfinConnector: JellyfinConnecting {
             selection: selection
         )
 
-        let (resource, method, mediaSourceID) = try client.playbackURL(
+        let (resource, method, mediaSourceID) = try await client.playbackURL(
             for: id.itemID,
             serverURL: connection.serverURL,
             accessToken: connection.accessToken,

@@ -62,17 +62,39 @@ struct MediaPlaybackPlan: Equatable {
     let path: MediaPlaybackPath
     let conversions: [MediaPlaybackConversion]
 
+    var playbackFormats: MediaPlaybackFormats {
+        MediaPlaybackFormats(
+            container: format(for: .container),
+            video: format(for: .video),
+            audio: format(for: .audio),
+            subtitles: format(for: .subtitles)
+        )
+    }
+
+    private func format(for element: MediaPlaybackElement) -> MediaFormat? {
+        guard let conversion = conversions.first(where: { $0.element == element }) else { return nil }
+        return conversion.output ?? conversion.source
+    }
+}
+
+struct MediaPlaybackFormats: Equatable {
+    let container: MediaFormat?
+    let video: MediaFormat?
+    let audio: MediaFormat?
+    let subtitles: MediaFormat?
+
     var playerDescription: String {
-        let sources = conversions.compactMap { conversion in
-            conversion.source.map { "\(conversion.element.rawValue) \($0.description)" }
-        }
-        let playback = conversions.map { "\($0.element.rawValue): \($0.description)" }
-        return [
-            sources.isEmpty ? nil : "Source: \(sources.joined(separator: " • "))",
-            playback.isEmpty ? nil : playback.joined(separator: "\n"),
-        ]
-        .compactMap { $0 }
-        .joined(separator: "\n")
+        [
+            line(.container, format: container),
+            line(.video, format: video),
+            line(.audio, format: audio),
+            line(.subtitles, format: subtitles),
+        ].joined(separator: "\n")
+    }
+
+    private func line(_ element: MediaPlaybackElement, format: MediaFormat?) -> String {
+        let fallback = element == .subtitles ? "None" : "Unknown"
+        return "\(element.rawValue): \(format?.description ?? fallback)"
     }
 }
 
@@ -136,6 +158,8 @@ extension MediaPlaybackOptions {
 }
 
 enum MediaTranscoding {
+    static let streamingContainer = MediaFormat(name: "MPEG-TS")
+
     static func container(_ name: String?) -> MediaFormat? {
         name.map { MediaFormat(name: $0) }
     }
@@ -169,6 +193,47 @@ enum MediaTranscoding {
         return MediaFormat(name: codec, details: isExternal ? ["External"] : [])
     }
 
+    static func canStreamSubtitle(codec: String?) -> Bool {
+        switch codec?.lowercased() {
+        case "ass", "mov_text", "ssa", "srt", "subrip", "tx3g", "vtt", "webvtt": true
+        default: false
+        }
+    }
+
+    static func hlsPlaybackFormats(
+        manifest: String,
+        container: MediaFormat = streamingContainer,
+        subtitles: MediaFormat? = nil
+    ) -> MediaPlaybackFormats? {
+        guard let streamLine = manifest.split(whereSeparator: \.isNewline)
+            .map(String.init)
+            .first(where: { $0.hasPrefix("#EXT-X-STREAM-INF:") }) else { return nil }
+        let attributes = hlsAttributes(in: streamLine)
+        let codecs = attributes["CODECS"]?
+            .split(separator: ",")
+            .map { canonicalHLSCodec(String($0)) } ?? []
+        let resolutionHeight = attributes["RESOLUTION"]?
+            .split(separator: "x")
+            .last
+            .flatMap { Int($0) }
+        let videoCodecs = Set(["av1", "h264", "hevc", "mpeg2video", "mpeg4", "vp8", "vp9"])
+        let audioCodecs = Set([
+            "aac", "ac-3", "ac3", "alac", "dca", "dts", "eac-3", "eac3", "ec-3", "flac", "mp3", "opus",
+            "truehd",
+        ])
+        let videoCodec = codecs.first { videoCodecs.contains($0) }
+        let audioCodec = codecs.first { audioCodecs.contains($0) }
+        let hasSubtitles = manifest.split(whereSeparator: \.isNewline)
+            .contains { $0.hasPrefix("#EXT-X-MEDIA:") && $0.contains("TYPE=SUBTITLES") }
+
+        return MediaPlaybackFormats(
+            container: container,
+            video: video(codec: videoCodec, height: resolutionHeight),
+            audio: audio(codec: audioCodec),
+            subtitles: hasSubtitles ? subtitles : nil
+        )
+    }
+
     static func displayName(for value: String?) -> String {
         guard let value = value?.trimmingCharacters(in: .whitespacesAndNewlines), value.isPresent else {
             return "Unknown"
@@ -198,9 +263,50 @@ enum MediaTranscoding {
         case "webvtt", "vtt": "WebVTT"
         case "pgs", "pgssub": "PGS"
         case "vobsub", "dvd_subtitle": "VobSub"
-        case "burned into video": "Burned into video"
         default: value.uppercased()
         }
+    }
+
+    private static func hlsAttributes(in line: String) -> [String: String] {
+        guard let separator = line.firstIndex(of: ":") else { return [:] }
+        var attributes: [String: String] = [:]
+        var key = ""
+        var value = ""
+        var isReadingValue = false
+        var isQuoted = false
+
+        func storeAttribute() {
+            guard key.isPresent else { return }
+            attributes[key] = value.trimmingCharacters(in: CharacterSet(charactersIn: "\""))
+        }
+
+        for character in line[line.index(after: separator)...] {
+            if character == "\"" {
+                isQuoted.toggle()
+            } else if character == "=" && !isQuoted && !isReadingValue {
+                isReadingValue = true
+            } else if character == "," && !isQuoted {
+                storeAttribute()
+                key = ""
+                value = ""
+                isReadingValue = false
+            } else if isReadingValue {
+                value.append(character)
+            } else {
+                key.append(character)
+            }
+        }
+        storeAttribute()
+        return attributes
+    }
+
+    private static func canonicalHLSCodec(_ codec: String) -> String {
+        let codec = codec.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        if codec.hasPrefix("avc1") || codec.hasPrefix("avc3") { return "h264" }
+        if codec.hasPrefix("hev1") || codec.hasPrefix("hvc1") { return "hevc" }
+        if codec.hasPrefix("av01") { return "av1" }
+        if codec.hasPrefix("mp4a") { return "aac" }
+        return codec
     }
 
     static func channelLayoutTitle(_ layout: String?, channels: Int?) -> String? {

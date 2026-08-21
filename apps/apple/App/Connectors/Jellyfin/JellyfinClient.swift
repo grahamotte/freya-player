@@ -157,14 +157,14 @@ final class JellyfinClient {
         playbackInfo: JellyfinPlaybackInfoResponse,
         selection: MediaPlaybackSelection?,
         offsetMilliseconds: Int?
-    ) throws -> (MediaPlaybackResource, JellyfinPlaybackMethod, String?) {
+    ) async throws -> (MediaPlaybackResource, JellyfinPlaybackMethod, String?) {
         guard let mediaSource = playbackInfo.mediaSources.first else {
             throw MediaConnectorError.unavailable
         }
 
         let requiresTranscodedAudio = PlatformMetadata.requiresTranscodedPlaybackAudio
         let usesDefaultAudio = selection == nil || selection?.audioID == selection?.defaultAudioID
-        let playbackDescription = mediaSource
+        let playbackPlan = mediaSource
             .playbackOptions(requiresTranscodedAudio: requiresTranscodedAudio)
             .playbackPlan(for: selection ?? MediaPlaybackSelection(
                 quality: .automatic,
@@ -173,7 +173,6 @@ final class JellyfinClient {
                 defaultAudioID: mediaSource.defaultAudioStreamIndex.map(String.init),
                 defaultSubtitleID: mediaSource.defaultSubtitleStreamIndex.map(String.init)
             ))
-            .playerDescription
 
         if !requiresTranscodedAudio,
            selection?.quality ?? .automatic == .automatic,
@@ -191,7 +190,7 @@ final class JellyfinClient {
                 MediaPlaybackResource(
                     url: url,
                     localStartOffsetMilliseconds: offsetMilliseconds,
-                    descriptionSuffix: playbackDescription
+                    descriptionSuffix: mediaSource.playbackFormats(selection: selection).playerDescription
                 ),
                 .directPlay,
                 mediaSource.id
@@ -208,11 +207,16 @@ final class JellyfinClient {
             guard let url = components.url else {
                 throw MediaConnectorError.unavailable
             }
+            let formats = await resolvedHLSPlaybackFormats(
+                at: url,
+                accessToken: accessToken,
+                fallback: playbackPlan.playbackFormats
+            )
             return (
                 MediaPlaybackResource(
                     url: url,
                     localStartOffsetMilliseconds: offsetMilliseconds,
-                    descriptionSuffix: playbackDescription
+                    descriptionSuffix: formats.playerDescription
                 ),
                 .transcode,
                 mediaSource.id
@@ -225,6 +229,8 @@ final class JellyfinClient {
 
         let selectedAudioIndex = selection.map { $0.audioID ?? "-1" }
         let selectedSubtitleIndex = selection.map { $0.subtitleID ?? "-1" }
+        let canCopyVideo = mediaSource.canCopyVideo
+        let canCopyAudio = !requiresTranscodedAudio && mediaSource.canCopyAudio(selection: selection)
 
         components.queryItems = [
             playbackInfo.playSessionId.map { URLQueryItem(name: "playSessionId", value: $0) },
@@ -234,11 +240,15 @@ final class JellyfinClient {
             selection?.quality.videoResolution.map { URLQueryItem(name: "maxHeight", value: $0) },
             selectedAudioIndex.map { URLQueryItem(name: "audioStreamIndex", value: $0) },
             selectedSubtitleIndex.map { URLQueryItem(name: "subtitleStreamIndex", value: $0) },
-            selection?.subtitleID.map { _ in URLQueryItem(name: "subtitleMethod", value: "Encode") },
+            selection?.subtitleID.map { _ in URLQueryItem(name: "subtitleMethod", value: "Hls") },
+            selection?.subtitleID.map { _ in URLQueryItem(name: "subtitleCodec", value: "vtt") },
+            selection?.subtitleID.map { _ in URLQueryItem(name: "enableSubtitlesInManifest", value: "true") },
+            URLQueryItem(name: "segmentContainer", value: "ts"),
             URLQueryItem(name: "videoCodec", value: "h264"),
             URLQueryItem(name: "profile", value: "high"),
             URLQueryItem(name: "audioCodec", value: Self.playbackAudioCodecs),
-            requiresTranscodedAudio ? URLQueryItem(name: "allowAudioStreamCopy", value: "false") : nil,
+            URLQueryItem(name: "allowVideoStreamCopy", value: canCopyVideo ? "true" : "false"),
+            URLQueryItem(name: "allowAudioStreamCopy", value: canCopyAudio ? "true" : "false"),
             URLQueryItem(name: "deviceId", value: deviceID),
             URLQueryItem(name: "api_key", value: accessToken)
         ]
@@ -251,14 +261,43 @@ final class JellyfinClient {
         let method: JellyfinPlaybackMethod = requiresTranscodedAudio || !mediaSource.supportsDirectStream
             ? .transcode
             : .directStream
+        let formats = await resolvedHLSPlaybackFormats(
+            at: url,
+            accessToken: accessToken,
+            fallback: playbackPlan.playbackFormats
+        )
         return (
             MediaPlaybackResource(
                 url: url,
                 localStartOffsetMilliseconds: offsetMilliseconds,
-                descriptionSuffix: playbackDescription
+                descriptionSuffix: formats.playerDescription
             ),
             method,
             mediaSource.id
+        )
+    }
+
+    private func resolvedHLSPlaybackFormats(
+        at url: URL,
+        accessToken: String,
+        fallback: MediaPlaybackFormats
+    ) async -> MediaPlaybackFormats {
+        var request = URLRequest(url: url)
+        applyAuthorizationHeaders(to: &request, accessToken: accessToken)
+        guard let (data, response) = try? await session.gatedData(for: request, priority: .playback),
+              let httpResponse = response as? HTTPURLResponse,
+              200..<300 ~= httpResponse.statusCode,
+              let manifest = String(data: data, encoding: .utf8),
+              let formats = MediaTranscoding.hlsPlaybackFormats(
+                  manifest: manifest,
+                  container: fallback.container ?? MediaTranscoding.streamingContainer,
+                  subtitles: fallback.subtitles
+              ) else { return fallback }
+        return MediaPlaybackFormats(
+            container: formats.container ?? fallback.container,
+            video: formats.video ?? fallback.video,
+            audio: formats.audio ?? fallback.audio,
+            subtitles: formats.subtitles
         )
     }
 

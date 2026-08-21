@@ -73,6 +73,8 @@ Freya Player is a native Apple client for personal Plex and Jellyfin servers. Th
 
 It targets tvOS, iOS and iPadOS, and Mac Catalyst. Prefer stock platform behavior, SwiftUI, AVKit, Foundation networking, and the least code that solves the problem well. Use UIKit where tvOS focus or collection-view behavior requires it.
 
+Freya Player never burns in subtitles.
+
 ### Apple App Architecture
 
 - The Apple app source is in `apps/apple/App`; the Xcode project is `apps/apple/App.xcodeproj`.

@@ -290,6 +290,22 @@ extension JellyfinMediaSource {
                 )
             }
         let selectedAudioID = defaultAudioStreamIndex.map(String.init) ?? audioOptions.first?.id
+        let subtitleOptions = streams
+            .filter { $0.type == "Subtitle" && MediaTranscoding.canStreamSubtitle(codec: $0.codec) }
+            .map { stream in
+                MediaPlaybackOption(
+                    id: String(stream.index),
+                    title: stream.displayTitle ?? stream.language ?? "Subtitle \(stream.index)",
+                    transcodingTitle: "WebVTT",
+                    sourceFormat: MediaTranscoding.subtitles(
+                        codec: stream.codec,
+                        isExternal: stream.isExternal == true
+                    )
+                )
+            }
+        let selectedSubtitleID = defaultSubtitleStreamIndex.map(String.init).flatMap { subtitleID in
+            subtitleOptions.contains(where: { $0.id == subtitleID }) ? subtitleID : nil
+        }
         let selectedAudioStream = streams.first { stream in
             stream.type == "Audio" && String(stream.index) == selectedAudioID
         }
@@ -301,21 +317,9 @@ extension JellyfinMediaSource {
             videoHeight: videoHeight,
             qualityOptions: MediaPlaybackQuality.transcodingOptions(forVideoHeight: videoHeight),
             audioOptions: audioOptions,
-            subtitleOptions: streams
-                .filter { $0.type == "Subtitle" }
-                .map { stream in
-                    MediaPlaybackOption(
-                        id: String(stream.index),
-                        title: stream.displayTitle ?? stream.language ?? "Subtitle \(stream.index)",
-                        transcodingTitle: "Burned into video",
-                        sourceFormat: MediaTranscoding.subtitles(
-                            codec: stream.codec,
-                            isExternal: stream.isExternal == true
-                        )
-                    )
-                },
+            subtitleOptions: subtitleOptions,
             selectedAudioID: selectedAudioID,
-            selectedSubtitleID: defaultSubtitleStreamIndex.map(String.init),
+            selectedSubtitleID: selectedSubtitleID,
             defaultVideoTranscoding: transcodesBoth ? "H.264" : nil,
             defaultAudioTranscoding: defaultAudioTranscoding,
             streamingVideoTranscoding: canDirectStreamVideo ? nil : "H.264",
@@ -332,6 +336,50 @@ extension JellyfinMediaSource {
             ),
             defaultContainerTranscoding: !supportsDirectPlay
         )
+    }
+
+    func playbackFormats(selection: MediaPlaybackSelection?) -> MediaPlaybackFormats {
+        let video = mediaStreams?.first(where: { $0.type == "Video" })
+        let audio = selectedAudioStream(selection: selection)
+        let subtitle = selectedSubtitleStream(selection: selection)
+        return MediaPlaybackFormats(
+            container: MediaTranscoding.container(directPlayContainer ?? container),
+            video: MediaTranscoding.video(
+                codec: video?.codec,
+                height: video?.height,
+                dynamicRange: video?.videoRangeType ?? video?.videoRange
+            ),
+            audio: MediaTranscoding.audio(
+                codec: audio?.codec,
+                channels: audio?.channels,
+                channelLayout: audio?.channelLayout
+            ),
+            subtitles: MediaTranscoding.subtitles(
+                codec: subtitle?.codec,
+                isExternal: subtitle?.isExternal == true
+            )
+        )
+    }
+
+    var canCopyVideo: Bool {
+        let video = mediaStreams?.first(where: { $0.type == "Video" })
+        return ["avc", "avc1", "h264"].contains(video?.codec?.lowercased() ?? "")
+    }
+
+    func canCopyAudio(selection: MediaPlaybackSelection?) -> Bool {
+        let audio = selectedAudioStream(selection: selection)
+        return ["aac", "mp3"].contains(audio?.codec?.lowercased() ?? "")
+    }
+
+    private func selectedAudioStream(selection: MediaPlaybackSelection?) -> JellyfinMediaStream? {
+        let index = selection?.audioID.flatMap(Int.init) ?? defaultAudioStreamIndex
+        return mediaStreams?.first { $0.type == "Audio" && $0.index == index }
+            ?? mediaStreams?.first(where: { $0.type == "Audio" })
+    }
+
+    private func selectedSubtitleStream(selection: MediaPlaybackSelection?) -> JellyfinMediaStream? {
+        guard let index = selection?.subtitleID.flatMap(Int.init) else { return nil }
+        return mediaStreams?.first { $0.type == "Subtitle" && $0.index == index }
     }
 }
 

@@ -228,7 +228,7 @@ final class PlaybackSessionController {
         Task { [weak self, weak item] in
             guard let self, let item,
                   let group = try? await item.asset.loadMediaSelectionGroup(for: .legible),
-                  let option = group.options.first,
+                  let option = group.defaultOption ?? group.options.first,
                   self.player.currentItem === item else { return }
             item.select(option, in: group)
         }

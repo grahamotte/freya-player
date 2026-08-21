@@ -42,7 +42,7 @@ struct MediaPlaybackOptions: Equatable {
         sourceContainer: MediaFormat? = nil,
         sourceVideo: MediaFormat? = nil,
         sourceAudio: MediaFormat? = nil,
-        streamingContainer: MediaFormat = MediaFormat(name: "HLS"),
+        streamingContainer: MediaFormat = MediaTranscoding.streamingContainer,
         defaultContainerTranscoding: Bool = false
     ) {
         self.videoHeight = videoHeight

@@ -96,6 +96,7 @@ final class PlexClient {
         let metadata = try await playbackMetadata(for: ratingKey, connection: connection)
         let requiresTranscodedAudio = PlatformMetadata.requiresTranscodedPlaybackAudio
         let directStreamAudio = !requiresTranscodedAudio && metadata.canDirectStreamAudio(selection?.audioID)
+        let includesSubtitles = metadata.canStreamSubtitle(selection?.subtitleID)
         let usesCustomAudio = selection.map { $0.audioID != $0.defaultAudioID } == true
         let changesSubtitle = selection.map { $0.subtitleID != $0.defaultSubtitleID } == true
 
@@ -105,21 +106,22 @@ final class PlexClient {
             try await setStreamSelection(
                 partID: partID,
                 audioStreamID: selection.audioID,
-                subtitleStreamID: selection.subtitleID,
+                subtitleStreamID: includesSubtitles ? selection.subtitleID : nil,
                 connection: connection
             )
         }
 
         if let selection,
-           (usesCustomAudio || selection.subtitleID != nil),
+           (usesCustomAudio || includesSubtitles),
            metadata.selectedPartID != nil {
-            try await preparePlaybackSession(
+            let prepared = try await preparePlaybackSession(
                 ratingKey: ratingKey,
                 connection: connection,
                 quality: selection.quality,
                 sessionID: sessionID,
                 offsetMilliseconds: offsetMilliseconds,
-                directStreamAudio: directStreamAudio
+                directStreamAudio: directStreamAudio,
+                includesSubtitles: includesSubtitles
             )
 
             guard let url = transcodedMovieStreamURL(
@@ -128,7 +130,8 @@ final class PlexClient {
                 quality: selection.quality,
                 sessionID: sessionID,
                 offsetMilliseconds: offsetMilliseconds,
-                directStreamAudio: directStreamAudio
+                directStreamAudio: directStreamAudio,
+                includesSubtitles: prepared.includesSubtitles
             ) else {
                 throw PlexError.invalidURL
             }
@@ -137,11 +140,7 @@ final class PlexClient {
                 url: url,
                 localStartOffsetMilliseconds: nil,
                 remoteSessionID: sessionID,
-                descriptionSuffix: metadata.playbackDescription(
-                    selection: selection,
-                    maxVideoBitrate: selection.quality.maxVideoBitrate
-                        ?? connection.automaticVideoBitrateLimit
-                )
+                descriptionSuffix: prepared.formats.playerDescription
             )
         }
 
@@ -155,20 +154,18 @@ final class PlexClient {
             return MediaPlaybackResource(
                 url: url,
                 localStartOffsetMilliseconds: offsetMilliseconds,
-                descriptionSuffix: metadata.playbackDescription(
-                    selection: selection,
-                    maxVideoBitrate: connection.automaticVideoBitrateLimit
-                )
+                descriptionSuffix: metadata.playbackFormats(selection: selection).playerDescription
             )
         }
 
-        try await preparePlaybackSession(
+        let prepared = try await preparePlaybackSession(
             ratingKey: ratingKey,
             connection: connection,
             quality: selection?.quality ?? .automatic,
             sessionID: sessionID,
             offsetMilliseconds: offsetMilliseconds,
-            directStreamAudio: directStreamAudio
+            directStreamAudio: directStreamAudio,
+            includesSubtitles: includesSubtitles
         )
 
         guard let url = transcodedMovieStreamURL(
@@ -177,20 +174,17 @@ final class PlexClient {
             quality: selection?.quality ?? .automatic,
             sessionID: sessionID,
             offsetMilliseconds: offsetMilliseconds,
-            directStreamAudio: directStreamAudio
+            directStreamAudio: directStreamAudio,
+            includesSubtitles: prepared.includesSubtitles
         ) else {
             throw PlexError.invalidURL
         }
 
-        let quality = selection?.quality ?? .automatic
         return MediaPlaybackResource(
             url: url,
             localStartOffsetMilliseconds: nil,
             remoteSessionID: sessionID,
-            descriptionSuffix: metadata.playbackDescription(
-                selection: selection,
-                maxVideoBitrate: quality.maxVideoBitrate ?? connection.automaticVideoBitrateLimit
-            )
+            descriptionSuffix: prepared.formats.playerDescription
         )
     }
 
@@ -348,7 +342,8 @@ final class PlexClient {
         quality: MediaPlaybackQuality,
         sessionID: String,
         offsetMilliseconds: Int?,
-        directStreamAudio: Bool
+        directStreamAudio: Bool,
+        includesSubtitles: Bool
     ) -> URL? {
         guard var components = URLComponents(
             string: "\(connection.serverURL)/video/:/transcode/universal/start.m3u8"
@@ -362,7 +357,8 @@ final class PlexClient {
             quality: quality,
             sessionID: sessionID,
             offsetMilliseconds: offsetMilliseconds,
-            directStreamAudio: directStreamAudio
+            directStreamAudio: directStreamAudio,
+            includesSubtitles: includesSubtitles
         )
 
         return components.url
@@ -374,8 +370,9 @@ final class PlexClient {
         quality: MediaPlaybackQuality,
         sessionID: String,
         offsetMilliseconds: Int?,
-        directStreamAudio: Bool
-    ) async throws {
+        directStreamAudio: Bool,
+        includesSubtitles: Bool
+    ) async throws -> PlexPreparedPlayback {
         guard var components = URLComponents(
             string: "\(connection.serverURL)/video/:/transcode/universal/decision"
         ) else {
@@ -388,7 +385,8 @@ final class PlexClient {
             quality: quality,
             sessionID: sessionID,
             offsetMilliseconds: offsetMilliseconds,
-            directStreamAudio: directStreamAudio
+            directStreamAudio: directStreamAudio,
+            includesSubtitles: includesSubtitles
         )
 
         var request = URLRequest(url: components.url!)
@@ -397,10 +395,25 @@ final class PlexClient {
             request,
             priority: .playback
         )
-        guard response.mediaContainer.metadata?.isEmpty == false else {
+        guard let metadata = response.mediaContainer.metadata?.first else {
             let details = response.mediaContainer.playbackDecisionDetails
             throw details.isEmpty ? PlexError.invalidResponse : PlexError.playbackFailed(details.joined(separator: "\n"))
         }
+        if includesSubtitles && metadata.burnsSubtitles {
+            return try await preparePlaybackSession(
+                ratingKey: ratingKey,
+                connection: connection,
+                quality: quality,
+                sessionID: sessionID,
+                offsetMilliseconds: offsetMilliseconds,
+                directStreamAudio: directStreamAudio,
+                includesSubtitles: false
+            )
+        }
+        return PlexPreparedPlayback(
+            formats: metadata.playbackFormats(includesSubtitles: includesSubtitles),
+            includesSubtitles: includesSubtitles
+        )
     }
 
     private func playbackQueryItems(
@@ -409,7 +422,8 @@ final class PlexClient {
         quality: MediaPlaybackQuality,
         sessionID: String,
         offsetMilliseconds: Int?,
-        directStreamAudio: Bool
+        directStreamAudio: Bool,
+        includesSubtitles: Bool
     ) -> [URLQueryItem] {
         let maxVideoBitrate = quality.maxVideoBitrate ?? connection.automaticVideoBitrateLimit
 
@@ -423,7 +437,8 @@ final class PlexClient {
             quality.videoResolution.map { URLQueryItem(name: "videoResolution", value: $0) },
             URLQueryItem(name: "copyts", value: "1"),
             URLQueryItem(name: "fastSeek", value: "1"),
-            URLQueryItem(name: "subtitles", value: "segmented"),
+            URLQueryItem(name: "subtitles", value: includesSubtitles ? "segmented" : "none"),
+            includesSubtitles ? nil : URLQueryItem(name: "skipSubtitles", value: "1"),
             URLQueryItem(name: "directPlay", value: "0"),
             URLQueryItem(name: "directStream", value: "1"),
             URLQueryItem(name: "directStreamAudio", value: directStreamAudio ? "1" : "0"),
@@ -897,6 +912,15 @@ private struct PlexPlaybackMetadata: Decodable {
         return true
     }
 
+    func canStreamSubtitle(_ subtitleID: String?) -> Bool {
+        guard let subtitleID,
+              let stream = media?.first(where: { $0.parts?.isEmpty == false })?
+                .parts?.first?.streams?.first(where: { $0.streamType == 3 && $0.id == subtitleID }) else {
+            return false
+        }
+        return MediaTranscoding.canStreamSubtitle(codec: stream.codec)
+    }
+
     func playbackOptions(maxVideoBitrate: Int? = nil) -> MediaPlaybackOptions? {
         guard let media = media?.first(where: { $0.parts?.isEmpty == false }),
               let part = media.parts?.first else {
@@ -907,6 +931,9 @@ private struct PlexPlaybackMetadata: Decodable {
         let audioOptions = part.audioOptions(requiresTranscoding: requiresTranscodedAudio)
         let subtitleOptions = part.subtitleOptions
         let selectedAudioID = part.selectedAudioID ?? audioOptions.first?.id
+        let selectedSubtitleID = part.selectedSubtitleID.flatMap { subtitleID in
+            subtitleOptions.contains(where: { $0.id == subtitleID }) ? subtitleID : nil
+        }
         let defaultAudioTranscoding = selectedAudioID.flatMap { audioID in
             audioOptions.first(where: { $0.id == audioID })?.transcodingTitle
         }
@@ -920,7 +947,7 @@ private struct PlexPlaybackMetadata: Decodable {
             audioOptions: audioOptions,
             subtitleOptions: subtitleOptions,
             selectedAudioID: selectedAudioID,
-            selectedSubtitleID: part.selectedSubtitleID,
+            selectedSubtitleID: selectedSubtitleID,
             defaultVideoTranscoding: requiresServerStream && (!media.canDirectStreamVideo || exceedsBitrateLimit)
                 ? "H.264"
                 : nil,
@@ -944,19 +971,35 @@ private struct PlexPlaybackMetadata: Decodable {
         )
     }
 
-    func playbackDescription(
-        selection: MediaPlaybackSelection?,
-        maxVideoBitrate: Int?
-    ) -> String? {
-        guard let options = playbackOptions(maxVideoBitrate: maxVideoBitrate) else { return nil }
-        let resolvedSelection = selection ?? MediaPlaybackSelection(
-            quality: .automatic,
-            audioID: options.selectedAudioID,
-            subtitleID: nil,
-            defaultAudioID: options.selectedAudioID,
-            defaultSubtitleID: options.selectedSubtitleID
+    func playbackFormats(selection: MediaPlaybackSelection?) -> MediaPlaybackFormats {
+        let media = media?.first(where: { $0.parts?.isEmpty == false })
+        let part = media?.parts?.first
+        let audio = part?.streams?.first { stream in
+            stream.streamType == 2
+                && (selection?.audioID.map { $0 == stream.id } ?? stream.selected == true)
+        } ?? part?.streams?.first(where: { $0.streamType == 2 })
+        let subtitle = selection?.subtitleID.flatMap { subtitleID in
+            part?.streams?.first { stream in
+                stream.streamType == 3
+                    && stream.id == subtitleID
+                    && MediaTranscoding.canStreamSubtitle(codec: stream.codec)
+            }
+        }
+        return MediaPlaybackFormats(
+            container: MediaTranscoding.container(part?.container ?? media?.container),
+            video: MediaTranscoding.video(
+                codec: part?.videoStream?.codec ?? media?.videoCodec,
+                resolution: media?.videoResolution,
+                height: part?.videoStream?.height ?? media?.height,
+                dynamicRange: part?.videoStream?.dynamicRange
+            ),
+            audio: MediaTranscoding.audio(
+                codec: audio?.codec ?? media?.audioCodec,
+                channels: audio?.channels ?? media?.audioChannels,
+                channelLayout: audio?.audioChannelLayout
+            ),
+            subtitles: MediaTranscoding.subtitles(codec: subtitle?.codec, isExternal: subtitle?.key != nil)
         )
-        return options.playbackPlan(for: resolvedSelection).playerDescription
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -1046,13 +1089,13 @@ private struct PlexPlaybackMetadata: Decodable {
 
         var subtitleOptions: [MediaPlaybackOption] {
             streams?
-                .filter { $0.streamType == 3 }
+                .filter { $0.streamType == 3 && MediaTranscoding.canStreamSubtitle(codec: $0.codec) }
                 .compactMap { stream in
                     guard let id = stream.id else { return nil }
                     return MediaPlaybackOption(
                         id: id,
                         title: stream.displayName,
-                        transcodingTitle: stream.subtitleTranscodingTitle,
+                        transcodingTitle: "WebVTT",
                         sourceFormat: MediaTranscoding.subtitles(
                             codec: stream.codec,
                             isExternal: stream.key != nil
@@ -1134,13 +1177,6 @@ private struct PlexPlaybackMetadata: Decodable {
             doviPresent == true ? "Dolby Vision" : colorTrc
         }
 
-        var subtitleTranscodingTitle: String {
-            switch codec?.lowercased() {
-            case "pgs", "pgssub", "vobsub", "dvd_subtitle": "Burned into video"
-            default: "WebVTT"
-            }
-        }
-
         init(from decoder: Decoder) throws {
             let container = try decoder.container(keyedBy: CodingKeys.self)
             id = try container.decodeLossyStringIfPresent(forKey: .id)
@@ -1187,4 +1223,133 @@ private struct PlexPlaybackMetadata: Decodable {
     }
 }
 
-private struct PlexPlaybackDecisionMetadata: Decodable {}
+private struct PlexPlaybackDecisionMetadata: Decodable {
+    let media: [Media]?
+
+    func playbackFormats(includesSubtitles: Bool) -> MediaPlaybackFormats {
+        let media = media?.first(where: { $0.selected != false }) ?? media?.first
+        let part = media?.parts?.first(where: { $0.selected != false }) ?? media?.parts?.first
+        let video = part?.streams?.first { $0.streamType == 1 && $0.decision != "ignore" }
+        let audio = part?.streams?.first { $0.streamType == 2 && $0.decision != "ignore" }
+        let subtitle = part?.streams?.first { stream in
+            stream.streamType == 3
+                && !["burn", "ignore"].contains(stream.decision?.lowercased() ?? "")
+                && media?.subtitleDecision?.lowercased() != "burn"
+        }
+        return MediaPlaybackFormats(
+            container: MediaTranscoding.container(part?.container ?? media?.container),
+            video: MediaTranscoding.video(
+                codec: media?.videoCodec ?? video?.codec,
+                resolution: media?.videoResolution,
+                height: media?.height ?? video?.height,
+                dynamicRange: video?.dynamicRange
+            ),
+            audio: MediaTranscoding.audio(
+                codec: media?.audioCodec ?? audio?.codec,
+                channels: media?.audioChannels ?? audio?.channels,
+                channelLayout: audio?.audioChannelLayout
+            ),
+            subtitles: MediaTranscoding.subtitles(
+                codec: subtitle?.codec ?? (includesSubtitles ? "webvtt" : nil)
+            )
+        )
+    }
+
+    var burnsSubtitles: Bool {
+        let media = media?.first(where: { $0.selected != false }) ?? media?.first
+        let part = media?.parts?.first(where: { $0.selected != false }) ?? media?.parts?.first
+        return media?.subtitleDecision?.lowercased() == "burn"
+            || part?.streams?.contains {
+                $0.streamType == 3 && $0.decision?.lowercased() == "burn"
+            } == true
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case media = "Media"
+    }
+
+    struct Media: Decodable {
+        let container: String?
+        let videoCodec: String?
+        let audioCodec: String?
+        let videoResolution: String?
+        let height: Int?
+        let audioChannels: Int?
+        let subtitleDecision: String?
+        let selected: Bool?
+        let parts: [Part]?
+
+        private enum CodingKeys: String, CodingKey {
+            case container, videoCodec, audioCodec, videoResolution, height, audioChannels, subtitleDecision, selected
+            case parts = "Part"
+        }
+
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            self.container = try container.decodeIfPresent(String.self, forKey: .container)
+            videoCodec = try container.decodeIfPresent(String.self, forKey: .videoCodec)
+            audioCodec = try container.decodeIfPresent(String.self, forKey: .audioCodec)
+            videoResolution = try container.decodeIfPresent(String.self, forKey: .videoResolution)
+            height = try container.decodeLossyIntIfPresent(forKey: .height)
+            audioChannels = try container.decodeLossyIntIfPresent(forKey: .audioChannels)
+            subtitleDecision = try container.decodeIfPresent(String.self, forKey: .subtitleDecision)
+            selected = try container.decodeLossyBoolIfPresent(forKey: .selected)
+            parts = try container.decodeIfPresent([Part].self, forKey: .parts)
+        }
+    }
+
+    struct Part: Decodable {
+        let container: String?
+        let selected: Bool?
+        let streams: [Stream]?
+
+        private enum CodingKeys: String, CodingKey {
+            case container, selected
+            case streams = "Stream"
+        }
+
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            self.container = try container.decodeIfPresent(String.self, forKey: .container)
+            selected = try container.decodeLossyBoolIfPresent(forKey: .selected)
+            streams = try container.decodeIfPresent([Stream].self, forKey: .streams)
+        }
+    }
+
+    struct Stream: Decodable {
+        let streamType: Int?
+        let codec: String?
+        let decision: String?
+        let channels: Int?
+        let audioChannelLayout: String?
+        let height: Int?
+        let colorTrc: String?
+        let doviPresent: Bool?
+
+        var dynamicRange: String? {
+            doviPresent == true ? "Dolby Vision" : colorTrc
+        }
+
+        private enum CodingKeys: String, CodingKey {
+            case streamType, codec, decision, channels, audioChannelLayout, height, colorTrc
+            case doviPresent = "DOVIPresent"
+        }
+
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            streamType = try container.decodeLossyIntIfPresent(forKey: .streamType)
+            codec = try container.decodeIfPresent(String.self, forKey: .codec)
+            decision = try container.decodeIfPresent(String.self, forKey: .decision)
+            channels = try container.decodeLossyIntIfPresent(forKey: .channels)
+            audioChannelLayout = try container.decodeIfPresent(String.self, forKey: .audioChannelLayout)
+            height = try container.decodeLossyIntIfPresent(forKey: .height)
+            colorTrc = try container.decodeIfPresent(String.self, forKey: .colorTrc)
+            doviPresent = try container.decodeLossyBoolIfPresent(forKey: .doviPresent)
+        }
+    }
+}
+
+private struct PlexPreparedPlayback {
+    let formats: MediaPlaybackFormats
+    let includesSubtitles: Bool
+}
