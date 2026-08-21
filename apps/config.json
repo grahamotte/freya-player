@@ -1,5 +1,5 @@
 {
-  "build": "1.21.0",
+  "build": "1.21.1",
   "contactEmail": "graham.otte@gmail.com",
   "contactFirstName": "Graham",
   "contactLastName": "Otte",
@@ -105,6 +105,6 @@
     },
     "android": {}
   },
-  "version": "1.21.0",
-  "whatsNew": "Improved playback compatibility by preserving Apple-native formats within each device’s capabilities. Adds clearer playback format and device capability details, faster recovery after long pauses, and more accurate watched completion."
+  "version": "1.21.1",
+  "whatsNew": "Improved playback compatibility by preserving Apple-native formats within each device’s capabilities. Adds clearer playback and device capability details, faster recovery after long pauses or exhausted buffers, and more accurate watched completion."
 }
