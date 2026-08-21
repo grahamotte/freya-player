@@ -14,7 +14,7 @@ Only work with the Kanban board when the user asks to create or manage cards, or
 
 ## Cards
 
-Name each card `<CODE> - <Title>.md`, where `<CODE>` is a four-letter uppercase code and `<Title>` is a concise description of the problem. For example:
+Name each card `<CODE> - <Title>.md`, where `<CODE>` is a four-letter uppercase code and `<Title>` is a concise description of the problem. Use the same code and title for the card's document title. For example:
 
 ```text
 SRAT - Review attachments are missing from App Store Connect submissions.md
@@ -25,7 +25,7 @@ Cards describe problems to solve, not solutions to implement. Describe the curre
 Use this basic template for each card:
 
 ```markdown
-# <title>
+# <CODE> - <Title>
 
 ## user value
 
@@ -38,9 +38,15 @@ As a <user type>, I want to <do thing>, so that <value>.
 ## Status, notes, context, etc (optional)
 
 <agent to edit as desired or needed>
+
+## Prompts
+
+<user prompts copied verbatim, interleaved with brief summaries of the agent's work>
 ```
 
 Keep useful problem and review context in the card so another agent chat can continue the work without turning the card into an implementation plan.
+
+Keep `## Prompts` as the final section of every card and use it as a chronological interaction log. When a user prompt creates, changes, or advances the card or its work, append the complete prompt exactly as it was given to the agent. Preserve its wording and formatting; do not summarize, correct, or otherwise rewrite it. After each prompt, append a brief summary of the work the agent performed in response before recording the next prompt.
 
 Refer to a card by its code, title, or filename. Preserve its filename while moving it between columns.
 
@@ -59,7 +65,7 @@ These immediate commits apply to standalone card management. Card moves and edit
 3. The card remains in `2 - In Progress/` across agent chats until an agent is satisfied that the work is complete and verified.
 4. The agent moves completed work to `3 - In Review/` and asks the user to review it. The implementation and card move remain uncommitted while review is pending.
 5. If the user reports an issue or requests a change, the agent moves the card back to `2 - In Progress/`, updates the work, verifies it, and returns the card to `3 - In Review/`.
-6. When the user explicitly approves the work, the agent moves the card to `4 - Done/` and commits the completed work and card move together.
+6. When the user explicitly approves the work, use the `commit` skill to move the card to `4 - Done/` and commit the completed work and card move together.
 7. When the user decides a card should not be worked on, the agent moves it to `5 - Won't Do/` and records the reason in the card. Cards never leave `5 - Won't Do/`. If the user later decides to address the underlying problem, create a new card in `1 - Problems to Solve/` instead of restoring the old card.
 
 ## Other
