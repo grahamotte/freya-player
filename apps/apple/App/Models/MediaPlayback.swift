@@ -22,21 +22,49 @@ struct MediaPlaybackOptions: Equatable {
     let selectedSubtitleID: String?
     let defaultVideoTranscoding: String?
     let defaultAudioTranscoding: String?
+    let streamingVideoTranscoding: String?
+    let sourceContainer: MediaFormat?
+    let sourceVideo: MediaFormat?
+    let sourceAudio: MediaFormat?
+    let streamingContainer: MediaFormat
+    let defaultContainerTranscoding: Bool
+
+    init(
+        videoHeight: Int?,
+        qualityOptions: [MediaPlaybackQuality],
+        audioOptions: [MediaPlaybackOption],
+        subtitleOptions: [MediaPlaybackOption],
+        selectedAudioID: String?,
+        selectedSubtitleID: String?,
+        defaultVideoTranscoding: String?,
+        defaultAudioTranscoding: String?,
+        streamingVideoTranscoding: String? = nil,
+        sourceContainer: MediaFormat? = nil,
+        sourceVideo: MediaFormat? = nil,
+        sourceAudio: MediaFormat? = nil,
+        streamingContainer: MediaFormat = MediaFormat(name: "HLS"),
+        defaultContainerTranscoding: Bool = false
+    ) {
+        self.videoHeight = videoHeight
+        self.qualityOptions = qualityOptions
+        self.audioOptions = audioOptions
+        self.subtitleOptions = subtitleOptions
+        self.selectedAudioID = selectedAudioID
+        self.selectedSubtitleID = selectedSubtitleID
+        self.defaultVideoTranscoding = defaultVideoTranscoding
+        self.defaultAudioTranscoding = defaultAudioTranscoding
+        self.streamingVideoTranscoding = streamingVideoTranscoding
+        self.sourceContainer = sourceContainer
+        self.sourceVideo = sourceVideo
+        self.sourceAudio = sourceAudio
+        self.streamingContainer = streamingContainer
+        self.defaultContainerTranscoding = defaultContainerTranscoding
+    }
 
     var defaultResolutionTitle: String {
         videoHeight.map { "\($0)p (Default)" } ?? "Automatic (Default)"
     }
 
-    func transcodingSummary(for selection: MediaPlaybackSelection) -> MediaPlaybackTranscodingSummary {
-        let video = selection.quality == .automatic
-            ? defaultVideoTranscoding
-            : "H.264 at \(selection.quality.title)"
-        let audio = selection.audioID.flatMap { audioID in
-            audioOptions.first(where: { $0.id == audioID })?.transcodingTitle
-        } ?? (selection.audioID == selectedAudioID ? defaultAudioTranscoding : nil)
-
-        return MediaPlaybackTranscodingSummary(video: video, audio: audio)
-    }
 }
 
 enum MediaPlaybackQuality: String, CaseIterable, Codable, Identifiable {
@@ -104,11 +132,18 @@ struct MediaPlaybackOption: Identifiable, Hashable {
     let id: String
     let title: String
     let transcodingTitle: String?
+    let sourceFormat: MediaFormat?
 
-    init(id: String, title: String, transcodingTitle: String? = nil) {
+    init(
+        id: String,
+        title: String,
+        transcodingTitle: String? = nil,
+        sourceFormat: MediaFormat? = nil
+    ) {
         self.id = id
         self.title = title
         self.transcodingTitle = transcodingTitle
+        self.sourceFormat = sourceFormat
     }
 }
 
@@ -152,11 +187,6 @@ struct MediaPlaybackSettings: Codable, Equatable {
             subtitleID: selection.subtitleID
         )
     }
-}
-
-struct MediaPlaybackTranscodingSummary: Equatable {
-    let video: String?
-    let audio: String?
 }
 
 enum MediaPlaybackTimelineState: String {

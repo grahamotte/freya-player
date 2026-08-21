@@ -21,7 +21,7 @@ final class MediaPlaybackTests: XCTestCase {
         )
     }
 
-    func testPlaybackOptionsDescribeDefaultsAndTranscoding() {
+    func testPlaybackOptionsDescribeDefaultResolution() {
         let options = MediaPlaybackOptions(
             videoHeight: 1440,
             qualityOptions: MediaPlaybackQuality.transcodingOptions(forVideoHeight: 1440),
@@ -37,14 +37,6 @@ final class MediaPlaybackTests: XCTestCase {
         )
 
         XCTAssertEqual(options.defaultResolutionTitle, "1440p (Default)")
-        XCTAssertEqual(
-            options.transcodingSummary(for: MediaPlaybackSelection(
-                quality: .p720,
-                audioID: "french",
-                subtitleID: nil
-            )),
-            MediaPlaybackTranscodingSummary(video: "H.264 at 720p", audio: "AAC")
-        )
     }
 
     func testPlaybackSettingsCaptureOnlyUserChoices() {

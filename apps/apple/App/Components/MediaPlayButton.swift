@@ -86,12 +86,11 @@ struct MediaPlayButton: View {
             error: playbackDialogError,
             qualityOptions: qualityOptions,
             defaultResolutionTitle: defaultResolutionTitle,
+            playbackOptions: playbackOptions,
             audioOptions: playbackOptions?.audioOptions ?? [],
             subtitleOptions: playbackOptions?.subtitleOptions ?? [],
             selectedAudioID: playbackOptions?.selectedAudioID,
             selectedSubtitleID: playbackOptions?.selectedSubtitleID,
-            defaultVideoTranscoding: playbackOptions?.defaultVideoTranscoding,
-            defaultAudioTranscoding: playbackOptions?.defaultAudioTranscoding,
             draftQuality: $draftQuality,
             draftAudioID: $draftAudioID,
             draftSubtitleID: $draftSubtitleID,
@@ -528,12 +527,11 @@ private struct PlaybackDialogModifier: ViewModifier {
     let error: String?
     let qualityOptions: [MediaPlaybackQuality]
     let defaultResolutionTitle: String
+    let playbackOptions: MediaPlaybackOptions?
     let audioOptions: [MediaPlaybackOption]
     let subtitleOptions: [MediaPlaybackOption]
     let selectedAudioID: String?
     let selectedSubtitleID: String?
-    let defaultVideoTranscoding: String?
-    let defaultAudioTranscoding: String?
     @Binding var draftQuality: MediaPlaybackQuality
     @Binding var draftAudioID: String?
     @Binding var draftSubtitleID: String?
@@ -571,12 +569,11 @@ private struct PlaybackDialogModifier: ViewModifier {
             error: error,
             qualityOptions: qualityOptions,
             defaultResolutionTitle: defaultResolutionTitle,
+            playbackOptions: playbackOptions,
             audioOptions: audioOptions,
             subtitleOptions: subtitleOptions,
             selectedAudioID: selectedAudioID,
             selectedSubtitleID: selectedSubtitleID,
-            defaultVideoTranscoding: defaultVideoTranscoding,
-            defaultAudioTranscoding: defaultAudioTranscoding,
             draftQuality: $draftQuality,
             draftAudioID: $draftAudioID,
             draftSubtitleID: $draftSubtitleID,
@@ -593,12 +590,11 @@ private struct PlaybackOptionsDialog: View {
     let error: String?
     let qualityOptions: [MediaPlaybackQuality]
     let defaultResolutionTitle: String
+    let playbackOptions: MediaPlaybackOptions?
     let audioOptions: [MediaPlaybackOption]
     let subtitleOptions: [MediaPlaybackOption]
     let selectedAudioID: String?
     let selectedSubtitleID: String?
-    let defaultVideoTranscoding: String?
-    let defaultAudioTranscoding: String?
     @Binding var draftQuality: MediaPlaybackQuality
     @Binding var draftAudioID: String?
     @Binding var draftSubtitleID: String?
@@ -672,7 +668,7 @@ private struct PlaybackOptionsDialog: View {
                 }
             }
 
-            transcodingBlock
+            playbackPlanBlock
 
             if let error {
                 Text(error)
@@ -781,10 +777,17 @@ private struct PlaybackOptionsDialog: View {
 #endif
     }
 
-    private var transcodingBlock: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            transcodingLine(label: "Video transcoding", value: videoTranscoding)
-            transcodingLine(label: "Audio transcoding", value: audioTranscoding)
+    private var playbackPlanBlock: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            if let plan = playbackOptions?.playbackPlan(for: draftSelection) {
+                ForEach(plan.conversions) { conversion in
+                    playbackPlanLine(conversion)
+                }
+            } else {
+                Text("Source format information is unavailable.")
+                    .font(transcodingTextFont)
+                    .foregroundStyle(AppTheme.secondaryText)
+            }
         }
         .padding(18)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -792,23 +795,23 @@ private struct PlaybackOptionsDialog: View {
         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
     }
 
-    private var videoTranscoding: String? {
-        draftQuality == .automatic
-            ? defaultVideoTranscoding
-            : "H.264 at \(draftQuality.title)"
+    private var draftSelection: MediaPlaybackSelection {
+        MediaPlaybackSelection(
+            quality: draftQuality,
+            audioID: draftAudioID,
+            subtitleID: draftSubtitleID,
+            defaultAudioID: selectedAudioID,
+            defaultSubtitleID: selectedSubtitleID
+        )
     }
 
-    private var audioTranscoding: String? {
-        draftAudioID.flatMap { audioID in
-            audioOptions.first(where: { $0.id == audioID })?.transcodingTitle
-        } ?? (draftAudioID == selectedAudioID ? defaultAudioTranscoding : nil)
-    }
-
-    private func transcodingLine(label: String, value: String?) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: 6) {
-            Text("\(label):")
-            Text(value ?? "None")
-                .foregroundStyle(value == nil ? AppTheme.secondaryText : .orange)
+    private func playbackPlanLine(_ conversion: MediaPlaybackConversion) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Text("\(conversion.element.rawValue):")
+                .foregroundStyle(AppTheme.secondaryText)
+                .frame(minWidth: 82, alignment: .leading)
+            Text(conversion.description)
+                .foregroundStyle(conversion.isConverted ? .orange : AppTheme.primaryText)
         }
         .font(transcodingTextFont)
     }

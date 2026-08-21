@@ -17,3 +17,8 @@ The desired outcome is for play options and the stock player description to clea
 - This card covers visibility and capability-detection infrastructure, not broader direct-play enablement.
 - Playback decisions are made independently by the Plex and Jellyfin connectors and must use a shared app-owned presentation model.
 - The information shown before playback is necessarily an expectation based on server metadata and negotiation. It must not be mislabeled as runtime-verified output.
+- In review: Settings now reports AVFoundation container, codec, HDR-route, channel-route, and subtitle capabilities for the current device below Libraries.
+- In review: Plex and Jellyfin feed source container, video, dynamic range, audio, channel, and selected subtitle metadata into a shared playback-plan model used by both Play Options and stock-player descriptions.
+- Review revision: Playback plans always show Container, Video, Audio, and Subtitles; direct formats have no qualifier, and an unselected subtitle is shown as `None`.
+- Review revision: Playback method headings and Direct Play, Remux, or Transcode summary rows were removed so the four format pairs stand alone.
+- Verified with `mise test` and unsigned generic tvOS, iOS, and Mac Catalyst builds.

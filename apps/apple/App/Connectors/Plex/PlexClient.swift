@@ -137,10 +137,10 @@ final class PlexClient {
                 url: url,
                 localStartOffsetMilliseconds: nil,
                 remoteSessionID: sessionID,
-                descriptionSuffix: metadata.transcodingDescription(
-                    quality: selection.quality,
-                    directStreamAudio: directStreamAudio,
-                    hasSubtitles: selection.subtitleID != nil
+                descriptionSuffix: metadata.playbackDescription(
+                    selection: selection,
+                    maxVideoBitrate: selection.quality.maxVideoBitrate
+                        ?? connection.automaticVideoBitrateLimit
                 )
             )
         }
@@ -154,7 +154,11 @@ final class PlexClient {
            ) {
             return MediaPlaybackResource(
                 url: url,
-                localStartOffsetMilliseconds: offsetMilliseconds
+                localStartOffsetMilliseconds: offsetMilliseconds,
+                descriptionSuffix: metadata.playbackDescription(
+                    selection: selection,
+                    maxVideoBitrate: connection.automaticVideoBitrateLimit
+                )
             )
         }
 
@@ -183,11 +187,9 @@ final class PlexClient {
             url: url,
             localStartOffsetMilliseconds: nil,
             remoteSessionID: sessionID,
-            descriptionSuffix: metadata.transcodingDescription(
-                quality: quality,
-                maxVideoBitrate: quality.maxVideoBitrate ?? connection.automaticVideoBitrateLimit,
-                directStreamAudio: directStreamAudio,
-                hasSubtitles: false
+            descriptionSuffix: metadata.playbackDescription(
+                selection: selection,
+                maxVideoBitrate: quality.maxVideoBitrate ?? connection.automaticVideoBitrateLimit
             )
         )
     }
@@ -910,6 +912,7 @@ private struct PlexPlaybackMetadata: Decodable {
         }
         let exceedsBitrateLimit = maxVideoBitrate.map { (media.bitrate ?? .max) > $0 } == true
         let videoHeight = media.playbackVideoHeight
+        let requiresServerStream = !media.isDirectPlayable || exceedsBitrateLimit
 
         return MediaPlaybackOptions(
             videoHeight: videoHeight,
@@ -918,29 +921,42 @@ private struct PlexPlaybackMetadata: Decodable {
             subtitleOptions: subtitleOptions,
             selectedAudioID: selectedAudioID,
             selectedSubtitleID: part.selectedSubtitleID,
-            defaultVideoTranscoding: !media.canDirectStreamVideo || exceedsBitrateLimit ? "H.264" : nil,
-            defaultAudioTranscoding: defaultAudioTranscoding
+            defaultVideoTranscoding: requiresServerStream && (!media.canDirectStreamVideo || exceedsBitrateLimit)
+                ? "H.264"
+                : nil,
+            defaultAudioTranscoding: defaultAudioTranscoding,
+            streamingVideoTranscoding: media.canDirectStreamVideo ? nil : "H.264",
+            sourceContainer: MediaTranscoding.container(part.container ?? media.container),
+            sourceVideo: MediaTranscoding.video(
+                codec: part.videoStream?.codec ?? media.videoCodec,
+                resolution: media.videoResolution,
+                height: part.videoStream?.height ?? media.height,
+                dynamicRange: part.videoStream?.dynamicRange
+            ),
+            sourceAudio: part.selectedAudioStream.map {
+                MediaTranscoding.audio(
+                    codec: $0.codec ?? media.audioCodec,
+                    channels: $0.channels ?? media.audioChannels,
+                    channelLayout: $0.audioChannelLayout
+                )
+            } ?? MediaTranscoding.audio(codec: media.audioCodec, channels: media.audioChannels),
+            defaultContainerTranscoding: requiresServerStream
         )
     }
 
-    func transcodingDescription(
-        quality: MediaPlaybackQuality,
-        maxVideoBitrate: Int? = nil,
-        directStreamAudio: Bool,
-        hasSubtitles: Bool
+    func playbackDescription(
+        selection: MediaPlaybackSelection?,
+        maxVideoBitrate: Int?
     ) -> String? {
-        guard let media = media?.first else { return nil }
-        var details: [String] = []
-
-        if quality != .automatic
-            || !media.canDirectStreamVideo
-            || maxVideoBitrate.map({ (media.bitrate ?? .max) > $0 }) == true {
-            details.append([quality == .automatic ? nil : quality.title, "H.264 video"].compactMap { $0 }.joined(separator: " "))
-        }
-        if !directStreamAudio { details.append("AAC audio") }
-        if hasSubtitles { details.append("WebVTT subtitles") }
-
-        return details.isEmpty ? nil : "Transcoding: \(details.joined(separator: " • "))"
+        guard let options = playbackOptions(maxVideoBitrate: maxVideoBitrate) else { return nil }
+        let resolvedSelection = selection ?? MediaPlaybackSelection(
+            quality: .automatic,
+            audioID: options.selectedAudioID,
+            subtitleID: nil,
+            defaultAudioID: options.selectedAudioID,
+            defaultSubtitleID: options.selectedSubtitleID
+        )
+        return options.playbackPlan(for: resolvedSelection).playerDescription
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -953,7 +969,9 @@ private struct PlexPlaybackMetadata: Decodable {
         let audioCodec: String?
         let videoResolution: String?
         let bitrate: Int?
+        let width: Int?
         let height: Int?
+        let audioChannels: Int?
         let parts: [Part]?
 
         var playbackVideoHeight: Int? {
@@ -993,7 +1011,9 @@ private struct PlexPlaybackMetadata: Decodable {
             case audioCodec
             case videoResolution
             case bitrate
+            case width
             case height
+            case audioChannels
             case parts = "Part"
         }
     }
@@ -1001,6 +1021,7 @@ private struct PlexPlaybackMetadata: Decodable {
     struct Part: Decodable {
         let id: String?
         let key: String
+        let container: String?
         let streams: [Stream]?
 
         func audioOptions(requiresTranscoding: Bool) -> [MediaPlaybackOption] {
@@ -1013,7 +1034,12 @@ private struct PlexPlaybackMetadata: Decodable {
                     return MediaPlaybackOption(
                         id: id,
                         title: stream.displayName,
-                        transcodingTitle: requiresTranscoding || !canDirectStream ? "AAC" : nil
+                        transcodingTitle: requiresTranscoding || !canDirectStream ? "AAC" : nil,
+                        sourceFormat: MediaTranscoding.audio(
+                            codec: stream.codec,
+                            channels: stream.channels,
+                            channelLayout: stream.audioChannelLayout
+                        )
                     )
                 } ?? []
         }
@@ -1023,8 +1049,26 @@ private struct PlexPlaybackMetadata: Decodable {
                 .filter { $0.streamType == 3 }
                 .compactMap { stream in
                     guard let id = stream.id else { return nil }
-                    return MediaPlaybackOption(id: id, title: stream.displayName)
+                    return MediaPlaybackOption(
+                        id: id,
+                        title: stream.displayName,
+                        transcodingTitle: stream.subtitleTranscodingTitle,
+                        sourceFormat: MediaTranscoding.subtitles(
+                            codec: stream.codec,
+                            isExternal: stream.key != nil
+                        )
+                    )
                 } ?? []
+        }
+
+        var videoStream: Stream? {
+            streams?.first(where: { $0.streamType == 1 })
+        }
+
+        var selectedAudioStream: Stream? {
+            streams?.first { stream in
+                stream.streamType == 2 && (selectedAudioID.map { $0 == stream.id } ?? stream.selected == true)
+            } ?? streams?.first(where: { $0.streamType == 2 })
         }
 
         var selectedAudioID: String? {
@@ -1055,12 +1099,14 @@ private struct PlexPlaybackMetadata: Decodable {
             let container = try decoder.container(keyedBy: CodingKeys.self)
             id = try container.decodeLossyStringIfPresent(forKey: .id)
             key = try container.decodeLossyString(forKey: .key)
+            self.container = try container.decodeIfPresent(String.self, forKey: .container)
             streams = try container.decodeIfPresent([Stream].self, forKey: .streams)
         }
 
         private enum CodingKeys: String, CodingKey {
             case id
             case key
+            case container
             case streams = "Stream"
         }
     }
@@ -1073,9 +1119,26 @@ private struct PlexPlaybackMetadata: Decodable {
         let language: String?
         let title: String?
         let displayTitle: String?
+        let key: String?
+        let channels: Int?
+        let audioChannelLayout: String?
+        let height: Int?
+        let colorTrc: String?
+        let doviPresent: Bool?
 
         var displayName: String {
             displayTitle ?? title ?? language ?? fallbackTitle
+        }
+
+        var dynamicRange: String? {
+            doviPresent == true ? "Dolby Vision" : colorTrc
+        }
+
+        var subtitleTranscodingTitle: String {
+            switch codec?.lowercased() {
+            case "pgs", "pgssub", "vobsub", "dvd_subtitle": "Burned into video"
+            default: "WebVTT"
+            }
         }
 
         init(from decoder: Decoder) throws {
@@ -1087,6 +1150,12 @@ private struct PlexPlaybackMetadata: Decodable {
             language = try container.decodeIfPresent(String.self, forKey: .language)
             title = try container.decodeIfPresent(String.self, forKey: .title)
             displayTitle = try container.decodeIfPresent(String.self, forKey: .displayTitle)
+            key = try container.decodeIfPresent(String.self, forKey: .key)
+            channels = try container.decodeLossyIntIfPresent(forKey: .channels)
+            audioChannelLayout = try container.decodeIfPresent(String.self, forKey: .audioChannelLayout)
+            height = try container.decodeLossyIntIfPresent(forKey: .height)
+            colorTrc = try container.decodeIfPresent(String.self, forKey: .colorTrc)
+            doviPresent = try container.decodeLossyBoolIfPresent(forKey: .doviPresent)
         }
 
         private var fallbackTitle: String {
@@ -1108,6 +1177,12 @@ private struct PlexPlaybackMetadata: Decodable {
             case language
             case title
             case displayTitle
+            case key
+            case channels
+            case audioChannelLayout
+            case height
+            case colorTrc
+            case doviPresent = "DOVIPresent"
         }
     }
 }

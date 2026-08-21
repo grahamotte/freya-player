@@ -57,6 +57,8 @@ struct ServerManagementPanel: View {
                             model.moveLibrary(at: index, by: offset)
                         }
                     )
+
+                    ServerManagementPlaybackCapabilitiesSection()
                 }
                 .frame(maxWidth: 860, alignment: .leading)
                 .padding(PlatformMetadata.isPhone ? 16 : 32)

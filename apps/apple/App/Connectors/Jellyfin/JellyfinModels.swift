@@ -266,6 +266,75 @@ struct JellyfinMediaStream: Decodable, Hashable {
     }
 }
 
+extension JellyfinMediaSource {
+    func playbackOptions(requiresTranscodedAudio: Bool) -> MediaPlaybackOptions {
+        let streams = mediaStreams ?? []
+        let video = streams.first(where: { $0.type == "Video" })
+        let videoHeight = video?.height
+        let transcodesBoth = !supportsDirectPlay && !supportsDirectStream
+        let canDirectStreamVideo = ["h264", "avc", "avc1"].contains(video?.codec?.lowercased() ?? "")
+        let transcodesAudio = requiresTranscodedAudio || transcodesBoth
+        let audioOptions = streams
+            .filter { $0.type == "Audio" }
+            .map { stream in
+                let canDirectStream = ["aac", "mp3"].contains(stream.codec?.lowercased() ?? "")
+                return MediaPlaybackOption(
+                    id: String(stream.index),
+                    title: stream.displayTitle ?? stream.language ?? "Audio \(stream.index)",
+                    transcodingTitle: transcodesAudio || !canDirectStream ? "AAC" : nil,
+                    sourceFormat: MediaTranscoding.audio(
+                        codec: stream.codec,
+                        channels: stream.channels,
+                        channelLayout: stream.channelLayout
+                    )
+                )
+            }
+        let selectedAudioID = defaultAudioStreamIndex.map(String.init) ?? audioOptions.first?.id
+        let selectedAudioStream = streams.first { stream in
+            stream.type == "Audio" && String(stream.index) == selectedAudioID
+        }
+        let defaultAudioTranscoding = selectedAudioID.flatMap { audioID in
+            audioOptions.first(where: { $0.id == audioID })?.transcodingTitle
+        }
+
+        return MediaPlaybackOptions(
+            videoHeight: videoHeight,
+            qualityOptions: MediaPlaybackQuality.transcodingOptions(forVideoHeight: videoHeight),
+            audioOptions: audioOptions,
+            subtitleOptions: streams
+                .filter { $0.type == "Subtitle" }
+                .map { stream in
+                    MediaPlaybackOption(
+                        id: String(stream.index),
+                        title: stream.displayTitle ?? stream.language ?? "Subtitle \(stream.index)",
+                        transcodingTitle: "Burned into video",
+                        sourceFormat: MediaTranscoding.subtitles(
+                            codec: stream.codec,
+                            isExternal: stream.isExternal == true
+                        )
+                    )
+                },
+            selectedAudioID: selectedAudioID,
+            selectedSubtitleID: defaultSubtitleStreamIndex.map(String.init),
+            defaultVideoTranscoding: transcodesBoth ? "H.264" : nil,
+            defaultAudioTranscoding: defaultAudioTranscoding,
+            streamingVideoTranscoding: canDirectStreamVideo ? nil : "H.264",
+            sourceContainer: MediaTranscoding.container(container),
+            sourceVideo: MediaTranscoding.video(
+                codec: video?.codec,
+                height: video?.height,
+                dynamicRange: video?.videoRangeType ?? video?.videoRange
+            ),
+            sourceAudio: MediaTranscoding.audio(
+                codec: selectedAudioStream?.codec,
+                channels: selectedAudioStream?.channels,
+                channelLayout: selectedAudioStream?.channelLayout
+            ),
+            defaultContainerTranscoding: !supportsDirectPlay
+        )
+    }
+}
+
 extension JellyfinConnectionSummary {
     func connectedServer(providerID: MediaProviderID = .jellyfin) -> ConnectedServer {
         ConnectedServer(

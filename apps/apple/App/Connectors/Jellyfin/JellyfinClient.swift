@@ -164,6 +164,16 @@ final class JellyfinClient {
 
         let requiresTranscodedAudio = PlatformMetadata.requiresTranscodedPlaybackAudio
         let usesDefaultAudio = selection == nil || selection?.audioID == selection?.defaultAudioID
+        let playbackDescription = mediaSource
+            .playbackOptions(requiresTranscodedAudio: requiresTranscodedAudio)
+            .playbackPlan(for: selection ?? MediaPlaybackSelection(
+                quality: .automatic,
+                audioID: mediaSource.defaultAudioStreamIndex.map(String.init),
+                subtitleID: nil,
+                defaultAudioID: mediaSource.defaultAudioStreamIndex.map(String.init),
+                defaultSubtitleID: mediaSource.defaultSubtitleStreamIndex.map(String.init)
+            ))
+            .playerDescription
 
         if !requiresTranscodedAudio,
            selection?.quality ?? .automatic == .automatic,
@@ -178,7 +188,11 @@ final class JellyfinClient {
                mediaSource: mediaSource
            ) {
             return (
-                MediaPlaybackResource(url: url, localStartOffsetMilliseconds: offsetMilliseconds),
+                MediaPlaybackResource(
+                    url: url,
+                    localStartOffsetMilliseconds: offsetMilliseconds,
+                    descriptionSuffix: playbackDescription
+                ),
                 .directPlay,
                 mediaSource.id
             )
@@ -198,7 +212,7 @@ final class JellyfinClient {
                 MediaPlaybackResource(
                     url: url,
                     localStartOffsetMilliseconds: offsetMilliseconds,
-                    descriptionSuffix: "Transcoding: H.264 video • AAC audio"
+                    descriptionSuffix: playbackDescription
                 ),
                 .transcode,
                 mediaSource.id
@@ -237,18 +251,11 @@ final class JellyfinClient {
         let method: JellyfinPlaybackMethod = requiresTranscodedAudio || !mediaSource.supportsDirectStream
             ? .transcode
             : .directStream
-        let descriptionSuffix: String? = if requiresTranscodedAudio {
-            "Transcoding: AAC audio"
-        } else if method == .transcode {
-            "Transcoding: H.264 video • AAC audio"
-        } else {
-            nil
-        }
         return (
             MediaPlaybackResource(
                 url: url,
                 localStartOffsetMilliseconds: offsetMilliseconds,
-                descriptionSuffix: descriptionSuffix
+                descriptionSuffix: playbackDescription
             ),
             method,
             mediaSource.id
