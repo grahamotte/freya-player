@@ -16,9 +16,14 @@ The desired outcome is for Freya to preserve lossless and spatial audio only whe
 
 - Split from NATP because direct codec detection does not establish lossless HLS delivery or route-dependent spatial presentation.
 - This card includes ALAC, FLAC, Dolby Atmos, and other lossless or spatial variants not covered by NATP's safe direct-play and HLS-copy set.
+- Won't Do: NATP already preserves the common AC-3 and E-AC-3 paths, while lossless HLS delivery would add disproportionate provider and container complexity for uncommon video soundtracks. Native AVPlayer also cannot fully preserve formats such as TrueHD Atmos and DTS:X, and route-aware conversion would provide little benefit because the system handles output adaptation.
 
 ## Prompts
 
 ok lets do NATP, or at least the low hanging fruit of it. we just did FMTV, so we should have some tools we can use. if you consider any formats not low hanging fruit, then exclude them from NATP and add new card(s) for those
 
 Split lossless server-streaming and route-dependent spatial-audio preservation out of NATP because codec labels alone cannot establish compatible delivery or output.
+
+lets move the card to wont do
+
+Recorded the decision and moved AUDP to Won't Do because its remaining value does not justify the delivery complexity and native playback limitations.
