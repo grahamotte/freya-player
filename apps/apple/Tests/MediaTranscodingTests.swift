@@ -53,7 +53,7 @@ final class MediaTranscodingTests: XCTestCase {
         XCTAssertEqual(
             plan.conversions.map(\.description),
             [
-                "MP4 → MPEG-TS",
+                "MP4 → Fragmented MP4",
                 "HEVC • 4K • HDR10 → H.264 • 1080p",
                 "E-AC-3 • 5.1 → AAC",
                 "SRT • External → WebVTT",
@@ -83,7 +83,7 @@ final class MediaTranscodingTests: XCTestCase {
         ))
 
         XCTAssertEqual(plan.path, .remux)
-        XCTAssertEqual(plan.conversions.first?.description, "Matroska → MPEG-TS")
+        XCTAssertEqual(plan.conversions.first?.description, "Matroska → Fragmented MP4")
         XCTAssertEqual(plan.conversions.count, 4)
         XCTAssertEqual(plan.conversions.last?.description, "None")
     }
@@ -111,7 +111,7 @@ final class MediaTranscodingTests: XCTestCase {
         let manifest = """
         #EXTM3U
         #EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID="subs",NAME="English",URI="subtitles.m3u8"
-        #EXT-X-STREAM-INF:BANDWIDTH=8000000,RESOLUTION=1920x1080,CODECS="avc1.640028,mp4a.40.2",SUBTITLES="subs"
+        #EXT-X-STREAM-INF:BANDWIDTH=8000000,RESOLUTION=1920x1080,CODECS="hvc1.2.4.L153.B0,mp4a.40.2",VIDEO-RANGE=PQ,SUBTITLES="subs"
         main.m3u8
         """
 
@@ -121,11 +121,60 @@ final class MediaTranscodingTests: XCTestCase {
                 subtitles: MediaTranscoding.subtitles(codec: "webvtt")
             ),
             MediaPlaybackFormats(
-                container: MediaTranscoding.container("mpegts"),
-                video: MediaTranscoding.video(codec: "h264", height: 1080),
+                container: MediaTranscoding.container("fmp4"),
+                video: MediaTranscoding.video(codec: "hevc", height: 1080, dynamicRange: "hdr10"),
                 audio: MediaTranscoding.audio(codec: "aac"),
                 subtitles: MediaTranscoding.subtitles(codec: "webvtt")
             )
+        )
+    }
+
+    func testHLSManifestContainerOverridesTheRequestedFallback() {
+        let manifest = """
+        #EXTM3U
+        #EXT-X-STREAM-INF:BANDWIDTH=4000000,CODECS="avc1.640028,mp4a.40.2"
+        segment.ts
+        """
+
+        XCTAssertEqual(
+            MediaTranscoding.hlsPlaybackFormats(manifest: manifest)?.container,
+            MediaTranscoding.container("mpegts")
+        )
+    }
+
+    func testDynamicRangeNamesAreNormalizedForCompatibilityAndReporting() {
+        let sdrNames = [
+            "SDR",
+            "BT709",
+            "BT470M",
+            "Gamma 2.2",
+            "BT470BG",
+            "Gamma 2.8",
+            "SMPTE 170M",
+            "SMPTE 240M",
+            "IEC 61966-2-4",
+            "xvYCC",
+            "BT1361",
+            "BT1361E",
+            "IEC 61966-2-1",
+            "sRGB",
+            "BT2020-10",
+            "BT2020-10 bit",
+            "BT2020-12",
+            "BT2020-12 bit",
+        ]
+
+        for name in sdrNames {
+            XCTAssertEqual(MediaTranscoding.normalizedDynamicRange(name), "sdr", name)
+        }
+        XCTAssertEqual(MediaTranscoding.normalizedDynamicRange("SMPTE ST 2084"), "hdr10")
+        XCTAssertEqual(MediaTranscoding.normalizedDynamicRange("ARIB-STD-B67"), "hlg")
+        XCTAssertEqual(MediaTranscoding.normalizedDynamicRange("Dolby Vision"), "dolbyvision")
+        XCTAssertEqual(MediaTranscoding.normalizedDynamicRange("HDR10+"), "hdr10plus")
+        XCTAssertEqual(MediaTranscoding.normalizedDynamicRange("unknown"), "unknown")
+        XCTAssertEqual(
+            MediaTranscoding.video(codec: "h264", height: 1080, dynamicRange: "BT709")?.description,
+            "H.264 • 1080p • SDR"
         )
     }
 

@@ -32,6 +32,108 @@ final class PlaybackCompatibilityTests: XCTestCase {
             PlaybackCompatibility.directPlayAudioCodecs(isPlayable: isPlayable),
             ["aac", "mp4a", "ac3", "ac-3", "eac3", "eac-3", "ec-3", "flac"]
         )
+        XCTAssertEqual(
+            PlaybackCompatibility.streamingVideoCodecs(
+                directPlayVideoCodecs: ["h264", "hevc", "av1"]
+            ),
+            ["h264", "hevc"]
+        )
+        XCTAssertEqual(
+            PlaybackCompatibility.streamingVideoCodecNames(copying: "hevc", canCopy: true),
+            ["h264", "hevc"]
+        )
+        XCTAssertEqual(
+            PlaybackCompatibility.streamingVideoCodecNames(copying: "vp9", canCopy: false),
+            ["h264"]
+        )
+    }
+
+    func testHEVCStreamingRequiresCompatibleSourceDeviceAndDisplayRoute() {
+        let supportedCodecs: Set<String> = ["h264", "hevc"]
+        let canStream: (
+            String?,
+            String?,
+            String?,
+            Int?,
+            Int?,
+            Bool?,
+            Bool,
+            Bool
+        ) -> Bool = { codec, dynamicRange, profile, level, bitDepth, isInterlaced, supportsMain10, isHDREligible in
+            PlaybackCompatibility.canStreamVideo(
+                codec: codec,
+                height: 2160,
+                dynamicRange: dynamicRange,
+                profile: profile,
+                level: level,
+                bitDepth: bitDepth,
+                isInterlaced: isInterlaced,
+                supportedCodecs: supportedCodecs,
+                maximumHeight: nil,
+                supportsHEVCMain10: supportsMain10,
+                isHDREligible: isHDREligible
+            )
+        }
+
+        XCTAssertTrue(canStream("hevc", "sdr", "Main", 120, 8, false, true, false))
+        XCTAssertTrue(canStream("hevc", "hdr10", "Main 10", 153, 10, false, true, true))
+        XCTAssertTrue(canStream("hevc", "hlg", "Main 10", 153, 10, false, true, true))
+        XCTAssertFalse(canStream("hevc", "hdr10", "Main 10", 153, 10, false, true, false))
+        XCTAssertFalse(canStream("hevc", "hdr10", "Main 10", 153, 10, false, false, true))
+        XCTAssertFalse(canStream("hevc", "hdr10", "Main", 153, 10, false, true, true))
+        XCTAssertFalse(canStream("hevc", "hlg", "Main 10", 153, 8, false, true, true))
+        XCTAssertFalse(canStream("hevc", "dolby vision", "Main 10", 153, 10, false, true, true))
+        XCTAssertFalse(canStream("hevc", "hdr10+", "Main 10", 153, 10, false, true, true))
+        XCTAssertFalse(canStream("hevc", "unknown", "Main 10", 153, 10, false, true, true))
+        XCTAssertFalse(canStream("hevc", "sdr", "Main 12", 153, 10, false, true, true))
+        XCTAssertFalse(canStream("hevc", "sdr", "Main", 156, 10, false, true, true))
+        XCTAssertFalse(canStream("hevc", "sdr", "Main", 153, 12, false, true, true))
+        XCTAssertFalse(canStream("hevc", "sdr", "Main", 153, 10, true, true, true))
+        XCTAssertFalse(canStream("vp9", "sdr", nil, nil, nil, nil, true, true))
+    }
+
+    func testSDRTransferNamesDoNotForceCompatibleVideoTranscoding() {
+        let supportedCodecs: Set<String> = ["h264", "hevc"]
+
+        XCTAssertTrue(PlaybackCompatibility.canStreamVideo(
+            codec: "h264",
+            height: 1080,
+            dynamicRange: "BT709",
+            profile: nil,
+            level: nil,
+            bitDepth: 8,
+            isInterlaced: false,
+            supportedCodecs: supportedCodecs,
+            maximumHeight: nil,
+            supportsHEVCMain10: true,
+            isHDREligible: false
+        ))
+        XCTAssertTrue(PlaybackCompatibility.canStreamVideo(
+            codec: "hevc",
+            height: 2160,
+            dynamicRange: "BT2020-10",
+            profile: "Main 10",
+            level: 153,
+            bitDepth: 10,
+            isInterlaced: false,
+            supportedCodecs: supportedCodecs,
+            maximumHeight: nil,
+            supportsHEVCMain10: true,
+            isHDREligible: false
+        ))
+        XCTAssertFalse(PlaybackCompatibility.canStreamVideo(
+            codec: "h264",
+            height: 1080,
+            dynamicRange: "unknown",
+            profile: nil,
+            level: nil,
+            bitDepth: 8,
+            isInterlaced: false,
+            supportedCodecs: supportedCodecs,
+            maximumHeight: nil,
+            supportsHEVCMain10: true,
+            isHDREligible: false
+        ))
     }
 
     func testVideoCompatibilityHonorsAnOptionalDisplayResolutionLimit() {

@@ -216,8 +216,14 @@ final class JellyfinClient {
 
         let selectedAudioIndex = selection.map { $0.audioID ?? "-1" }
         let selectedSubtitleIndex = selection.map { $0.subtitleID ?? "-1" }
-        let canCopyVideo = mediaSource.canCopyVideo
+        let canCopyVideo = mediaSource.supportsDirectStream
+            && mediaSource.canCopyVideo
+            && quality == .automatic
         let canCopyAudio = !requiresTranscodedAudio && mediaSource.canCopyAudio(selection: selection)
+        let videoCodecs = PlaybackCompatibility.streamingVideoCodecNames(
+            copying: mediaSource.videoCodec,
+            canCopy: canCopyVideo
+        )
 
         components.queryItems = [
             playbackInfo.playSessionId.map { URLQueryItem(name: "playSessionId", value: $0) },
@@ -230,8 +236,8 @@ final class JellyfinClient {
             selection?.subtitleID.map { _ in URLQueryItem(name: "subtitleMethod", value: "Hls") },
             selection?.subtitleID.map { _ in URLQueryItem(name: "subtitleCodec", value: "vtt") },
             selection?.subtitleID.map { _ in URLQueryItem(name: "enableSubtitlesInManifest", value: "true") },
-            URLQueryItem(name: "segmentContainer", value: "ts"),
-            URLQueryItem(name: "videoCodec", value: "h264"),
+            URLQueryItem(name: "segmentContainer", value: "mp4"),
+            URLQueryItem(name: "videoCodec", value: videoCodecs.joined(separator: ",")),
             URLQueryItem(name: "profile", value: "high"),
             URLQueryItem(name: "audioCodec", value: Self.playbackAudioCodecs),
             URLQueryItem(name: "allowVideoStreamCopy", value: canCopyVideo ? "true" : "false"),

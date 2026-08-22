@@ -158,10 +158,17 @@ extension MediaPlaybackOptions {
 }
 
 enum MediaTranscoding {
-    static let streamingContainer = MediaFormat(name: "MPEG-TS")
+    static let streamingContainer = MediaFormat(name: "Fragmented MP4")
 
     static func container(_ name: String?) -> MediaFormat? {
         name.map { MediaFormat(name: $0) }
+    }
+
+    static func hlsContainer(_ name: String?) -> MediaFormat? {
+        switch name?.lowercased() {
+        case "fmp4", "fragmented mp4", "mp4": streamingContainer
+        default: container(name)
+        }
     }
 
     static func video(
@@ -216,6 +223,7 @@ enum MediaTranscoding {
             .split(separator: "x")
             .last
             .flatMap { Int($0) }
+        let dynamicRange = normalizedDynamicRange(attributes["VIDEO-RANGE"])
         let videoCodecs = Set(["av1", "h264", "hevc", "mpeg2video", "mpeg4", "vp8", "vp9"])
         let audioCodecs = Set([
             "aac", "ac-3", "ac3", "alac", "dca", "dts", "eac-3", "eac3", "ec-3", "flac", "mp3", "opus",
@@ -227,8 +235,8 @@ enum MediaTranscoding {
             .contains { $0.hasPrefix("#EXT-X-MEDIA:") && $0.contains("TYPE=SUBTITLES") }
 
         return MediaPlaybackFormats(
-            container: container,
-            video: video(codec: videoCodec, height: resolutionHeight),
+            container: detectedHLSContainer(in: manifest) ?? container,
+            video: video(codec: videoCodec, height: resolutionHeight, dynamicRange: dynamicRange),
             audio: audio(codec: audioCodec),
             subtitles: hasSubtitles ? subtitles : nil
         )
@@ -243,6 +251,7 @@ enum MediaTranscoding {
         case "mov": "QuickTime"
         case "mkv", "matroska": "Matroska"
         case "mpegts", "mpeg-ts", "ts": "MPEG-TS"
+        case "fmp4", "fragmented mp4": "Fragmented MP4"
         case "hls": "HLS"
         case "h264", "avc", "avc1": "H.264"
         case "hevc", "h265", "hvc1", "hev1": "HEVC"
@@ -309,6 +318,35 @@ enum MediaTranscoding {
         return codec
     }
 
+    static func normalizedDynamicRange(_ dynamicRange: String?) -> String? {
+        guard let dynamicRange = dynamicRange?.trimmingCharacters(in: .whitespacesAndNewlines),
+              dynamicRange.isPresent else { return nil }
+        if ["hdr10+", "hdr10plus"].contains(dynamicRange.lowercased()) { return "hdr10plus" }
+        return switch dynamicRange.lowercased()
+            .filter({ $0.isLetter || $0.isNumber }) {
+        case "sdr", "bt709", "bt470m", "gamma22", "bt470bg", "gamma28",
+             "smpte170m", "smpte240m", "iec6196624", "xvycc", "bt1361",
+             "bt1361e", "iec6196621", "srgb", "bt202010", "bt202010bit",
+             "bt202012", "bt202012bit": "sdr"
+        case "hdr", "hdr10", "pq", "smpte2084", "smptest2084": "hdr10"
+        case "hlg", "aribstdb67": "hlg"
+        case "dovi", "dolbyvision": "dolbyvision"
+        case "hdr10plus": "hdr10plus"
+        case let value: value
+        }
+    }
+
+    private static func detectedHLSContainer(in manifest: String) -> MediaFormat? {
+        let lines = manifest.split(whereSeparator: \.isNewline)
+        if lines.contains(where: { $0.hasPrefix("#EXT-X-MAP:") || $0.lowercased().contains(".m4s") }) {
+            return streamingContainer
+        }
+        if lines.contains(where: { $0.lowercased().hasSuffix(".ts") }) {
+            return container("mpegts")
+        }
+        return nil
+    }
+
     static func channelLayoutTitle(_ layout: String?, channels: Int?) -> String? {
         if let layout = layout?.trimmingCharacters(in: .whitespacesAndNewlines), layout.isPresent {
             return layout
@@ -336,15 +374,13 @@ enum MediaTranscoding {
     }
 
     private static func dynamicRangeTitle(_ dynamicRange: String?) -> String? {
-        guard let dynamicRange = dynamicRange?.trimmingCharacters(in: .whitespacesAndNewlines),
-              dynamicRange.isPresent else { return nil }
-        return switch dynamicRange.lowercased() {
-        case "dovi", "dolbyvision", "dolby vision": "Dolby Vision"
-        case "hdr", "hdr10": "HDR10"
+        guard let dynamicRange = normalizedDynamicRange(dynamicRange) else { return nil }
+        return switch dynamicRange {
+        case "dolbyvision": "Dolby Vision"
+        case "hdr10": "HDR10"
+        case "hdr10plus": "HDR10+"
         case "hlg": "HLG"
         case "sdr": "SDR"
-        case "smpte2084", "smpte st 2084": "HDR10"
-        case "arib-std-b67": "HLG"
         default: dynamicRange.uppercased()
         }
     }

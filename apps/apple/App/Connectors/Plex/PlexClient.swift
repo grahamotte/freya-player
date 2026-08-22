@@ -13,11 +13,6 @@ final class PlexClient {
     private let bundle: Bundle
     private let clientIdentifier: String
     private var playbackMetadataCache: [String: PlexPlaybackMetadata] = [:]
-    private let hlsProfileExtra = [
-        "add-transcode-target(type=videoProfile&context=streaming&protocol=hls&container=mpegts&videoCodec=h264&audioCodec=aac&replace=true)",
-        "add-transcode-target(type=subtitleProfile&context=all&protocol=hls&container=webvtt&subtitleCodec=webvtt)"
-    ].joined(separator: "+")
-
     init(
         session: URLSession = .shared,
         defaults: any DefaultsStore = UserDefaults.standard,
@@ -103,6 +98,7 @@ final class PlexClient {
             toMaximumVideoHeight: PlaybackCompatibility.maximumVideoHeight,
             sourceVideoHeight: metadata.videoHeight
         )
+        let streamingVideoCodecs = metadata.streamingVideoCodecNames(quality: quality)
 
         if let selection,
            (usesCustomAudio || changesSubtitle),
@@ -115,7 +111,7 @@ final class PlexClient {
             )
         }
 
-        if let selection,
+        if selection != nil,
            (usesCustomAudio || includesSubtitles),
            metadata.selectedPartID != nil {
             let prepared = try await preparePlaybackSession(
@@ -125,6 +121,7 @@ final class PlexClient {
                 sessionID: sessionID,
                 offsetMilliseconds: offsetMilliseconds,
                 directStreamAudio: directStreamAudio,
+                streamingVideoCodecs: streamingVideoCodecs,
                 includesSubtitles: includesSubtitles
             )
 
@@ -135,6 +132,7 @@ final class PlexClient {
                 sessionID: sessionID,
                 offsetMilliseconds: offsetMilliseconds,
                 directStreamAudio: directStreamAudio,
+                streamingVideoCodecs: streamingVideoCodecs,
                 includesSubtitles: prepared.includesSubtitles
             ) else {
                 throw PlexError.invalidURL
@@ -169,6 +167,7 @@ final class PlexClient {
             sessionID: sessionID,
             offsetMilliseconds: offsetMilliseconds,
             directStreamAudio: directStreamAudio,
+            streamingVideoCodecs: streamingVideoCodecs,
             includesSubtitles: includesSubtitles
         )
 
@@ -179,6 +178,7 @@ final class PlexClient {
             sessionID: sessionID,
             offsetMilliseconds: offsetMilliseconds,
             directStreamAudio: directStreamAudio,
+            streamingVideoCodecs: streamingVideoCodecs,
             includesSubtitles: prepared.includesSubtitles
         ) else {
             throw PlexError.invalidURL
@@ -347,6 +347,7 @@ final class PlexClient {
         sessionID: String,
         offsetMilliseconds: Int?,
         directStreamAudio: Bool,
+        streamingVideoCodecs: [String],
         includesSubtitles: Bool
     ) -> URL? {
         guard var components = URLComponents(
@@ -362,6 +363,7 @@ final class PlexClient {
             sessionID: sessionID,
             offsetMilliseconds: offsetMilliseconds,
             directStreamAudio: directStreamAudio,
+            streamingVideoCodecs: streamingVideoCodecs,
             includesSubtitles: includesSubtitles
         )
 
@@ -375,6 +377,7 @@ final class PlexClient {
         sessionID: String,
         offsetMilliseconds: Int?,
         directStreamAudio: Bool,
+        streamingVideoCodecs: [String],
         includesSubtitles: Bool
     ) async throws -> PlexPreparedPlayback {
         guard var components = URLComponents(
@@ -390,6 +393,7 @@ final class PlexClient {
             sessionID: sessionID,
             offsetMilliseconds: offsetMilliseconds,
             directStreamAudio: directStreamAudio,
+            streamingVideoCodecs: streamingVideoCodecs,
             includesSubtitles: includesSubtitles
         )
 
@@ -411,6 +415,7 @@ final class PlexClient {
                 sessionID: sessionID,
                 offsetMilliseconds: offsetMilliseconds,
                 directStreamAudio: directStreamAudio,
+                streamingVideoCodecs: streamingVideoCodecs,
                 includesSubtitles: false
             )
         }
@@ -427,6 +432,7 @@ final class PlexClient {
         sessionID: String,
         offsetMilliseconds: Int?,
         directStreamAudio: Bool,
+        streamingVideoCodecs: [String],
         includesSubtitles: Bool
     ) -> [URLQueryItem] {
         let maxVideoBitrate = quality.maxVideoBitrate ?? connection.automaticVideoBitrateLimit
@@ -448,7 +454,10 @@ final class PlexClient {
             URLQueryItem(name: "directStreamAudio", value: directStreamAudio ? "1" : "0"),
             URLQueryItem(name: "advancedSubtitles", value: "text"),
             URLQueryItem(name: "transcodeSessionId", value: sessionID),
-            URLQueryItem(name: "X-Plex-Client-Profile-Extra", value: hlsProfileExtra),
+            URLQueryItem(
+                name: "X-Plex-Client-Profile-Extra",
+                value: hlsProfileExtra(streamingVideoCodecs: streamingVideoCodecs)
+            ),
             URLQueryItem(name: "X-Plex-Client-Profile-Name", value: "iOS"),
             URLQueryItem(name: "X-Plex-Token", value: connection.serverToken),
             URLQueryItem(name: "X-Plex-Client-Identifier", value: clientIdentifier),
@@ -459,6 +468,13 @@ final class PlexClient {
             URLQueryItem(name: "X-Plex-Device-Name", value: "Freya Player")
         ]
         .compactMap { $0 }
+    }
+
+    private func hlsProfileExtra(streamingVideoCodecs: [String]) -> String {
+        [
+            "add-transcode-target(type=videoProfile&context=streaming&protocol=hls&container=mp4&videoCodec=\(streamingVideoCodecs.joined(separator: ","))&audioCodec=aac&replace=true)",
+            "add-transcode-target(type=subtitleProfile&context=all&protocol=hls&container=webvtt&subtitleCodec=webvtt)",
+        ].joined(separator: "+")
     }
 
     private func directPlayURL(
@@ -907,6 +923,14 @@ private struct PlexPlaybackMetadata: Decodable {
         media?.first(where: { $0.parts?.isEmpty == false })?.playbackVideoHeight
     }
 
+    func streamingVideoCodecNames(quality: MediaPlaybackQuality) -> [String] {
+        let media = media?.first(where: { $0.parts?.isEmpty == false })
+        return PlaybackCompatibility.streamingVideoCodecNames(
+            copying: media?.sourceVideoCodec,
+            canCopy: quality == .automatic && media?.canDirectStreamVideo == true
+        )
+    }
+
     func canDirectStreamAudio(_ audioID: String?) -> Bool {
         let media = media?.first(where: { $0.parts?.isEmpty == false })
         let streams = media?.parts?.first?.streams
@@ -1052,7 +1076,20 @@ private struct PlexPlaybackMetadata: Decodable {
         }
 
         var canDirectStreamVideo: Bool {
-            PlaybackCompatibility.canStreamVideo(codec: videoCodec, height: playbackVideoHeight)
+            let video = parts?.first?.videoStream
+            return PlaybackCompatibility.canStreamVideo(
+                codec: video?.codec ?? videoCodec,
+                height: video?.height ?? playbackVideoHeight,
+                dynamicRange: video?.dynamicRange,
+                profile: video?.profile,
+                level: video?.level,
+                bitDepth: video?.bitDepth,
+                isInterlaced: video?.scanType?.lowercased() == "interlaced"
+            )
+        }
+
+        var sourceVideoCodec: String? {
+            parts?.first?.videoStream?.codec ?? videoCodec
         }
 
         private static let supportedContainers = ["mp4", "m4v", "mov"]
@@ -1179,6 +1216,10 @@ private struct PlexPlaybackMetadata: Decodable {
         let channels: Int?
         let audioChannelLayout: String?
         let height: Int?
+        let bitDepth: Int?
+        let profile: String?
+        let level: Int?
+        let scanType: String?
         let colorTrc: String?
         let doviPresent: Bool?
 
@@ -1203,6 +1244,10 @@ private struct PlexPlaybackMetadata: Decodable {
             channels = try container.decodeLossyIntIfPresent(forKey: .channels)
             audioChannelLayout = try container.decodeIfPresent(String.self, forKey: .audioChannelLayout)
             height = try container.decodeLossyIntIfPresent(forKey: .height)
+            bitDepth = try container.decodeLossyIntIfPresent(forKey: .bitDepth)
+            profile = try container.decodeIfPresent(String.self, forKey: .profile)
+            level = try container.decodeLossyIntIfPresent(forKey: .level)
+            scanType = try container.decodeIfPresent(String.self, forKey: .scanType)
             colorTrc = try container.decodeIfPresent(String.self, forKey: .colorTrc)
             doviPresent = try container.decodeLossyBoolIfPresent(forKey: .doviPresent)
         }
@@ -1230,6 +1275,10 @@ private struct PlexPlaybackMetadata: Decodable {
             case channels
             case audioChannelLayout
             case height
+            case bitDepth
+            case profile
+            case level
+            case scanType
             case colorTrc
             case doviPresent = "DOVIPresent"
         }
@@ -1250,7 +1299,7 @@ private struct PlexPlaybackDecisionMetadata: Decodable {
                 && media?.subtitleDecision?.lowercased() != "burn"
         }
         return MediaPlaybackFormats(
-            container: MediaTranscoding.container(part?.container ?? media?.container),
+            container: MediaTranscoding.hlsContainer(part?.container ?? media?.container),
             video: MediaTranscoding.video(
                 codec: media?.videoCodec ?? video?.codec,
                 resolution: media?.videoResolution,

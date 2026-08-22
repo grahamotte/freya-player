@@ -63,13 +63,103 @@ final class JellyfinPlaybackModelsTests: XCTestCase {
         )
     }
 
+    func testCompatibleHEVCInMatroskaIsRemuxedWithoutChangingVideo() throws {
+        let source = try mediaSource(
+            container: "mkv",
+            videoCodec: "hevc",
+            audioCodec: "aac",
+            supportsDirectPlay: false,
+            supportsDirectStream: true,
+            dynamicRange: "SDR",
+            profile: "Main"
+        )
+        let options = source.playbackOptions(requiresTranscodedAudio: false)
+        let plan = options.playbackPlan(for: MediaPlaybackSelection(
+            quality: .automatic,
+            audioID: "1",
+            subtitleID: nil,
+            defaultAudioID: "1"
+        ))
+
+        XCTAssertNil(options.defaultVideoTranscoding)
+        XCTAssertEqual(plan.path, .remux)
+        XCTAssertEqual(plan.conversions[0].description, "Matroska → Fragmented MP4")
+        XCTAssertEqual(plan.conversions[1].description, "HEVC • 1080p • SDR")
+    }
+
+    func testBT709H264InMatroskaIsRemuxedWithoutChangingVideo() throws {
+        let source = try mediaSource(
+            container: "mkv",
+            videoCodec: "h264",
+            audioCodec: "aac",
+            supportsDirectPlay: false,
+            supportsDirectStream: true,
+            dynamicRange: "BT709"
+        )
+        let options = source.playbackOptions(requiresTranscodedAudio: false)
+        let plan = options.playbackPlan(for: MediaPlaybackSelection(
+            quality: .automatic,
+            audioID: "1",
+            subtitleID: nil,
+            defaultAudioID: "1"
+        ))
+
+        XCTAssertNil(options.defaultVideoTranscoding)
+        XCTAssertEqual(plan.path, .remux)
+        XCTAssertEqual(plan.conversions[0].description, "Matroska → Fragmented MP4")
+        XCTAssertEqual(plan.conversions[1].description, "H.264 • 1080p • SDR")
+    }
+
+    func testIncompatibleHEVCFallsBackToH264() throws {
+        let source = try mediaSource(
+            container: "mkv",
+            videoCodec: "hevc",
+            audioCodec: "aac",
+            supportsDirectPlay: false,
+            supportsDirectStream: true,
+            dynamicRange: "Dolby Vision",
+            profile: "Main 10"
+        )
+        let options = source.playbackOptions(requiresTranscodedAudio: false)
+
+        XCTAssertEqual(options.defaultVideoTranscoding, "H.264")
+        XCTAssertEqual(options.streamingVideoTranscoding, "H.264")
+    }
+
+    func testCompatibleHEVCIsPreservedWhileOnlyAudioConverts() throws {
+        let source = try mediaSource(
+            container: "mkv",
+            videoCodec: "hevc",
+            audioCodec: "dts",
+            supportsDirectPlay: false,
+            supportsDirectStream: true,
+            dynamicRange: "SDR",
+            profile: "Main"
+        )
+        let options = source.playbackOptions(requiresTranscodedAudio: false)
+        let plan = options.playbackPlan(for: MediaPlaybackSelection(
+            quality: .automatic,
+            audioID: "1",
+            subtitleID: nil,
+            defaultAudioID: "1"
+        ))
+
+        XCTAssertEqual(plan.path, .transcode)
+        XCTAssertEqual(plan.conversions[1].description, "HEVC • 1080p • SDR")
+        XCTAssertEqual(plan.conversions[2].description, "DTS • Stereo → AAC")
+    }
+
     private func mediaSource(
         container: String,
         videoCodec: String,
         audioCodec: String,
         supportsDirectPlay: Bool,
-        supportsDirectStream: Bool
+        supportsDirectStream: Bool,
+        dynamicRange: String? = nil,
+        profile: String? = nil
     ) throws -> JellyfinMediaSource {
+        let dynamicRangeJSON = dynamicRange.map { #", "VideoRangeType": "\#($0)""# } ?? ""
+        let profileJSON = profile.map { #", "Profile": "\#($0)""# } ?? ""
         let data = Data(
             """
             {
@@ -84,7 +174,7 @@ final class JellyfinPlaybackModelsTests: XCTestCase {
                   "Type": "Video",
                   "Codec": "\(videoCodec)",
                   "IsDefault": true,
-                  "Height": 1080
+                  "Height": 1080\(dynamicRangeJSON)\(profileJSON)
                 },
                 {
                   "Index": 1,

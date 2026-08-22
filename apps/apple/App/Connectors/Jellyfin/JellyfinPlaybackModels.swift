@@ -127,7 +127,12 @@ extension JellyfinMediaSource {
         let requiresServerStream = !supportsDirectPlay || !isDirectPlayable
         let canDirectStreamVideo = PlaybackCompatibility.canStreamVideo(
             codec: video?.codec,
-            height: video?.height
+            height: video?.height,
+            dynamicRange: video?.videoRangeType ?? video?.videoRange,
+            profile: video?.profile,
+            level: video?.level,
+            bitDepth: video?.bitDepth,
+            isInterlaced: video?.isInterlaced
         )
         let transcodesVideo = requiresServerStream && (!supportsDirectStream || !canDirectStreamVideo)
         let transcodesAllAudio = requiresTranscodedAudio || (requiresServerStream && !supportsDirectStream)
@@ -220,7 +225,19 @@ extension JellyfinMediaSource {
 
     var canCopyVideo: Bool {
         let video = mediaStreams?.first(where: { $0.type == "Video" })
-        return PlaybackCompatibility.canStreamVideo(codec: video?.codec, height: video?.height)
+        return PlaybackCompatibility.canStreamVideo(
+            codec: video?.codec,
+            height: video?.height,
+            dynamicRange: video?.videoRangeType ?? video?.videoRange,
+            profile: video?.profile,
+            level: video?.level,
+            bitDepth: video?.bitDepth,
+            isInterlaced: video?.isInterlaced
+        )
+    }
+
+    var videoCodec: String? {
+        mediaStreams?.first(where: { $0.type == "Video" })?.codec
     }
 
     func canCopyAudio(selection: MediaPlaybackSelection?) -> Bool {

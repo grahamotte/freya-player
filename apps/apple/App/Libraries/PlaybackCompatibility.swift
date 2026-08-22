@@ -49,7 +49,7 @@ enum PlaybackCompatibility {
     }
 
     static var streamingVideoCodecs: Set<String> {
-        directPlayVideoCodecs.intersection(h264Codecs)
+        streamingVideoCodecs(directPlayVideoCodecs: directPlayVideoCodecs)
     }
 
     static var streamingAudioCodecs: Set<String> {
@@ -91,9 +91,18 @@ enum PlaybackCompatibility {
     ) -> Set<String> {
         var codecs: Set<String> = []
         if isPlayable(h264MIMEType) { codecs.formUnion(h264Codecs) }
-        if isPlayable(hevcMIMEType) { codecs.formUnion(hevcCodecs) }
+        if isPlayable(hevcMIMEType) || isPlayable(hevcMain10MIMEType) { codecs.formUnion(hevcCodecs) }
         if isPlayable(av1MIMEType) && hasHardwareAV1Decoder { codecs.formUnion(av1Codecs) }
         return codecs
+    }
+
+    static func streamingVideoCodecs(directPlayVideoCodecs: Set<String>) -> Set<String> {
+        directPlayVideoCodecs.intersection(h264Codecs.union(hevcCodecs))
+    }
+
+    static func streamingVideoCodecNames(copying codec: String?, canCopy: Bool) -> [String] {
+        guard canCopy, hevcCodecs.contains(codec?.lowercased() ?? "") else { return ["h264"] }
+        return ["h264", "hevc"]
     }
 
     static func directPlayAudioCodecs(isPlayable: (String) -> Bool) -> Set<String> {
@@ -118,12 +127,46 @@ enum PlaybackCompatibility {
     static func canStreamVideo(
         codec: String?,
         height: Int?,
+        dynamicRange: String? = nil,
+        profile: String? = nil,
+        level: Int? = nil,
+        bitDepth: Int? = nil,
+        isInterlaced: Bool? = nil,
         supportedCodecs: Set<String>? = nil,
-        maximumHeight: Int? = maximumVideoHeight
+        maximumHeight: Int? = maximumVideoHeight,
+        supportsHEVCMain10: Bool = AVURLAsset.isPlayableExtendedMIMEType(hevcMain10MIMEType),
+        isHDREligible: Bool = AVPlayer.eligibleForHDRPlayback
     ) -> Bool {
         let codecs = supportedCodecs ?? streamingVideoCodecs
-        return codecs.contains(codec?.lowercased() ?? "")
-            && supportsVideoHeight(height, maximumHeight: maximumHeight)
+        let codec = codec?.lowercased() ?? ""
+        guard codecs.contains(codec),
+              supportsVideoHeight(height, maximumHeight: maximumHeight) else { return false }
+
+        let dynamicRange = MediaTranscoding.normalizedDynamicRange(dynamicRange)
+        guard hevcCodecs.contains(codec) else {
+            return dynamicRange == nil || dynamicRange == "sdr"
+        }
+        guard isInterlaced != true,
+              bitDepth.map({ $0 <= 10 }) != false,
+              level.map({ $0 <= maximumHEVCLevel }) != false else { return false }
+
+        let normalizedProfile = profile?
+            .lowercased()
+            .filter { $0.isLetter || $0.isNumber }
+        guard normalizedProfile.map({ ["main", "main10"].contains($0) }) != false else { return false }
+
+        let requiresMain10 = normalizedProfile == "main10"
+            || dynamicRange.map { ["hdr10", "hlg"].contains($0) } == true
+        if dynamicRange.map({ ["hdr10", "hlg"].contains($0) }) == true {
+            guard normalizedProfile.map({ $0 == "main10" }) != false,
+                  bitDepth.map({ $0 == 10 }) != false else { return false }
+        }
+        guard !requiresMain10 || supportsHEVCMain10 else { return false }
+        return switch dynamicRange {
+        case nil, "sdr": true
+        case "hdr10", "hlg": isHDREligible
+        default: false
+        }
     }
 
     static func maximumVideoHeight(deviceIdentifier: String) -> Int? {
@@ -190,8 +233,7 @@ enum PlaybackCompatibility {
             codecCapability(
                 category: .video,
                 name: "HEVC",
-                mimeType: hevcMIMEType,
-                isPlayable: isPlayable
+                isSupported: isPlayable(hevcMIMEType) || isPlayable(hevcMain10MIMEType)
             ),
             PlaybackCapability(
                 category: .video,
@@ -287,7 +329,20 @@ enum PlaybackCompatibility {
         isPlayable: (String) -> Bool,
         detail: String? = nil
     ) -> PlaybackCapability {
-        let isSupported = isPlayable(mimeType)
+        codecCapability(
+            category: category,
+            name: name,
+            isSupported: isPlayable(mimeType),
+            detail: detail
+        )
+    }
+
+    private static func codecCapability(
+        category: PlaybackCapabilityCategory,
+        name: String,
+        isSupported: Bool,
+        detail: String? = nil
+    ) -> PlaybackCapability {
         return PlaybackCapability(
             category: category,
             name: name,
@@ -328,6 +383,7 @@ enum PlaybackCompatibility {
 
     private static let h264MIMEType = "video/mp4; codecs=\"avc1.640028\""
     private static let hevcMIMEType = "video/mp4; codecs=\"hvc1.1.6.L120.B0\""
+    private static let hevcMain10MIMEType = "video/mp4; codecs=\"hvc1.2.4.L153.B0\""
     private static let av1MIMEType = "video/mp4; codecs=\"av01.0.08M.08\""
     private static let aacMIMEType = "audio/mp4; codecs=\"mp4a.40.2\""
     private static let mp3MIMEType = "audio/mpeg; codecs=\"mp3\""
@@ -338,6 +394,7 @@ enum PlaybackCompatibility {
     private static let h264Codecs: Set<String> = ["h264", "avc", "avc1"]
     private static let hevcCodecs: Set<String> = ["hevc", "h265", "hvc1"]
     private static let av1Codecs: Set<String> = ["av1", "av01"]
+    private static let maximumHEVCLevel = 153
     private static let hlsAudioCodecs: Set<String> = [
         "aac", "mp4a", "mp3", "ac3", "ac-3", "eac3", "eac-3", "ec-3",
     ]
