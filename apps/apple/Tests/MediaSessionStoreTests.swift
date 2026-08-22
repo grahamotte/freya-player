@@ -54,6 +54,62 @@ final class MediaSessionStoreTests: XCTestCase {
             serverID: "server-one"
         ))
     }
+
+    func testLibraryRefreshIsDueWhenNoPreviousRefreshWasStarted() {
+        let store = MediaSessionStore(defaults: MemoryDefaultsStore())
+
+        XCTAssertTrue(store.shouldStartLibraryRefresh(
+            providerID: .plex,
+            serverID: "server-one",
+            at: Date(timeIntervalSince1970: 1_000)
+        ))
+    }
+
+    func testLibraryRefreshIsDueFifteenMinutesAfterItStarted() {
+        let store = MediaSessionStore(defaults: MemoryDefaultsStore())
+        let startedAt = Date(timeIntervalSince1970: 1_000)
+        store.setLibraryRefreshStartedAt(startedAt, providerID: .plex, serverID: "server-one")
+
+        XCTAssertFalse(store.shouldStartLibraryRefresh(
+            providerID: .plex,
+            serverID: "server-one",
+            at: startedAt.addingTimeInterval((15 * 60) - 1)
+        ))
+        XCTAssertTrue(store.shouldStartLibraryRefresh(
+            providerID: .plex,
+            serverID: "server-one",
+            at: startedAt.addingTimeInterval(15 * 60)
+        ))
+    }
+
+    func testLibraryRefreshStartIsScopedByProviderAndServer() {
+        let store = MediaSessionStore(defaults: MemoryDefaultsStore())
+        let startedAt = Date(timeIntervalSince1970: 1_000)
+        store.setLibraryRefreshStartedAt(startedAt, providerID: .plex, serverID: "server-one")
+
+        XCTAssertTrue(store.shouldStartLibraryRefresh(
+            providerID: .plex,
+            serverID: "server-two",
+            at: startedAt
+        ))
+        XCTAssertTrue(store.shouldStartLibraryRefresh(
+            providerID: .jellyfin,
+            serverID: "server-one",
+            at: startedAt
+        ))
+    }
+
+    func testLibraryRefreshIsDueAfterTheClockMovesBackward() {
+        let store = MediaSessionStore(defaults: MemoryDefaultsStore())
+        let startedAt = Date(timeIntervalSince1970: 1_000)
+        store.setLibraryRefreshStartedAt(startedAt, providerID: .plex, serverID: "server-one")
+
+        XCTAssertTrue(store.shouldStartLibraryRefresh(
+            providerID: .plex,
+            serverID: "server-one",
+            at: startedAt.addingTimeInterval(-1)
+        ))
+    }
 }
 
 private final class MemoryDefaultsStore: DefaultsStore {

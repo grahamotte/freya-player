@@ -59,7 +59,7 @@ struct AppView: View {
             guard let server = model.connectedServer else { return }
             await PollingLoop.run {
                 guard let currentServer = model.connectedServer, currentServer.id == server.id else { return }
-                model.refreshAllLibraries(currentServer)
+                model.refreshAllLibrariesIfStale(currentServer)
             }
         }
         .alert("Connection Failed", isPresented: savedConnectionFailurePresented) {

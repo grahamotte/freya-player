@@ -29,6 +29,7 @@ final class AppModel: ObservableObject {
     private var restoreTask: Task<Void, Never>?
     private var pollTask: Task<Void, Never>?
     private var hasRestored = false
+    private var hasLiveConnection = false
     private var activeLibraryOrderServerID: String?
     private var activeLibraryOrder: [String] = []
     private var activeHiddenLibraryIDs: Set<String> = []
@@ -106,6 +107,7 @@ final class AppModel: ObservableObject {
     }
 
     func retrySavedConnection() {
+        hasLiveConnection = false
         connectionState = .checking
         restoreTask?.cancel()
         restoreTask = Task { [weak self] in
@@ -123,8 +125,7 @@ final class AppModel: ObservableObject {
                     let wasShowingCachedServer = connectedServer?.id == server.id
                     setConnectedServer(server)
                     if wasShowingCachedServer {
-                        cancelLibraryRefresh()
-                        refreshAllLibraries(server)
+                        refreshAllLibrariesIfStale(server)
                     }
                     return
                 }
@@ -149,8 +150,7 @@ final class AppModel: ObservableObject {
                     let wasShowingCachedServer = connectedServer?.id == server.id
                     setConnectedServer(server)
                     if wasShowingCachedServer {
-                        cancelLibraryRefresh()
-                        refreshAllLibraries(server)
+                        refreshAllLibrariesIfStale(server)
                     }
                     return
                 }
@@ -177,6 +177,7 @@ final class AppModel: ObservableObject {
     }
 
     func connectJellyfin(serverURL: String, username: String, password: String) {
+        hasLiveConnection = false
         restoreTask?.cancel()
         pollTask?.cancel()
         plexLinkCode = nil
@@ -210,6 +211,7 @@ final class AppModel: ObservableObject {
     }
 
     func startPlexLogin() {
+        hasLiveConnection = false
         restoreTask?.cancel()
         pollTask?.cancel()
         plexLinkCode = nil
@@ -252,6 +254,7 @@ final class AppModel: ObservableObject {
         plexConnector.disconnect()
         jellyfinConnector.disconnect()
         activeConnector = nil
+        hasLiveConnection = false
         clearActiveLibraryOrder()
         ArtworkImageCache.shared.clear()
         URLCache.shared.removeAllCachedResponses()
@@ -320,13 +323,31 @@ final class AppModel: ObservableObject {
         }
     }
 
-    func refreshAllLibraries(_ server: ConnectedServer) {
+    func refreshAllLibraries(_ server: ConnectedServer, at date: Date = Date()) {
         guard !isOffline else { return }
         guard let refreshID = refreshTracker.beginRefresh() else { return }
+        mediaSessionStore.setLibraryRefreshStartedAt(
+            date,
+            providerID: server.providerID,
+            serverID: server.serverID
+        )
 
         refreshTracker.run(.allLibraries) { [weak self] in
             await self?._refreshAllLibraries(server, refreshID: refreshID)
         }
+    }
+
+    func refreshAllLibrariesIfStale(_ server: ConnectedServer, at date: Date = Date()) {
+        guard hasLiveConnection else { return }
+        guard mediaSessionStore.shouldStartLibraryRefresh(
+            providerID: server.providerID,
+            serverID: server.serverID,
+            at: date
+        ) else {
+            return
+        }
+
+        refreshAllLibraries(server, at: date)
     }
 
     func cancelLibraryRefresh() {
@@ -841,6 +862,7 @@ final class AppModel: ObservableObject {
         plexConnector.disconnect()
         if activeConnector?.providerID == .plex {
             activeConnector = nil
+            hasLiveConnection = false
         }
         plexLinkCode = nil
     }
@@ -849,6 +871,7 @@ final class AppModel: ObservableObject {
         jellyfinConnector.disconnect()
         if activeConnector?.providerID == .jellyfin {
             activeConnector = nil
+            hasLiveConnection = false
         }
     }
 
@@ -884,6 +907,7 @@ final class AppModel: ObservableObject {
     // MARK: - Library order / hidden state
 
     private func setConnectedServer(_ server: ConnectedServer) {
+        hasLiveConnection = true
         if activeLibraryOrderServerID != server.id {
             loadActiveLibraryState(for: server)
         }

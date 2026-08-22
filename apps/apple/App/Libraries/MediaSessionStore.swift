@@ -17,6 +17,7 @@ final class MediaSessionStore {
     private let librarySortOrderKeyPrefix = "media.library.sort.order"
     private let libraryOrderKeyPrefix = "media.server.library.order"
     private let hiddenLibrariesKeyPrefix = "media.server.library.hidden"
+    private let libraryRefreshStartedAtKeyPrefix = "media.server.library.refresh.started.at"
     private let playbackSettingsKeyPrefix = "media.playback.settings"
 
     init(defaults: any DefaultsStore = UserDefaults.standard) {
@@ -73,6 +74,29 @@ final class MediaSessionStore {
 
     func setHiddenLibraryIDs(_ libraryIDs: Set<String>, providerID: MediaProviderID, serverID: String) {
         defaults.set(Array(libraryIDs), forKey: key(prefix: hiddenLibrariesKeyPrefix, providerID: providerID, serverID: serverID))
+    }
+
+    func shouldStartLibraryRefresh(
+        providerID: MediaProviderID,
+        serverID: String,
+        at date: Date = Date(),
+        minimumInterval: TimeInterval = 15 * 60
+    ) -> Bool {
+        guard let lastStartedAt = defaults.object(
+            forKey: key(prefix: libraryRefreshStartedAtKeyPrefix, providerID: providerID, serverID: serverID)
+        ) as? Date else {
+            return true
+        }
+
+        let elapsed = date.timeIntervalSince(lastStartedAt)
+        return elapsed < 0 || elapsed >= minimumInterval
+    }
+
+    func setLibraryRefreshStartedAt(_ date: Date, providerID: MediaProviderID, serverID: String) {
+        defaults.set(
+            date,
+            forKey: key(prefix: libraryRefreshStartedAtKeyPrefix, providerID: providerID, serverID: serverID)
+        )
     }
 
     func playbackSettings(for id: MediaPlaybackID, serverID: String) -> MediaPlaybackSettings? {
