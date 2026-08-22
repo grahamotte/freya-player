@@ -2,11 +2,12 @@ import AVFoundation
 import OSLog
 
 final class PlaybackSessionController {
-    let player = AVPlayer()
+    private(set) var player = AVPlayer()
 
     private var timeObserver: Any?
     private var timeControlObservation: NSKeyValueObservation?
     private var itemStatusObservation: NSKeyValueObservation?
+    private var pendingPlayerStatusObservation: NSKeyValueObservation?
     private var endObserver: NSObjectProtocol?
     private var failureObserver: NSObjectProtocol?
     private var stalledObserver: NSObjectProtocol?
@@ -19,6 +20,7 @@ final class PlaybackSessionController {
     private var onPlaybackEnded: ((Int, Int?) -> Void)?
     private var onRecoveryNeeded: ((Int, Error?) -> Void)?
     private var onNavigationNeeded: ((Int) -> Void)?
+    private var onPlayerChanged: ((AVPlayer) -> Void)?
     private var lastState: MediaPlaybackTimelineState?
     private var startOffsetMilliseconds: Int?
     private var enableSubtitles = false
@@ -30,6 +32,10 @@ final class PlaybackSessionController {
     private var pendingNavigationOffsetMilliseconds: Int?
     private var didObservePause = false
     private var didObservePlaying = false
+    private var isPreparingItem = false
+    private var pendingItem: AVPlayerItem?
+    private var pendingPlayer: AVPlayer?
+    private var pendingOffsetMilliseconds: Int?
     private var resumeProbe: PlaybackResumeProbe?
     private var resumeProbeFollowsNavigation = false
     private let logger = Logger(
@@ -38,13 +44,7 @@ final class PlaybackSessionController {
     )
 
     init() {
-        observePlaybackState()
-        timeObserver = player.addPeriodicTimeObserver(
-            forInterval: CMTime(seconds: 5, preferredTimescale: 600),
-            queue: .main
-        ) { [weak self] _ in
-            self?.sendCurrentTimeline()
-        }
+        bindPlayerObservers()
     }
 
     deinit {
@@ -54,6 +54,7 @@ final class PlaybackSessionController {
     func load(
         item: AVPlayerItem,
         startOffsetMilliseconds: Int? = nil,
+        timelineOffsetMilliseconds: Int? = nil,
         enableSubtitles: Bool = false,
         autoplay: Bool = true,
         onTimelineEvent: @escaping (MediaPlaybackTimelineState, Int, Int?) -> Void,
@@ -62,6 +63,7 @@ final class PlaybackSessionController {
         onNavigationNeeded: ((Int) -> Void)? = nil
     ) {
         PlaybackAudioSession.activate()
+        let currentItem = player.currentItem
         unbindCurrentItem()
 
         self.startOffsetMilliseconds = startOffsetMilliseconds.flatMap { $0 > 0 ? $0 : nil }
@@ -74,19 +76,30 @@ final class PlaybackSessionController {
         didPrepareCurrentItem = false
         canSendTimelineEvents = false
         didRequestRecovery = false
-        recoveryOffsetMilliseconds = self.startOffsetMilliseconds ?? 0
+        recoveryOffsetMilliseconds = timelineOffsetMilliseconds ?? self.startOffsetMilliseconds ?? 0
         pendingNavigationOffsetMilliseconds = nil
         didObservePause = false
         didObservePlaying = false
+        isPreparingItem = false
         resumeProbe = nil
         resumeProbeFollowsNavigation = false
         lastState = nil
 
-        player.replaceCurrentItem(with: item)
+        guard currentItem != nil else {
+            attach(item)
+            return
+        }
+
+        pendingItem = item
+        pendingOffsetMilliseconds = self.startOffsetMilliseconds
+        let pendingPlayer = AVPlayer(playerItem: item)
+        self.pendingPlayer = pendingPlayer
         observeItemStatus(item)
-        observePlaybackEnd(item)
-        observePlaybackFailure(item)
-        observeDiagnostics(item)
+        observePendingPlayerStatus(pendingPlayer, item: item)
+    }
+
+    func setPlayerChangeHandler(_ handler: ((AVPlayer) -> Void)?) {
+        onPlayerChanged = handler
     }
 
     func play() {
@@ -107,21 +120,21 @@ final class PlaybackSessionController {
         PlaybackAudioSession.deactivate()
     }
 
-    func prepareForRecovery() {
+    @discardableResult
+    func prepareForRecovery() -> Bool {
         rememberCurrentTime()
-        shouldPlayWhenReady = false
-        unbindCurrentItem()
-        player.replaceCurrentItem(with: nil)
-        didPrepareCurrentItem = false
+        let autoplay = shouldPlayWhenReady
         canSendTimelineEvents = false
+        unbindCurrentItem()
+        didPrepareCurrentItem = false
+        if !autoplay {
+            player.pause()
+        }
+        return autoplay
     }
 
     func teardown() {
-        if let timeObserver {
-            player.removeTimeObserver(timeObserver)
-        }
-        timeObserver = nil
-        timeControlObservation = nil
+        unbindPlayerObservers()
         unbindCurrentItem()
         player.replaceCurrentItem(with: nil)
         onTimelineEvent = nil
@@ -142,8 +155,9 @@ final class PlaybackSessionController {
         player.currentItem?.duration.milliseconds
     }
 
-    func userNavigated(to time: CMTime) {
-        guard let offset = time.milliseconds else { return }
+    @discardableResult
+    func userNavigated(to time: CMTime) -> Bool {
+        guard let offset = time.milliseconds else { return false }
         pendingNavigationOffsetMilliseconds = offset
         guard onNavigationNeeded != nil else {
             let bufferedThroughMilliseconds = bufferedThroughMilliseconds(at: offset)
@@ -157,7 +171,7 @@ final class PlaybackSessionController {
             if bufferedThroughMilliseconds == nil {
                 scheduleResumeProbeTimer()
             }
-            return
+            return false
         }
 
         navigationTimer?.invalidate()
@@ -168,6 +182,19 @@ final class PlaybackSessionController {
         }
         RunLoop.main.add(timer, forMode: .common)
         navigationTimer = timer
+        return true
+    }
+
+    func userWillResumeAfterNavigation() {
+        shouldPlayWhenReady = true
+    }
+
+    private func attach(_ item: AVPlayerItem) {
+        player.replaceCurrentItem(with: item)
+        observeItemStatus(item)
+        observePlaybackEnd(item)
+        observePlaybackFailure(item)
+        observeDiagnostics(item)
     }
 
     private func unbindCurrentItem() {
@@ -196,13 +223,20 @@ final class PlaybackSessionController {
         navigationTimer = nil
         stallTimer = nil
         resumeProbeTimer = nil
+        pendingItem?.cancelPendingSeeks()
+        pendingPlayer?.replaceCurrentItem(with: nil)
+        pendingPlayerStatusObservation = nil
+        pendingItem = nil
+        pendingPlayer = nil
+        pendingOffsetMilliseconds = nil
+        isPreparingItem = false
     }
 
     private func observeItemStatus(_ item: AVPlayerItem) {
         itemStatusObservation = item.observe(\.status, options: [.initial, .new]) { [weak self] item, _ in
             guard let self else { return }
             switch item.status {
-            case .readyToPlay where !self.didPrepareCurrentItem:
+            case .readyToPlay:
                 self.prepareItemForPlayback(item)
             case .failed:
                 self.logger.error("item failed: \(item.error?.localizedDescription ?? "unknown", privacy: .public)")
@@ -213,31 +247,98 @@ final class PlaybackSessionController {
         }
     }
 
-    private func prepareItemForPlayback(_ item: AVPlayerItem) {
-        didPrepareCurrentItem = true
-        enableSubtitlesIfNeeded(on: item)
+    private func observePendingPlayerStatus(_ pendingPlayer: AVPlayer, item: AVPlayerItem) {
+        pendingPlayerStatusObservation = pendingPlayer.observe(\.status, options: [.initial, .new]) {
+            [weak self, weak item] pendingPlayer, _ in
+            guard let self, let item else { return }
+            switch pendingPlayer.status {
+            case .readyToPlay:
+                self.prepareItemForPlayback(item)
+            case .failed:
+                self.requestRecovery(error: pendingPlayer.error)
+            default:
+                break
+            }
+        }
+    }
 
-        guard let startOffsetMilliseconds else {
-            canSendTimelineEvents = true
-            if shouldPlayWhenReady { player.play() }
-            sendState()
+    private func prepareItemForPlayback(_ item: AVPlayerItem) {
+        guard !isPreparingItem else { return }
+        if let pendingPlayer, pendingItem === item {
+            guard item.status == .readyToPlay, pendingPlayer.status == .readyToPlay else { return }
+            isPreparingItem = true
+            enableSubtitlesIfNeeded(on: item)
+            seek(
+                pendingPlayer,
+                item: item,
+                to: pendingOffsetMilliseconds
+            ) { [weak self, weak item, weak pendingPlayer] in
+                guard let self, let item, let pendingPlayer,
+                      self.pendingItem === item,
+                      self.pendingPlayer === pendingPlayer else { return }
+                self.activatePendingPlayer(pendingPlayer, item: item)
+            }
             return
         }
 
+        guard player.currentItem === item, !didPrepareCurrentItem else { return }
+        isPreparingItem = true
+        enableSubtitlesIfNeeded(on: item)
+        seek(player, item: item, to: startOffsetMilliseconds) { [weak self, weak item] in
+            guard let self, let item else { return }
+            self.activatePreparedItem(item)
+        }
+    }
+
+    private func seek(
+        _ player: AVPlayer,
+        item: AVPlayerItem,
+        to offsetMilliseconds: Int?,
+        completion: @escaping () -> Void
+    ) {
+        guard let offsetMilliseconds else {
+            completion()
+            return
+        }
         let duration = item.duration.milliseconds
-        let offset = min(startOffsetMilliseconds, max((duration ?? .max) - 10_000, 0))
+        let offset = min(offsetMilliseconds, max((duration ?? .max) - 10_000, 0))
         let tolerance = CMTime(seconds: 5, preferredTimescale: 600)
         player.seek(
             to: CMTime(milliseconds: offset),
             toleranceBefore: tolerance,
             toleranceAfter: tolerance
-        ) { [weak self, weak item] _ in
-            guard let item, self?.player.currentItem === item else { return }
-            guard let self else { return }
-            self.canSendTimelineEvents = true
-            if self.shouldPlayWhenReady { self.player.play() }
-            self.sendState()
-        }
+        ) { _ in completion() }
+    }
+
+    private func activatePendingPlayer(_ pendingPlayer: AVPlayer, item: AVPlayerItem) {
+        let previousPlayer = player
+        unbindPlayerObservers()
+        player = pendingPlayer
+        self.pendingPlayer = nil
+        pendingItem = nil
+        pendingOffsetMilliseconds = nil
+        pendingPlayerStatusObservation = nil
+        bindPlayerObservers()
+        observePlaybackEnd(item)
+        observePlaybackFailure(item)
+        observeDiagnostics(item)
+        didPrepareCurrentItem = true
+        isPreparingItem = false
+        canSendTimelineEvents = true
+        if shouldPlayWhenReady { pendingPlayer.play() }
+        onPlayerChanged?(pendingPlayer)
+        previousPlayer.pause()
+        previousPlayer.replaceCurrentItem(with: nil)
+        sendState()
+    }
+
+    private func activatePreparedItem(_ item: AVPlayerItem) {
+        guard player.currentItem === item else { return }
+        didPrepareCurrentItem = true
+        isPreparingItem = false
+        canSendTimelineEvents = true
+        if shouldPlayWhenReady { player.play() }
+        sendState()
     }
 
     private func enableSubtitlesIfNeeded(on item: AVPlayerItem) {
@@ -246,15 +347,29 @@ final class PlaybackSessionController {
             guard let self, let item,
                   let group = try? await item.asset.loadMediaSelectionGroup(for: .legible),
                   let option = group.defaultOption ?? group.options.first,
-                  self.player.currentItem === item else { return }
+                  self.player.currentItem === item || self.pendingItem === item else { return }
             item.select(option, in: group)
         }
     }
 
-    private func observePlaybackState() {
+    private func bindPlayerObservers() {
         timeControlObservation = player.observe(\.timeControlStatus, options: [.initial, .new]) { [weak self] _, _ in
             self?.sendState()
         }
+        timeObserver = player.addPeriodicTimeObserver(
+            forInterval: CMTime(seconds: 5, preferredTimescale: 600),
+            queue: .main
+        ) { [weak self] _ in
+            self?.sendCurrentTimeline()
+        }
+    }
+
+    private func unbindPlayerObservers() {
+        if let timeObserver {
+            player.removeTimeObserver(timeObserver)
+        }
+        timeObserver = nil
+        timeControlObservation = nil
     }
 
     private func observePlaybackEnd(_ item: AVPlayerItem) {
@@ -441,7 +556,9 @@ final class PlaybackSessionController {
     private func requestRecovery(error: Error? = nil) {
         guard !didRequestRecovery else { return }
         didRequestRecovery = true
-        player.pause()
+        if !shouldPlayWhenReady {
+            player.pause()
+        }
         onRecoveryNeeded?(pendingNavigationOffsetMilliseconds ?? recoveryOffsetMilliseconds, error)
     }
 

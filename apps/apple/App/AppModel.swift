@@ -460,12 +460,14 @@ final class AppModel: ObservableObject {
         offsetMilliseconds: Int? = nil
     ) async throws -> MediaPlaybackResource {
         guard !isOffline else { throw URLError(.notConnectedToInternet) }
-        return try await connector(for: id.providerID).playbackURL(
+        var resource = try await connector(for: id.providerID).playbackURL(
             for: id,
             selection: selection,
             sessionID: sessionID,
             offsetMilliseconds: offsetMilliseconds
         )
+        resource.timelineStartOffsetMilliseconds = offsetMilliseconds
+        return resource
     }
 
     func cachedQuickPlayItem(for item: MediaItem) -> MediaItem? {

@@ -8,6 +8,7 @@ struct MediaPlaybackID: Hashable {
 struct MediaPlaybackResource {
     let url: URL
     let localStartOffsetMilliseconds: Int?
+    var timelineStartOffsetMilliseconds: Int? = nil
     var reloadsForSeek = false
     var remoteSessionID: String? = nil
     var descriptionSuffix: String? = nil

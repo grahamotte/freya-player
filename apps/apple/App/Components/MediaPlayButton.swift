@@ -151,7 +151,7 @@ struct MediaPlayButton: View {
         currentResumeOffset = nil
         let controller = playbackController ?? PlaybackSessionController()
         playbackController = controller
-        let playerViewController = presentPlayerViewController(controller, isLoading: true)
+        let playerViewController = presentPlayerViewController(controller)
 
         do {
             let selection: MediaPlaybackSelection?
@@ -174,10 +174,7 @@ struct MediaPlayButton: View {
                 return false
             }
             load(controller, resource: resource)
-            if let playerViewController,
-               presentedPlayerController === playerViewController {
-                playerViewController.setLoading(false)
-            } else {
+            if playerViewController == nil || presentedPlayerController !== playerViewController {
                 presentPlayerViewController(controller)
             }
             isLoading = false
@@ -249,6 +246,7 @@ struct MediaPlayButton: View {
         controller.load(
             item: MediaPlayerItemFactory.item(resource: resource, mediaItem: item),
             startOffsetMilliseconds: resource.localStartOffsetMilliseconds,
+            timelineOffsetMilliseconds: resource.timelineStartOffsetMilliseconds,
             enableSubtitles: activeSelection?.subtitleID != nil,
             autoplay: autoplay,
             onTimelineEvent: reportTimeline(state:time:duration:),
@@ -260,15 +258,13 @@ struct MediaPlayButton: View {
 
     @discardableResult
     private func presentPlayerViewController(
-        _ playbackController: PlaybackSessionController,
-        isLoading: Bool = false
+        _ playbackController: PlaybackSessionController
     ) -> StockPlayerViewController? {
         if let controller = presentedPlayerController, controller.view.window != nil {
             controller.configure(
                 to: playbackController,
                 onPictureInPictureChanged: pictureInPictureChanged
             )
-            controller.setLoading(isLoading)
             return controller
         }
 
@@ -280,7 +276,6 @@ struct MediaPlayButton: View {
             onPictureInPictureChanged: pictureInPictureChanged,
             onDismiss: stopPlayback
         )
-        controller.setLoading(isLoading)
         presentedPlayerController = controller
         presenter.present(controller, animated: true)
         return controller
@@ -425,9 +420,8 @@ struct MediaPlayButton: View {
         let previousSessionID = activeRemoteSessionID
         currentResumeOffset = resumeOffset
         activeRemoteSessionID = nil
-        previousController.prepareForRecovery()
+        let autoplay = previousController.prepareForRecovery()
         model.stopPlaybackSession(for: id, sessionID: previousSessionID)
-        presentedPlayerController?.setLoading(true)
         recoveryTask?.cancel()
         recoveryTask = Task {
             isLoading = true
@@ -449,7 +443,7 @@ struct MediaPlayButton: View {
                 }
                 playbackSessionID = newSessionID
                 currentResumeOffset = resumeOffset
-                load(previousController, resource: resource)
+                load(previousController, resource: resource, autoplay: autoplay)
                 presentPlayerViewController(previousController)
             } catch {
                 guard !Task.isCancelled else { return }
@@ -490,6 +484,7 @@ struct MediaPlayButton: View {
     private func reportTimeline(state: MediaPlaybackTimelineState, time: Int, duration: Int?) {
         if state == .playing {
             currentResumeOffset = nil
+            didRetryPlayback = false
         }
         model.reportPlaybackTimeline(
             for: id,
@@ -885,11 +880,9 @@ final class StockPlayerViewController: AVPlayerViewController, AVPlayerViewContr
     var playbackController: PlaybackSessionController
     private var onPictureInPictureChanged: (Bool) -> Void
     private var onDismiss: (() -> Void)?
-    private let loadingIndicator = UIActivityIndicatorView(style: .large)
 
     private var didDismiss = false
     private var isPictureInPictureActive = false
-    private var isLoading = false
     private weak var pictureInPicturePresenter: UIViewController?
 
     init(
@@ -902,6 +895,7 @@ final class StockPlayerViewController: AVPlayerViewController, AVPlayerViewContr
         self.onDismiss = onDismiss
         super.init(nibName: nil, bundle: nil)
         modalPresentationStyle = .fullScreen
+        bindPlayerChanges()
     }
 
     @available(*, unavailable)
@@ -914,15 +908,6 @@ final class StockPlayerViewController: AVPlayerViewController, AVPlayerViewContr
 
         delegate = self
         player = playbackController.player
-        loadingIndicator.hidesWhenStopped = true
-        loadingIndicator.color = .white
-        loadingIndicator.translatesAutoresizingMaskIntoConstraints = false
-        view.addSubview(loadingIndicator)
-        NSLayoutConstraint.activate([
-            loadingIndicator.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            loadingIndicator.centerYAnchor.constraint(equalTo: view.centerYAnchor),
-        ])
-        updateLoadingIndicator()
 #if os(iOS)
         allowsPictureInPicturePlayback = true
 #endif
@@ -953,23 +938,28 @@ final class StockPlayerViewController: AVPlayerViewController, AVPlayerViewContr
         self.onPictureInPictureChanged = onPictureInPictureChanged
 
         guard self.playbackController !== playbackController else {
+            bindPlayerChanges()
             playbackController.play()
             return
         }
 
+        self.playbackController.setPlayerChangeHandler(nil)
         self.playbackController = playbackController
+        bindPlayerChanges()
         player = playbackController.player
         playbackController.play()
     }
 
-    func clearDismissHandler() {
-        onDismiss = nil
+    private func bindPlayerChanges() {
+        playbackController.setPlayerChangeHandler { [weak self, weak playbackController] player in
+            guard let self, let playbackController,
+                  self.playbackController === playbackController else { return }
+            self.player = player
+        }
     }
 
-    func setLoading(_ isLoading: Bool) {
-        self.isLoading = isLoading
-        guard isViewLoaded else { return }
-        updateLoadingIndicator()
+    func clearDismissHandler() {
+        onDismiss = nil
     }
 
 #if os(tvOS)
@@ -981,20 +971,20 @@ final class StockPlayerViewController: AVPlayerViewController, AVPlayerViewContr
         playbackController.userNavigated(to: targetTime)
         return targetTime
     }
+
+    func playerViewController(
+        _ playerViewController: AVPlayerViewController,
+        willResumePlaybackAfterUserNavigatedFrom oldTime: CMTime,
+        to targetTime: CMTime
+    ) {
+        playbackController.userWillResumeAfterNavigation()
+    }
 #endif
 
     private func finishDismissalIfNeeded() {
         guard !didDismiss else { return }
         didDismiss = true
         onDismiss?()
-    }
-
-    private func updateLoadingIndicator() {
-        if isLoading {
-            loadingIndicator.startAnimating()
-        } else {
-            loadingIndicator.stopAnimating()
-        }
     }
 
     func playerViewControllerWillStartPictureInPicture(_ playerViewController: AVPlayerViewController) {

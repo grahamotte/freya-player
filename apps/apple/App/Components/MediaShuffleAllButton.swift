@@ -78,7 +78,7 @@ struct MediaPlayAllButton: View {
         await loadCurrent(showPlayer: true)
     }
 
-    private func loadCurrent(showPlayer: Bool = false) async {
+    private func loadCurrent(showPlayer: Bool = false, autoplay: Bool = true) async {
         guard !Task.isCancelled else { return }
         guard let item = currentItem, let id = item.playbackID else {
             isShowingPlayer = false
@@ -104,7 +104,7 @@ struct MediaPlayAllButton: View {
             sessionID = nextSessionID
             didFinishCurrent = false
             resumeOffset = nil
-            loadPlayerItem(resource, mediaItem: item)
+            loadPlayerItem(resource, mediaItem: item, autoplay: autoplay)
             schedulePrepareNext()
             if showPlayer {
                 isShowingPlayer = true
@@ -113,7 +113,7 @@ struct MediaPlayAllButton: View {
             guard !Task.isCancelled, index == currentIndex else { return }
             index += 1
             didRetryCurrent = false
-            await loadCurrent(showPlayer: showPlayer)
+            await loadCurrent(showPlayer: showPlayer, autoplay: autoplay)
         }
     }
 
@@ -155,6 +155,9 @@ struct MediaPlayAllButton: View {
 
     private func reportTimeline(state: MediaPlaybackTimelineState, time: Int, duration: Int?) {
         guard let id = currentItem?.playbackID else { return }
+        if state == .playing {
+            didRetryCurrent = false
+        }
         model.reportPlaybackTimeline(for: id, state: state, time: time, duration: duration, sessionID: sessionID)
     }
 
@@ -195,11 +198,11 @@ struct MediaPlayAllButton: View {
             : max(playbackController.currentTimeMilliseconds, currentItem?.resumeOffsetMilliseconds ?? 0)
         let previousSessionID = activeRemoteSessionID
         activeRemoteSessionID = nil
-        playbackController.prepareForRecovery()
+        let autoplay = playbackController.prepareForRecovery()
         if let id = currentItem?.playbackID {
             model.stopPlaybackSession(for: id, sessionID: previousSessionID)
         }
-        await loadCurrent()
+        await loadCurrent(autoplay: autoplay)
     }
 
     private func restartCurrent(at offset: Int) async {
@@ -238,7 +241,11 @@ struct MediaPlayAllButton: View {
         }
     }
 
-    private func loadPlayerItem(_ resource: MediaPlaybackResource, mediaItem: MediaItem) {
+    private func loadPlayerItem(
+        _ resource: MediaPlaybackResource,
+        mediaItem: MediaItem,
+        autoplay: Bool = true
+    ) {
         let previousSessionID = activeRemoteSessionID
         activeRemoteSessionID = resource.remoteSessionID
         if previousSessionID != activeRemoteSessionID, let id = currentItem?.playbackID {
@@ -250,6 +257,8 @@ struct MediaPlayAllButton: View {
         controller.load(
             item: MediaPlayerItemFactory.item(resource: resource, mediaItem: mediaItem),
             startOffsetMilliseconds: resource.localStartOffsetMilliseconds,
+            timelineOffsetMilliseconds: resource.timelineStartOffsetMilliseconds,
+            autoplay: autoplay,
             onTimelineEvent: reportTimeline(state:time:duration:),
             onPlaybackEnded: playbackEnded(time:duration:),
             onRecoveryNeeded: { savedTime, _ in
