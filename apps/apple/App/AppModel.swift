@@ -351,13 +351,13 @@ final class AppModel: ObservableObject {
     }
 
     func cancelLibraryRefresh() {
-        guard refreshTracker.progress != nil else { return }
+        guard refreshTracker.isLibraryRefreshInProgress else { return }
         invalidateCacheGeneration()
         refreshTracker.cancelAll()
     }
 
-    var libraryRefreshProgress: RefreshProgress? {
-        refreshTracker.progress
+    var isLibraryRefreshInProgress: Bool {
+        refreshTracker.isLibraryRefreshInProgress
     }
 
     /// Schedule a full recursive refresh of `library` in the background.
@@ -512,18 +512,24 @@ final class AppModel: ObservableObject {
     // MARK: - Internal implementations
 
     private func _refreshAllLibraries(_ server: ConnectedServer, refreshID: UUID) async {
-        defer { refreshTracker.finishRefresh(refreshID) }
+        let generation = cacheGeneration
+        libraryCache.beginBatchUpdates()
+        defer {
+            libraryCache.endBatchUpdates(
+                publishingChanges: generation == cacheGeneration && !Task.isCancelled
+            )
+            refreshTracker.finishRefresh(refreshID)
+        }
         let traversal = LibraryRefreshTraversal()
         var tasks: [Task<Void, Never>] = [
             refreshTracker.run(.connection) { [weak self] in
-                await self?._refreshConnection(refreshID: refreshID)
+                await self?._refreshConnection()
             },
         ]
         tasks += server.libraries.map { library in
             refreshTracker.run(.library(library.id)) { [weak self] in
                 await self?._resyncLibrary(
                     library.reference,
-                    refreshID: refreshID,
                     traversal: traversal
                 )
             }
@@ -533,15 +539,13 @@ final class AppModel: ObservableObject {
         }
     }
 
-    private func _refreshConnection(refreshID: UUID? = nil) async {
+    private func _refreshConnection() async {
         guard let activeConnector else { return }
         let generation = cacheGeneration
         let existingServer = connectedServer
 
         do {
-            let server = try await trackedRefreshRequest(refreshID) {
-                try await activeConnector.refreshConnection()
-            }
+            let server = try await activeConnector.refreshConnection()
             guard generation == cacheGeneration else { return }
             if plexLinkCode != nil {
                 plexLinkCode = nil
@@ -556,29 +560,25 @@ final class AppModel: ObservableObject {
 
     private func _resyncLibrary(
         _ library: LibraryReference,
-        refreshID: UUID? = nil,
         traversal: LibraryRefreshTraversal? = nil
     ) async {
         libraryCache.beginBatchUpdates()
         defer { libraryCache.endBatchUpdates() }
-        let refreshedItems = await _refreshLibrary(library, refreshID: refreshID)
+        let refreshedItems = await _refreshLibrary(library)
         await _warmLibraryChildren(
             library,
             refreshedItems: refreshedItems,
-            refreshID: refreshID,
             traversal: traversal ?? LibraryRefreshTraversal()
         )
     }
 
-    private func _refreshLibrary(_ library: LibraryReference, refreshID: UUID? = nil) async -> [MediaItem]? {
+    private func _refreshLibrary(_ library: LibraryReference) async -> [MediaItem]? {
         let generation = cacheGeneration
         guard isCurrentServer(providerID: library.providerID, serverID: library.serverID) else { return nil }
 
         let connector = connector(for: library.providerID)
         do {
-            let items = try await trackedRefreshRequest(refreshID) {
-                try await connector.loadLibraryItems(for: library)
-            }
+            let items = try await connector.loadLibraryItems(for: library)
             guard generation == cacheGeneration,
                   isCurrentServer(providerID: library.providerID, serverID: library.serverID) else { return nil }
             libraryCache.ingest(items: items, asTopLevelOf: library.id)
@@ -607,7 +607,6 @@ final class AppModel: ObservableObject {
     private func _refreshChildrenWork(
         of item: MediaItem,
         recursive: Bool,
-        refreshID: UUID? = nil,
         traversal: LibraryRefreshTraversal? = nil
     ) async {
         let generation = cacheGeneration
@@ -617,9 +616,7 @@ final class AppModel: ObservableObject {
         let connector = connector(for: item.providerID)
         let children: [MediaItem]
         do {
-            children = try await trackedRefreshRequest(refreshID) {
-                try await connector.loadChildren(for: item)
-            }
+            children = try await connector.loadChildren(for: item)
         } catch {
             return
         }
@@ -636,7 +633,6 @@ final class AppModel: ObservableObject {
                     await self?._refreshTrackedChildren(
                         of: child,
                         recursive: true,
-                        refreshID: refreshID,
                         traversal: traversal
                     )
                 }
@@ -647,7 +643,6 @@ final class AppModel: ObservableObject {
     private func _refreshTrackedChildren(
         of item: MediaItem,
         recursive: Bool,
-        refreshID: UUID? = nil,
         traversal: LibraryRefreshTraversal? = nil
     ) async {
         if let traversal, !traversal.claim(item.id) {
@@ -658,7 +653,6 @@ final class AppModel: ObservableObject {
             await self?._refreshChildrenWork(
                 of: item,
                 recursive: recursive,
-                refreshID: refreshID,
                 traversal: traversal
             )
         }.value
@@ -667,7 +661,6 @@ final class AppModel: ObservableObject {
     private func _warmLibraryChildren(
         _ library: LibraryReference,
         refreshedItems: [MediaItem]?,
-        refreshID: UUID? = nil,
         traversal: LibraryRefreshTraversal
     ) async {
         let generation = cacheGeneration
@@ -684,7 +677,6 @@ final class AppModel: ObservableObject {
                     await self?._refreshTrackedChildren(
                         of: item,
                         recursive: true,
-                        refreshID: refreshID,
                         traversal: traversal
                     )
                 }
@@ -692,19 +684,6 @@ final class AppModel: ObservableObject {
         }
 
         libraryCache.cacheLatestEpisodeAddedAt(for: topLevel.map(\.id))
-    }
-
-    private func trackedRefreshRequest<Value>(
-        _ refreshID: UUID?,
-        _ request: () async throws -> Value
-    ) async throws -> Value {
-        let isTracked = refreshTracker.registerRequest(for: refreshID)
-        defer {
-            if isTracked {
-                refreshTracker.completeRequest(for: refreshID)
-            }
-        }
-        return try await request()
     }
 
     private func _applyAndSyncWatchStatus(for item: MediaItem, isWatched: Bool) async {

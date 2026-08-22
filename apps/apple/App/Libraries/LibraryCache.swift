@@ -139,11 +139,12 @@ final class LibraryCache: ObservableObject {
         batchDepth += 1
     }
 
-    func endBatchUpdates() {
+    func endBatchUpdates(publishingChanges: Bool = true) {
         guard batchDepth > 0 else { return }
         batchDepth -= 1
         guard batchDepth == 0, var next = pendingSnapshot else { return }
         pendingSnapshot = nil
+        guard publishingChanges else { return }
         next.pruneUnreachableItems()
         guard snapshot != next else { return }
         snapshot = next

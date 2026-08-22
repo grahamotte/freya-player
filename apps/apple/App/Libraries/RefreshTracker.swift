@@ -12,11 +12,6 @@ enum RefreshKey: Hashable, Sendable {
     case item(String)
 }
 
-struct RefreshProgress: Equatable {
-    let completed: Int
-    let total: Int
-}
-
 /// Tracks the set of background refreshes currently in flight and dedups
 /// concurrent calls for the same `RefreshKey`.
 ///
@@ -34,7 +29,7 @@ struct RefreshProgress: Equatable {
 @MainActor
 final class RefreshTracker: ObservableObject {
     @Published private(set) var inFlight: Set<RefreshKey> = []
-    @Published private(set) var progress: RefreshProgress?
+    @Published private(set) var isLibraryRefreshInProgress = false
     private var tasks: [RefreshKey: Task<Void, Never>] = [:]
     private var tokens: [RefreshKey: UUID] = [:]
     private var refreshID: UUID?
@@ -44,25 +39,16 @@ final class RefreshTracker: ObservableObject {
 
         let id = UUID()
         refreshID = id
-        progress = RefreshProgress(completed: 0, total: 0)
+        isLibraryRefreshInProgress = true
         return id
-    }
-
-    func registerRequest(for id: UUID?) -> Bool {
-        guard let id, refreshID == id, let progress else { return false }
-        self.progress = RefreshProgress(completed: progress.completed, total: progress.total + 1)
-        return true
-    }
-
-    func completeRequest(for id: UUID?) {
-        guard let id, refreshID == id, let progress else { return }
-        self.progress = RefreshProgress(completed: progress.completed + 1, total: progress.total)
     }
 
     func finishRefresh(_ id: UUID) {
         guard refreshID == id else { return }
         refreshID = nil
-        progress = nil
+        if isLibraryRefreshInProgress {
+            isLibraryRefreshInProgress = false
+        }
     }
 
     @discardableResult
@@ -92,8 +78,9 @@ final class RefreshTracker: ObservableObject {
         tasks.removeAll()
         tokens.removeAll()
         inFlight.removeAll()
-        refreshID = nil
-        progress = nil
+        if isLibraryRefreshInProgress {
+            isLibraryRefreshInProgress = false
+        }
     }
 
     func isRefreshing(_ key: RefreshKey) -> Bool {

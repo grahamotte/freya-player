@@ -1,3 +1,4 @@
+import Combine
 import Foundation
 import XCTest
 @testable import FreyaPlayerCore
@@ -201,12 +202,17 @@ final class LibraryCacheTests: XCTestCase {
         let refreshedSeries = makeMediaItem(id: series.id, kind: .series, addedAt: 500)
         let newSeason = makeMediaItem(id: "new-season", kind: .season)
         let newEpisode = makeMediaItem(id: "new-episode", kind: .episode, addedAt: 200)
+        var publishedSnapshots: [LibraryCacheSnapshot] = []
+        let subscription = cache.snapshotDidChange.sink { publishedSnapshots.append($0) }
 
         cache.beginBatchUpdates()
         cache.ingest(items: [refreshedSeries], asTopLevelOf: library.id)
+        cache.beginBatchUpdates()
         cache.ingest(children: [newSeason], of: series.id)
+        cache.endBatchUpdates()
 
         XCTAssertEqual(cache.libraryItems(for: library.id).first?.addedAt, 300)
+        XCTAssertTrue(publishedSnapshots.isEmpty)
 
         cache.ingest(children: [newEpisode], of: newSeason.id)
         cache.cacheLatestEpisodeAddedAt(for: [series.id])
@@ -218,5 +224,41 @@ final class LibraryCacheTests: XCTestCase {
         XCTAssertEqual(cache.libraryItems(for: library.id).first?.addedAt, 200)
         XCTAssertEqual(cache.snapshot.itemsByID[series.id]?.addedAt, 200)
         XCTAssertNil(cache.snapshot.itemsByID[oldEpisode.id])
+        XCTAssertEqual(publishedSnapshots, [cache.snapshot])
+        withExtendedLifetime(subscription) {}
+    }
+
+    @MainActor
+    func testDiscardedRefreshBatchKeepsCompletedSnapshotVisible() {
+        let original = makeMediaItem(id: "item", title: "Original")
+        let refreshed = makeMediaItem(id: original.id, title: "Refreshed")
+        let library = makeLibraryShelf(items: [original])
+        let snapshot = LibraryCacheSnapshot(
+            serverKey: "plex:server",
+            libraries: [
+                library.id: CachedLibrary(reference: library.reference, isHidden: false),
+            ],
+            libraryOrder: [library.id],
+            itemsByID: [original.id: original],
+            libraryItemIDs: [library.id: [original.id]]
+        )
+        let cache = LibraryCache(
+            storage: LibraryCacheStorage(
+                load: { snapshot },
+                save: { _ in },
+                clear: {},
+                sizeBytes: { 0 }
+            )
+        )
+        var publishCount = 0
+        let subscription = cache.snapshotDidChange.sink { _ in publishCount += 1 }
+
+        cache.beginBatchUpdates()
+        cache.ingest(items: [refreshed], asTopLevelOf: library.id)
+        cache.endBatchUpdates(publishingChanges: false)
+
+        XCTAssertEqual(cache.libraryItems(for: library.id).first?.title, original.title)
+        XCTAssertEqual(publishCount, 0)
+        withExtendedLifetime(subscription) {}
     }
 }
