@@ -2,36 +2,43 @@
 
 ## user value
 
-As a viewer with an AV1-capable Apple device, I want compatible AV1 video to remain intact during server streaming, so that Freya does not reduce quality or burden my server with an unnecessary video encode.
+As a viewer with an AV1-capable Apple device, I want compatible AV1 video to remain intact during server streaming, so that Freya preserves quality without an unnecessary server encode.
 
 ## Problem description
 
-NATP permits AV1 direct play only when AVFoundation reports a representative AV1 format as playable and VideoToolbox reports a hardware decoder. When the original MP4-family file cannot be delivered directly, Freya's Plex and Jellyfin streaming paths request MPEG-TS/H.264 and therefore convert AV1 even on hardware that could decode an Apple-compatible AV1 HLS stream.
+Freya capability-gates AV1 direct play, but its Plex and Jellyfin server-streaming paths always request MPEG-TS/H.264. Compatible AV1 is therefore converted whenever direct file delivery is unavailable, even though Apple supports conforming AV1 HLS in fragmented MP4 on suitable hardware.
 
-Generic AV1 and hardware-decoder checks do not prove that a particular source is compatible. Profile, level, tier, bit depth, chroma subsampling, resolution, frame rate, dynamic range, container metadata, device generation, and actual server output matter. Apple's HLS requirements permit AV1 only in fragmented MP4 and impose a level limit, while provider support for retaining AV1 during streaming still needs independent evidence.
-
-The desired outcome is for compatible AV1 video to retain its codec, resolution, bitrate, and ordinary SDR or static-HDR presentation during direct or server-streamed playback, with a reliable playable fallback on unsupported devices or when the server cannot deliver a conforming stream.
+The desired outcome is to retain compatible AV1 SDR, HDR10, and HLG video during server streaming, with the existing H.264 path used when AV1 hardware, source parameters, provider delivery, or presentation is unsupported or uncertain.
 
 ## Status, notes, context, etc
 
-- Split from VREM so AV1 hardware and delivery validation does not block the much more common HEVC remux case.
-- This card covers ordinary AV1 SDR, HDR10, and HLG compatibility. DOVI owns Dolby Vision carried by AV1, and HDPL owns HDR10+ carried by AV1.
-- Current evidence: direct play uses one representative AV1 MIME type plus a hardware-decoder check; `streamingVideoCodecs` excludes AV1; Jellyfin requests MPEG-TS/H.264; Plex advertises an HLS MPEG-TS/H.264 target.
-- Apple requires AV1 HLS video to use fragmented MP4 and limits it to Level 6.2 in the current [HLS authoring specification](https://developer.apple.com/documentation/http-live-streaming/hls-authoring-specification-for-apple-devices/).
-- Continuation guidance: establish the AV1 profiles actually reported by Plex and Jellyfin, the hardware and operating systems on which the representative format check is trustworthy, and what each server delivers under direct play, remux, and conversion before broadening compatibility claims.
-- A generic AV1 label, software decode possibility, or conforming source does not prove that the active server can produce a conforming stream. Preserve the existing H.264 fallback when hardware, source parameters, or server delivery are uncertain.
-- Validation should cover hardware-decoder present and absent cases, compatible and incompatible source parameters, both providers, direct and server-streamed paths, actual delivered manifests, and accurate playback reporting. Portable decisions require unit tests; final performance and presentation checks require representative AV1 hardware and media.
+- Order: 3 of 3. Start after VREM and DHDR; reuse their shared container, format, manifest, reporting, and fallback behavior.
+- Scope: AV1 SDR, HDR10, and HLG. Dolby Vision and HDR10+ carried by AV1 are excluded.
+- Extend `PlaybackCompatibility` for exact AV1 source and hardware decisions instead of relying only on a generic codec label. Reuse the fragmented-MP4 and provider-neutral streaming representation established by VREM.
+- Keep AV1 format normalization and delivered HLS parsing in `MediaTranscoding`, and keep predicted remux/transcode reporting in `MediaPlaybackOptions` and `MediaPlaybackPlan`. Do not add a parallel AV1-specific transcoding model.
+- Plex and Jellyfin should translate their AV1 metadata into the common decision and construct provider-specific requests. The actual server decision and delivered manifest remain authoritative for final format reporting.
+- Preserve the H.264 fallback when hardware decode, profile, level, bit depth, chroma format, resolution, dynamic range, or provider delivery cannot be established safely.
+- Cover hardware-decoder present and absent cases, compatible and incompatible AV1, both providers, SDR/HDR10/HLG, container-only remuxing, H.264 fallback, delivered manifests, and playback reporting. Final performance and presentation checks require representative AV1 hardware and media.
+- Platform reference: [Apple HLS authoring specification](https://developer.apple.com/documentation/http-live-streaming/hls-authoring-specification-for-apple-devices/).
 
 ## Prompts
 
 ok lets do NATP, or at least the low hanging fruit of it. we just did FMTV, so we should have some tools we can use. if you consider any formats not low hanging fruit, then exclude them from NATP and add new card(s) for those
 
-Originally tracked AV1 as part of the advanced-video work split from NATP.
+Originally tracked AV1 preservation in the work split from NATP.
 
 hwo about VREM -- easy ? worth it?
 
-Identified AV1 as worthwhile only on a narrower hardware set and independent from the common HEVC remux case.
+Identified AV1 as a separate hardware- and delivery-dependent follow-up.
 
 ok cool makes sense. can you split it into separate cards and include good details and instructions for the next agent,
 
-Created AVRM with codec-parameter, hardware, provider-delivery, fallback, reporting, and validation context for the next agent.
+Created AVRM separately from HEVC and dynamic HDR.
+
+1 VREM: HEVC, HDR10, and HLG.
+2 Dynamic HDR card: combine DOVI and HDPL.
+3 AVRM: AV1 SDR, HDR10, and HLG.
+
+ok lets split this way. and mention the order in the cards. rewrite the cards as new ordered and focused cards focused just on their change without all the cruft in the current cards so the agent stays focused. include some broad implimentation details in this so there is cohesive design across the cards - particularly the use of the common transcoding module and stuff
+
+Rewrote AVRM as the third focused card, explicitly reusing VREM and DHDR's common transcoding and playback-reporting design.

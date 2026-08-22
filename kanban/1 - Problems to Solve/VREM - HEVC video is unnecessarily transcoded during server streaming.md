@@ -2,36 +2,43 @@
 
 ## user value
 
-As a viewer, I want compatible HEVC video to remain intact during server streaming, so that container or track incompatibilities do not reduce picture quality or make my server re-encode video unnecessarily.
+As a viewer, I want compatible HEVC video to remain intact during server streaming, so that Freya preserves picture quality without burdening my server with an unnecessary video encode.
 
 ## Problem description
 
-NATP allows device-detected HEVC to direct play from compatible MP4-family files. When Plex or Jellyfin cannot deliver the original file, however, Freya's server-streaming path only considers H.264 copyable and requests MPEG-TS/H.264 output. Common HEVC media in MKV therefore requires video transcoding when only its container, audio, selected track, subtitle delivery, or connection limit prevents direct play. Static HDR10 or HLG presentation can be lost with the codec conversion.
+Freya can direct play device-supported HEVC from compatible MP4-family files, but its Plex and Jellyfin server-streaming paths currently request MPEG-TS with H.264. HEVC in a common incompatible container such as MKV is therefore converted even when only remuxing is needed. This can also discard HDR10 or HLG presentation.
 
-HEVC compatibility cannot be inferred from a broad codec label. Main versus Main 10 profile, level, tier, bit depth, chroma format, sample entry, resolution, frame rate, dynamic-range metadata, device hardware, operating system, display route, provider behavior, and actual server output all affect native playback. Apple's HLS requirements allow HEVC, HDR10, and HLG, but require HEVC video to use fragmented MP4 rather than the transport-stream path Freya currently requests.
-
-The desired outcome is for compatible HEVC SDR, HDR10, and HLG video to retain its codec, resolution, bitrate, and dynamic range during direct or server-streamed playback. An unrelated incompatibility must not force video conversion when the server can deliver a native stream, while uncertain or incompatible cases must continue to receive a playable fallback.
+The desired outcome is to retain compatible HEVC SDR, HDR10, and HLG video during server streaming, while preserving the existing H.264 fallback whenever the device, source, display route, or provider output is incompatible or uncertain.
 
 ## Status, notes, context, etc
 
-- Split from NATP because direct-file codec detection does not prove that Plex or Jellyfin can retain the same video through server streaming.
-- This card is limited to HEVC SDR, static HDR10, and HLG. DOVI owns Dolby Vision, HDPL owns HDR10+, and AVRM owns AV1.
-- Current evidence: `PlaybackCompatibility.streamingVideoCodecs` reduces detected native support to H.264; Jellyfin requests `segmentContainer=ts` and `videoCodec=h264`; Plex advertises an HLS MPEG-TS/H.264 target.
-- Apple states that HEVC HLS must use fragmented MP4, supports Main 10 through defined profile and level limits, and permits HDR10 or HLG dynamic range: [HLS authoring specification](https://developer.apple.com/documentation/http-live-streaming/hls-authoring-specification-for-apple-devices/).
-- Continuation guidance: read FMTV and NATP in Done before starting, and follow their capability-detection and provider-decision test patterns. Treat source metadata, server decisions, delivered HLS signaling, and successful native presentation as separate evidence; none alone proves the complete path.
-- Preserve the existing H.264 fallback whenever capability or server delivery is unknown. Validation should cover Plex and Jellyfin, direct and server-streamed playback, SDR/HDR10/HLG, compatible and incompatible profiles, container-only remux cases, audio-only conversion cases, and the actual formats reported after server negotiation.
-- Unit-test portable compatibility and provider decisions, run `mise test`, and perform the generic unsigned Apple builds used by NATP. Real-device HDR presentation remains a user validation step unless suitable hardware is available.
+- Order: 1 of 3. Complete this before DHDR and AVRM because it establishes the shared fragmented-MP4 streaming path they build on.
+- Scope: HEVC SDR, HDR10, and HLG during server streaming. Dolby Vision and HDR10+ belong to DHDR. AV1 belongs to AVRM.
+- Apple requires HEVC HLS to use fragmented MP4. Freya currently limits `PlaybackCompatibility.streamingVideoCodecs` to H.264, requests `segmentContainer=ts` and `videoCodec=h264` from Jellyfin, and advertises MPEG-TS/H.264 to Plex.
+- Keep Apple capability checks in `PlaybackCompatibility`. Keep normalized containers, video formats, dynamic-range names, and delivered HLS parsing in `MediaTranscoding`. Let `MediaPlaybackOptions` and `MediaPlaybackPlan` describe the predicted remux or transcode using those common formats.
+- Plex and Jellyfin should translate provider metadata into the shared decision and then build their own requests. Do not duplicate Apple codec rules in provider code or expose provider response models outside their connector.
+- Treat the server decision and delivered manifest as authoritative for the displayed playback formats. A source HEVC label alone does not prove that the server retained HEVC or HDR.
+- Cover both providers, compatible and incompatible HEVC, SDR/HDR10/HLG, container-only remuxing, audio-only conversion, the H.264 fallback, and actual delivered-format reporting. Run `mise test` and the same generic unsigned Apple builds used by NATP.
+- Platform reference: [Apple HLS authoring specification](https://developer.apple.com/documentation/http-live-streaming/hls-authoring-specification-for-apple-devices/).
 
 ## Prompts
 
 ok lets do NATP, or at least the low hanging fruit of it. we just did FMTV, so we should have some tools we can use. if you consider any formats not low hanging fruit, then exclude them from NATP and add new card(s) for those
 
-Split advanced native-video preservation out of NATP because generic codec detection cannot safely establish profile and dynamic-range support and the current provider paths always produce MPEG-TS/H.264 when server streaming is needed.
+Split advanced native-video preservation from NATP.
 
 hwo about VREM -- easy ? worth it?
 
-Assessed the common HEVC remux case as worthwhile and moderate, while identifying Dolby Vision, HDR10+, and AV1 as harder independent compatibility problems.
+Identified HEVC remuxing as the common, worthwhile part of VREM.
 
 ok cool makes sense. can you split it into separate cards and include good details and instructions for the next agent,
 
-Narrowed VREM to HEVC SDR/HDR10/HLG and recorded the current transport constraints, authoritative platform requirements, scope boundaries, fallback expectations, and validation guidance for continuation.
+Separated HEVC, Dolby Vision, HDR10+, and AV1 concerns into focused cards.
+
+1 VREM: HEVC, HDR10, and HLG.
+2 Dynamic HDR card: combine DOVI and HDPL.
+3 AVRM: AV1 SDR, HDR10, and HLG.
+
+ok lets split this way. and mention the order in the cards. rewrite the cards as new ordered and focused cards focused just on their change without all the cruft in the current cards so the agent stays focused. include some broad implimentation details in this so there is cohesive design across the cards - particularly the use of the common transcoding module and stuff
+
+Rewrote VREM as the first focused card and recorded the shared compatibility, transcoding, playback-planning, provider, fallback, and verification boundaries.
