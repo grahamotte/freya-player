@@ -21,11 +21,6 @@ struct PlexSetupContent: View {
                     Text(message)
                         .foregroundStyle(AppTheme.secondaryText)
 
-                    Button("Connect With Plex") {
-                        model.startPlexLogin()
-                    }
-                    .buttonStyle(MediaGlassButtonStyle())
-
                 case .connecting(let message):
                     if let code = model.plexLinkCode {
                         Text("Visit this link in your browser")
@@ -49,23 +44,37 @@ struct PlexSetupContent: View {
                     Text(message)
                         .foregroundStyle(AppTheme.secondaryText)
 
-                    Button("Try Again") {
-                        model.startPlexLogin()
-                    }
-                    .buttonStyle(MediaGlassButtonStyle())
-
                 case .connected:
                     ProgressView("Loading your server...")
+                }
+
+                HStack(spacing: 16) {
+                    switch model.connectionState {
+                    case .signedOut:
+                        Button("Connect With Plex") {
+                            model.startPlexLogin()
+                        }
+                        .buttonStyle(MediaGlassButtonStyle())
+
+                    case .failed:
+                        Button("Try Again") {
+                            model.startPlexLogin()
+                        }
+                        .buttonStyle(MediaGlassButtonStyle())
+
+                    default:
+                        EmptyView()
+                    }
+
+                    Button("Cancel") {
+                        dismiss()
+                    }
+                    .buttonStyle(MediaGlassButtonStyle())
                 }
             }
             .frame(maxWidth: 720, alignment: .leading)
             .padding(28)
             .background(PanelBackground())
-
-            Button("Cancel") {
-                dismiss()
-            }
-            .buttonStyle(MediaGlassButtonStyle())
 
             Spacer()
         }
