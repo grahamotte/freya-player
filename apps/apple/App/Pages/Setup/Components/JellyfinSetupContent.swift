@@ -15,7 +15,7 @@ struct JellyfinSetupContent: View {
             Spacer()
 
             VStack(alignment: .leading, spacing: 18) {
-                Label("Jellyfin", systemImage: "square.stack.3d.up.fill")
+                MediaProviderLabel(providerID: .jellyfin)
                     .font(.title3.weight(.semibold))
 
                 serverAddressLayout {

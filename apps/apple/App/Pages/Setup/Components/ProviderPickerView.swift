@@ -32,18 +32,30 @@ struct ProviderPickerView: View {
     private var serviceButtons: some View {
         Group {
             NavigationLink(value: AppRoute.jellyfinSetup) {
-                Label("Jellyfin", systemImage: "square.stack.3d.up.fill")
+                MediaProviderLabel(providerID: .jellyfin, logoSize: serviceLogoSize)
                     .font(.title3.weight(.semibold))
-                    .frame(maxWidth: .infinity)
+                    .frame(width: serviceButtonWidth, height: serviceButtonHeight)
             }
-            .buttonStyle(MediaGlassButtonStyle(horizontalPadding: 72, verticalPadding: 44))
+            .buttonStyle(MediaGlassButtonStyle(horizontalPadding: 0, verticalPadding: 0))
 
             NavigationLink(value: AppRoute.plexSetup) {
-                Label("Plex", systemImage: "play.rectangle.fill")
+                MediaProviderLabel(providerID: .plex, logoSize: serviceLogoSize)
                     .font(.title3.weight(.semibold))
-                    .frame(maxWidth: .infinity)
+                    .frame(width: serviceButtonWidth, height: serviceButtonHeight)
             }
-            .buttonStyle(MediaGlassButtonStyle(horizontalPadding: 72, verticalPadding: 44))
+            .buttonStyle(MediaGlassButtonStyle(horizontalPadding: 0, verticalPadding: 0))
         }
+    }
+
+    private var serviceButtonWidth: CGFloat {
+        PlatformMetadata.isPhone ? 220 : 340
+    }
+
+    private var serviceButtonHeight: CGFloat {
+        PlatformMetadata.isPhone ? 72 : 120
+    }
+
+    private var serviceLogoSize: CGFloat {
+        PlatformMetadata.isPhone ? 28 : 40
     }
 }

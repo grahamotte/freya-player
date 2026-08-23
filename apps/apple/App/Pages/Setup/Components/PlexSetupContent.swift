@@ -10,7 +10,7 @@ struct PlexSetupContent: View {
             Spacer()
 
             VStack(alignment: .leading, spacing: 18) {
-                Label("Plex", systemImage: "play.rectangle.fill")
+                MediaProviderLabel(providerID: .plex)
                     .font(.title3.weight(.semibold))
 
                 switch model.connectionState {
