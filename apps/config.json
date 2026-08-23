@@ -1,5 +1,5 @@
 {
-  "build": "1.21.3",
+  "build": "1.21.4",
   "contactEmail": "graham.otte@gmail.com",
   "contactFirstName": "Graham",
   "contactLastName": "Otte",
@@ -105,6 +105,6 @@
     },
     "android": {}
   },
-  "version": "1.21.3",
-  "whatsNew": "Improved playback compatibility by preserving Apple-native formats within each device’s capabilities. Adds clearer playback and device capability details, smoother seeking and recovery after interruptions, more accurate watched completion, and fewer unnecessary library refreshes."
+  "version": "1.21.4",
+  "whatsNew": "Improved playback compatibility by preserving Apple-native formats within each device’s capabilities. Adds clearer playback and device capability details, smoother seeking and recovery after interruptions, more accurate watched completion, fewer unnecessary library refreshes, and more stable tvOS focus."
 }
