@@ -12,6 +12,9 @@ class DependenciesPatchTest < Minitest::Test
     assert_includes commands, "which mise"
     assert_includes commands, 'mise settings add idiomatic_version_file_enable_tools "[]"'
     assert_includes commands, "mise settings set ruby.compile=false"
+    assert commands.any? { |command| command.include?("curl -fsSL https://opencode.ai/install") }
+    assert commands.any? { |command| command.include?("--no-modify-path") }
+    assert commands.any? { |command| command.include?("sudo ln -sf ~/.opencode/bin/opencode /usr/local/bin/opencode") }
     refute commands.any? { |command| command.include?("apt install -y mise") }
   end
 
@@ -41,6 +44,7 @@ class DependenciesPatchTest < Minitest::Test
 
     assert_equal "4.0.6", versions.fetch("ruby")
     assert_equal "26.7.0", versions.fetch("node")
+    refute versions.key?("opencode")
   end
 
   def test_apply

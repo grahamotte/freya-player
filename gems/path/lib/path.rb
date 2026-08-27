@@ -244,6 +244,7 @@ class Path
       when :heif then "image/heif"
       when :jpg, :jpeg then "image/jpeg"
       when :png then "image/png"
+      when :tif, :tiff then "image/tiff"
       when :webp then "image/webp"
       when :avif then "image/avif"
 
@@ -251,6 +252,7 @@ class Path
       when :flv then "video/flv"
       when :mkv then "video/mkv"
       when :mov then "video/quicktime"
+      when :qta then "video/quicktime"
       when :mp4 then "video/mp4"
       when :mpeg then "video/mpeg"
       when :mpg then "video/mpg"
@@ -267,6 +269,7 @@ class Path
       when :html, :htm then "text/html"
       when :csv then "text/csv"
       when :json then "application/json"
+      when :py then "application/x-sh"
 
       when :pdf then "application/pdf"
       when :epub then "application/epub+zip"
@@ -280,6 +283,7 @@ class Path
       when :numbers then "application/zip"
       when :ics then "text/calendar"
       when :db then "application/x-sqlite3"
+      when :docx then "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
       when :xlsx then "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
       when :nes then "application/x-nesrom"
       when :mpp then "application/x-ole-storage"

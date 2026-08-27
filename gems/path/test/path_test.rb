@@ -618,6 +618,8 @@ class PathTest < Minitest::Test
 
   def test_mime_type_comprehensive_image_types
     assert_equal "image/heic", Path.mime_type("photo.heic")
+    assert_equal "image/tiff", Path.mime_type("scan.tif")
+    assert_equal "image/tiff", Path.mime_type("scan.tiff")
     assert_equal "image/webp", Path.mime_type("image.webp")
     assert_equal "image/avif", Path.mime_type("modern.avif")
   end
@@ -626,6 +628,7 @@ class PathTest < Minitest::Test
     assert_equal "video/avi", Path.mime_type("video.avi")
     assert_equal "video/flv", Path.mime_type("video.flv")
     assert_equal "video/mkv", Path.mime_type("video.mkv")
+    assert_equal "video/quicktime", Path.mime_type("audio.qta")
     assert_equal "video/webm", Path.mime_type("video.webm")
     assert_equal "video/wmv", Path.mime_type("video.wmv")
     assert_equal "video/m4v", Path.mime_type("video.m4v")
@@ -636,12 +639,14 @@ class PathTest < Minitest::Test
     assert_equal "text/html", Path.mime_type("page.html")
     assert_equal "text/csv", Path.mime_type("data.csv")
     assert_equal "application/json", Path.mime_type("config.json")
+    assert_equal "application/x-sh", Path.mime_type("script.py")
     assert_equal "application/epub+zip", Path.mime_type("book.epub")
     assert_equal "application/zip", Path.mime_type("archive.zip")
     assert_equal "application/x-mobipocket-ebook", Path.mime_type("book.mobi")
     assert_equal "application/pgp-encrypted", Path.mime_type("secret.gpg")
     assert_equal "text/calendar", Path.mime_type("event.ics")
     assert_equal "application/x-sqlite3", Path.mime_type("database.db")
+    assert_equal "application/vnd.openxmlformats-officedocument.wordprocessingml.document", Path.mime_type("document.docx")
     assert_equal "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", Path.mime_type("sheet.xlsx")
     assert_equal "application/x-ole-storage", Path.mime_type("project.mpp")
   end
