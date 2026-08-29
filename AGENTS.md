@@ -17,6 +17,18 @@ The "Repo Specific" section blow contains rules specific to this repo only.
 5. Use root `mise` tasks instead of invoking underlying tools directly when an applicable task exists.
 6. Do not create a canvas or visualization unless the user specifically requests one.
 
+## Layout Specifications
+
+- `layout/` describes the required structure and behavior of app layouts.
+- Organize specifications into `pages/` and `components/`. Use lowercase filenames with spaces, ending each name with `page.md` or `component.md` as appropriate.
+- A specification title is the canonical name for that page or component. Page names end in "Page" and component names end in "Component."
+- Page specifications define their composition by referring to component specifications instead of repeating them. Component specifications define their own behavior and composition, referring to subcomponent specifications where applicable.
+- Keep implementation names and boundaries aligned with the specified names and composition when practical.
+- Before changing a covered layout, read its specification and reconcile the implementation against it.
+- If the intended layout changes, update its specification in the same change. Otherwise, fix the implementation to conform.
+- Update a layout specification only for meaningful structural or behavioral changes, not cosmetic or implementation details.
+- Call out any unresolved difference between a layout specification and the implementation.
+
 ## Ruby
 
 - Use `.blank?` and `.present?` for presence checks instead of `.empty?`, `.nil?`, or truthiness checks.
@@ -62,6 +74,7 @@ The "Repo Specific" section blow contains rules specific to this repo only.
 - `frontend/subdomains.json` - Website subdomain configuration.
 - `gems/` - Shared Ruby gems.
 - `kanban/` - Repository-local work board and workflow instructions.
+- `layout/` - Canonically named page and component layout specifications.
 - `scripts/` - General-purpose scripts.
 - `mise.toml` - Project tooling and task definitions.
 
