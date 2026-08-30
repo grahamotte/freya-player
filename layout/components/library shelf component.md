@@ -1,6 +1,6 @@
 # Library Shelf Component
 
-The Library Shelf Component represents one library on the [Home Page](<../pages/home page.md>). It contains the library name followed by a horizontally scrolling row of [Tile Image Components](<tile image component.md>).
+The Library Shelf Component represents one library on the [Home Page](<../pages/home page.md>). It contains the left-aligned library name followed by a horizontally scrolling row of [Tile Image Components](<tile image component.md>).
 
 The first Tile Image Component opens the full library. It is followed by up to 20 media-item Tile Image Components using the full library's selected filter, sort, and sort order, including the All or Unseen filter and Title, Added At, or Duration sort.
 

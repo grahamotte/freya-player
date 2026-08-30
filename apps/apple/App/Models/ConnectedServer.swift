@@ -1,6 +1,6 @@
 import Foundation
 
-struct ConnectedServer: Equatable, Identifiable {
+struct ConnectedServer: Hashable, Identifiable {
     let providerID: MediaProviderID
     let serverID: String
     let serverName: String

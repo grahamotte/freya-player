@@ -38,9 +38,21 @@ struct LibrariesPage: View {
     private var iOSLayout: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: sectionSpacing) {
-                Text(projection.serverName)
-                    .font(.largeTitle.weight(.bold))
-                    .padding(.horizontal, pagePadding)
+                HStack(spacing: 16) {
+                    Text(projection.serverName)
+                        .font(.system(size: PlatformMetadata.isPhone ? 38 : 52, weight: .bold))
+                        .lineLimit(1)
+
+                    Spacer(minLength: 16)
+
+                    NavigationLink(value: projection.searchRoute) {
+                        Label("Search", systemImage: "magnifyingglass")
+                    }
+                    .buttonStyle(actionButtonStyle)
+                    .accessibilityLabel("Search Server")
+                }
+                .padding(.horizontal, pagePadding)
+                .padding(.top, PlatformMetadata.isPhone ? 8 : 16)
 
                 ForEach(projection.shelves) { shelf in
                     let artworkStyle = shelf.artworkStyle
@@ -48,6 +60,7 @@ struct LibrariesPage: View {
                     VStack(alignment: .leading, spacing: shelfSpacing) {
                         Text(shelf.title)
                             .font(.title2.weight(.semibold))
+                            .lineLimit(1)
                             .padding(.horizontal, pagePadding)
 
                         ScrollView(.horizontal) {

@@ -5,6 +5,43 @@ import XCTest
 
 final class LibraryCacheTests: XCTestCase {
     @MainActor
+    func testSearchableItemsIncludeEveryCachedDescendantInLibraryOrder() {
+        let series = makeMediaItem(id: "series", kind: .series)
+        let season = makeMediaItem(id: "season", kind: .season)
+        let episode = makeMediaItem(id: "episode", kind: .episode)
+        let other = makeMediaItem(id: "other")
+        let library = makeLibraryShelf(items: [series])
+        let snapshot = LibraryCacheSnapshot(
+            serverKey: "plex:server",
+            libraries: [
+                library.id: CachedLibrary(reference: library.reference, isHidden: false),
+            ],
+            libraryOrder: [library.id],
+            itemsByID: [
+                series.id: series,
+                season.id: season,
+                episode.id: episode,
+                other.id: other,
+            ],
+            libraryItemIDs: [library.id: [series.id]],
+            childItemIDs: [
+                series.id: [season.id],
+                season.id: [episode.id],
+            ]
+        )
+        let cache = LibraryCache(
+            storage: LibraryCacheStorage(
+                load: { snapshot },
+                save: { _ in },
+                clear: {},
+                sizeBytes: { 0 }
+            )
+        )
+
+        XCTAssertEqual(cache.searchableItems(for: library.id).map(\.id), ["series", "season", "episode"])
+    }
+
+    @MainActor
     func testLoadedCacheWithoutCurrentVersionIsCleared() {
         for cacheVersion in [nil, 0] as [Int?] {
             let series = makeMediaItem(id: "series", kind: .series)

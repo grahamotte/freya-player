@@ -155,6 +155,25 @@ final class LibraryCache: ObservableObject {
         libraryItems(for: libraryID, in: snapshot)
     }
 
+    func searchableItems(for libraryID: String) -> [MediaItem] {
+        var itemIDs: [String] = []
+        var visitedItemIDs = Set<String>()
+
+        func appendItemAndDescendants(_ itemID: String) {
+            guard visitedItemIDs.insert(itemID).inserted else { return }
+            itemIDs.append(itemID)
+            for childID in snapshot.childItemIDs[itemID] ?? [] {
+                appendItemAndDescendants(childID)
+            }
+        }
+
+        for itemID in snapshot.libraryItemIDs[libraryID] ?? [] {
+            appendItemAndDescendants(itemID)
+        }
+
+        return itemIDs.compactMap { snapshot.itemsByID[$0] }.map { derivedItem($0) }
+    }
+
     private func libraryItems(for libraryID: String, in source: LibraryCacheSnapshot) -> [MediaItem] {
         let ids = source.libraryItemIDs[libraryID] ?? []
         return ids.compactMap { source.itemsByID[$0] }.map { derivedItem($0, in: source) }

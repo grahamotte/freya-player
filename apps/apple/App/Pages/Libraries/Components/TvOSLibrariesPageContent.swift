@@ -53,6 +53,7 @@ private final class LibrariesCollectionViewController: UIViewController, UIColle
     private var refreshSubscription: AnyCancellable?
     private var isRefreshing = false
     private var isOffline: Bool
+    private let searchFocusGuide = UIFocusGuide()
     private lazy var quickActionHandler = MediaItemQuickActionHandler(
         presenter: self,
         model: model,
@@ -139,12 +140,17 @@ private final class LibrariesCollectionViewController: UIViewController, UIColle
         )
 
         view.addSubview(collectionView)
+        view.addLayoutGuide(searchFocusGuide)
 
         NSLayoutConstraint.activate([
             collectionView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             collectionView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             collectionView.topAnchor.constraint(equalTo: view.topAnchor),
-            collectionView.bottomAnchor.constraint(equalTo: view.bottomAnchor)
+            collectionView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            searchFocusGuide.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 48),
+            searchFocusGuide.topAnchor.constraint(equalTo: view.topAnchor),
+            searchFocusGuide.widthAnchor.constraint(equalToConstant: 480),
+            searchFocusGuide.heightAnchor.constraint(equalToConstant: 184)
         ])
     }
 
@@ -225,7 +231,11 @@ private final class LibrariesCollectionViewController: UIViewController, UIColle
                 withReuseIdentifier: LibrariesServerHeaderView.reuseIdentifier,
                 for: indexPath
             ) as! LibrariesServerHeaderView
-            view.title = server.serverName
+            view.configure(title: server.serverName) { [weak self] in
+                guard let self else { return }
+                self.onSelectRoute(.search(self.server))
+            }
+            searchFocusGuide.preferredFocusEnvironments = [view.searchFocusTarget]
             return view
         }
 
@@ -333,7 +343,7 @@ private final class LibrariesCollectionViewController: UIViewController, UIColle
         configuration.interSectionSpacing = 40
         configuration.boundarySupplementaryItems = [
             NSCollectionLayoutBoundarySupplementaryItem(
-                layoutSize: .init(widthDimension: .fractionalWidth(1), heightDimension: .absolute(144)),
+                layoutSize: .init(widthDimension: .fractionalWidth(1), heightDimension: .absolute(184)),
                 elementKind: Self.serverHeaderKind,
                 alignment: .top
             )
@@ -528,7 +538,13 @@ private final class LibrariesCollectionViewController: UIViewController, UIColle
             forElementKind: Self.serverHeaderKind,
             at: indexPath
         ) as? LibrariesServerHeaderView
-        header?.title = server.serverName
+        header?.configure(title: server.serverName) { [weak self] in
+            guard let self else { return }
+            self.onSelectRoute(.search(self.server))
+        }
+        if let header {
+            searchFocusGuide.preferredFocusEnvironments = [header.searchFocusTarget]
+        }
     }
 
     private func reloadDataPreservingScrollPosition(_ shouldPreserveScrollPosition: Bool) {
@@ -1047,25 +1063,71 @@ private final class LibrariesServerHeaderView: UICollectionReusableView {
     static let reuseIdentifier = "LibrariesServerHeaderView"
     private let horizontalInset: CGFloat = 48
     private let label = UILabel()
+    private let searchButton = UIButton(type: .system)
+    private var onSearch: (() -> Void)?
 
-    var title: String? {
-        didSet { label.text = title }
+    var searchFocusTarget: UIView {
+        searchButton
     }
 
     override init(frame: CGRect) {
         super.init(frame: frame)
 
-        label.font = .preferredFont(forTextStyle: .title1).withTraits(.traitBold)
+        label.font = .systemFont(ofSize: 64, weight: .bold)
         label.textColor = AppTheme.uiPrimaryText
         label.translatesAutoresizingMaskIntoConstraints = false
 
+        var configuration = UIButton.Configuration.plain()
+        configuration.title = "Search"
+        configuration.image = UIImage(systemName: "magnifyingglass")
+        configuration.imagePadding = 10
+        configuration.cornerStyle = .capsule
+        searchButton.configuration = configuration
+        searchButton.titleLabel?.font = .preferredFont(forTextStyle: .headline)
+        searchButton.accessibilityLabel = "Search Server"
+        searchButton.translatesAutoresizingMaskIntoConstraints = false
+        searchButton.addTarget(self, action: #selector(search), for: .primaryActionTriggered)
+        searchButton.configurationUpdateHandler = { button in
+            let isFocused = button.isFocused
+            var configuration = button.configuration
+            configuration?.baseForegroundColor = isFocused ? AppTheme.uiInverseText : AppTheme.uiPrimaryText
+            configuration?.background.backgroundColor = isFocused ? AppTheme.uiPrimaryText : AppTheme.uiSurfaceBorder
+            configuration?.background.strokeColor = isFocused
+                ? .clear
+                : AppTheme.uiPrimaryText.withAlphaComponent(0.28)
+            configuration?.background.strokeWidth = isFocused ? 0 : 1
+            configuration?.background.cornerRadius = 36
+            button.configuration = configuration
+        }
+
         addSubview(label)
+        addSubview(searchButton)
         NSLayoutConstraint.activate([
             label.leadingAnchor.constraint(equalTo: leadingAnchor, constant: horizontalInset),
-            label.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -horizontalInset),
-            label.topAnchor.constraint(equalTo: topAnchor, constant: 44),
-            label.bottomAnchor.constraint(lessThanOrEqualTo: bottomAnchor, constant: -40)
+            label.trailingAnchor.constraint(lessThanOrEqualTo: searchButton.leadingAnchor, constant: -24),
+            label.topAnchor.constraint(equalTo: topAnchor, constant: 48),
+            label.bottomAnchor.constraint(lessThanOrEqualTo: bottomAnchor, constant: -44),
+
+            searchButton.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -horizontalInset),
+            searchButton.centerYAnchor.constraint(equalTo: label.centerYAnchor),
+            searchButton.widthAnchor.constraint(equalToConstant: 360),
+            searchButton.heightAnchor.constraint(equalToConstant: 72)
         ])
+    }
+
+    func configure(title: String?, onSearch: @escaping () -> Void) {
+        label.text = title
+        self.onSearch = onSearch
+    }
+
+    @objc private func search() {
+        onSearch?()
+    }
+
+    override func prepareForReuse() {
+        super.prepareForReuse()
+        label.text = nil
+        onSearch = nil
     }
 
     @available(*, unavailable)

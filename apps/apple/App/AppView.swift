@@ -31,6 +31,8 @@ struct AppView: View {
                         JellyfinSettingsPage(model: model, path: $path)
                     case .library(let library):
                         libraryPage(for: library)
+                    case .search(let server):
+                        ServerSearchPage(model: model, server: server)
                     case .movie(let item):
                         MovieItemPage(model: model, item: item)
                     case .series(let item):

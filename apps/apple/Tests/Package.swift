@@ -4,9 +4,18 @@ import PackageDescription
 let package = Package(
     name: "FreyaPlayer",
     platforms: [.macOS(.v15)],
+    dependencies: [
+        .package(
+            url: "https://github.com/krisk/fuse-swift.git",
+            exact: "2.0.0-rc.1"
+        ),
+    ],
     targets: [
         .target(
             name: "FreyaPlayerCore",
+            dependencies: [
+                .product(name: "Fuse", package: "fuse-swift"),
+            ],
             path: "App",
             exclude: [
                 "AppModel.swift",

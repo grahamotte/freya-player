@@ -4,6 +4,7 @@ import Foundation
 struct LibrariesHomeProjection {
     let serverName: String
     let manageRoute: AppRoute
+    let searchRoute: AppRoute
     let shelves: [Shelf]
 
     init(
@@ -20,6 +21,7 @@ struct LibrariesHomeProjection {
     ) {
         serverName = server.serverName
         manageRoute = server.providerID.settingsRoute
+        searchRoute = .search(server)
         shelves = server.libraries.filter { !$0.isHidden }.map { library in
             let cachedItems = cache?.libraryItems(for: library.id) ?? library.items
             let items = cachedItems.map { cache?.derivedItem($0) ?? $0 }

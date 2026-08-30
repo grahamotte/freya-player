@@ -6,6 +6,11 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		F5E000012F8A000100000001 /* Fuse in Frameworks */ = {isa = PBXBuildFile; productRef = F5E000032F8A000100000001 /* Fuse */; };
+		F5E000022F8A000100000001 /* Fuse in Frameworks */ = {isa = PBXBuildFile; productRef = F5E000042F8A000100000001 /* Fuse */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXFileReference section */
 		BFDE05B12F7A447F00E3784C /* freya-player-tvos.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "freya-player-tvos.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		BFDE06012F7A447F00E3784C /* freya-player-ios-macos.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "freya-player-ios-macos.app"; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -48,6 +53,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				F5E000012F8A000100000001 /* Fuse in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -55,6 +61,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				F5E000022F8A000100000001 /* Fuse in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -97,6 +104,9 @@
 				BFDE05B32F7A447F00E3784C /* App */,
 			);
 			name = "freya-player-tvos";
+			packageProductDependencies = (
+				F5E000032F8A000100000001 /* Fuse */,
+			);
 			productName = "freya-player-tvos";
 			productReference = BFDE05B12F7A447F00E3784C /* freya-player-tvos.app */;
 			productType = "com.apple.product-type.application";
@@ -117,6 +127,9 @@
 				BFDE05B32F7A447F00E3784C /* App */,
 			);
 			name = "freya-player-ios-macos";
+			packageProductDependencies = (
+				F5E000042F8A000100000001 /* Fuse */,
+			);
 			productName = "freya-player-ios-macos";
 			productReference = BFDE06012F7A447F00E3784C /* freya-player-ios-macos.app */;
 			productType = "com.apple.product-type.application";
@@ -150,6 +163,9 @@
 			minimizedProjectReferenceProxies = 1;
 			preferredProjectObjectVersion = 77;
 			productRefGroup = BFDE05B22F7A447F00E3784C /* Products */;
+			packageReferences = (
+				F5E000052F8A000100000001 /* XCRemoteSwiftPackageReference "fuse-swift" */,
+			);
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
@@ -470,6 +486,30 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		F5E000052F8A000100000001 /* XCRemoteSwiftPackageReference "fuse-swift" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/krisk/fuse-swift.git";
+			requirement = {
+				kind = exactVersion;
+				version = "2.0.0-rc.1";
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		F5E000032F8A000100000001 /* Fuse */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = F5E000052F8A000100000001 /* XCRemoteSwiftPackageReference "fuse-swift" */;
+			productName = Fuse;
+		};
+		F5E000042F8A000100000001 /* Fuse */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = F5E000052F8A000100000001 /* XCRemoteSwiftPackageReference "fuse-swift" */;
+			productName = Fuse;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = BFDE05A92F7A447F00E3784C /* Project object */;
 }
