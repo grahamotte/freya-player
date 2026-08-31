@@ -1,5 +1,5 @@
 {
-  "build": "1.22.0",
+  "build": "1.22.1",
   "contactEmail": "graham.otte@gmail.com",
   "contactFirstName": "Graham",
   "contactLastName": "Otte",
@@ -105,6 +105,6 @@
     },
     "android": {}
   },
-  "version": "1.22.0",
-  "whatsNew": "Search your server’s movie and TV libraries from any device, with fast fuzzy matching and clear result details. Server setup forms now look and behave consistently across devices, with reliable focus and automatic port selection when switching protocols."
+  "version": "1.22.1",
+  "whatsNew": "Fixes a crash that could close Freya Player while loading on Apple TV."
 }
