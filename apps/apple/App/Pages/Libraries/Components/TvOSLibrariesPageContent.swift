@@ -77,25 +77,6 @@ private final class LibrariesCollectionViewController: UIViewController, UIColle
         self.isOffline = model.isOffline
         super.init(nibName: nil, bundle: nil)
         sections = makeSections(from: server)
-
-        cacheSubscription = model.libraryCache.snapshotDidChange
-            .throttle(for: .milliseconds(250), scheduler: DispatchQueue.main, latest: true)
-            .sink { [weak self] _ in
-                self?.rebuildSectionsPreservingScrollPosition()
-            }
-
-        defaultsSubscription = NotificationCenter.default.publisher(for: UserDefaults.didChangeNotification)
-            .sink { [weak self] _ in
-                self?.rebuildSectionsPreservingScrollPosition()
-            }
-
-        refreshSubscription = model.refreshTracker.$isLibraryRefreshInProgress
-            .sink { [weak self] isRefreshing in
-                guard let self else { return }
-                guard self.isRefreshing != isRefreshing else { return }
-                self.isRefreshing = isRefreshing
-                self.reconfigureRefreshCell()
-            }
     }
 
     @available(*, unavailable)
@@ -152,6 +133,25 @@ private final class LibrariesCollectionViewController: UIViewController, UIColle
             searchFocusGuide.widthAnchor.constraint(equalToConstant: 480),
             searchFocusGuide.heightAnchor.constraint(equalToConstant: 184)
         ])
+
+        cacheSubscription = model.libraryCache.snapshotDidChange
+            .throttle(for: .milliseconds(250), scheduler: DispatchQueue.main, latest: true)
+            .sink { [weak self] _ in
+                self?.rebuildSectionsPreservingScrollPosition()
+            }
+
+        defaultsSubscription = NotificationCenter.default.publisher(for: UserDefaults.didChangeNotification)
+            .sink { [weak self] _ in
+                self?.rebuildSectionsPreservingScrollPosition()
+            }
+
+        refreshSubscription = model.refreshTracker.$isLibraryRefreshInProgress
+            .sink { [weak self] isRefreshing in
+                guard let self else { return }
+                guard self.isRefreshing != isRefreshing else { return }
+                self.isRefreshing = isRefreshing
+                self.reconfigureRefreshCell()
+            }
     }
 
     func update(server: ConnectedServer, isOffline: Bool) {
